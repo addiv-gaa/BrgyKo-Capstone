@@ -1,1 +1,15 @@
 @import "tailwindcss";
+@tailwind utilities;    
+
+
+@layer components{
+    
+    .sidebar-button {
+        @apply relative flex items-center gap-2 p-2 pl-3 rounded-lg text-sm text-left capitalize my-px mx-1.5 cursor-pointer transition-all duration-15 hover:bg-gray-100;
+    }
+
+    .sidebar-category{
+        @apply pt-3 pr-2 pl-2 pb-1 text-xs font-bold uppercase 
+    }
+
+}
