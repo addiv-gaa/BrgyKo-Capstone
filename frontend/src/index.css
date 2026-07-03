@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@tailwind utilities;    
+@tailwind utilities;
 
 
 @layer components{
@@ -11,5 +11,4 @@
     .sidebar-category{
         @apply pt-3 pr-2 pl-2 pb-1 text-xs font-bold uppercase 
     }
-
 }

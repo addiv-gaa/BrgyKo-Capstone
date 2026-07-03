@@ -1,7 +1,7 @@
 
 const Sidebar = () => {
         return(
-            <div className="h-screen w-64 m-0 text-left flex flex-col bg-gray-300 text-black shadow-lg shrink-0">
+            <div className="h-screen w-64 m-0 text-left flex flex-col bg-gray-300 text-black shadow-lg shrink-0 overflow-y-auto scrollbar-none">
                 <div>
                     <div className="sidebar-category">SERVICES</div>
                     <div className="sidebar-button">Dashboard</div>
