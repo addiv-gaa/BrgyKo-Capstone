@@ -46,3 +46,54 @@ class CertificateRequest(models.Model):
 
     def __str__(self):
         return f"{self.full_name} - {self.get_certificate_type_display()}"
+    
+
+class PermitRequest(models.Model):
+    # --- Dropdown Choices ---
+    PERMIT_TYPES = [
+        ('BUSINESS', 'Business Permit'),
+        ('CONSTRUCTION', 'Construction Permit'),
+        ('EVENT', 'Event/Activity Permit'),
+        ('ZONING', 'Zoning Clearance'),
+    ]
+
+
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('PROCESSING', 'Processing'),
+        ('RELEASED', 'Released'),
+        ('REJECTED', 'Rejected'),
+    ]
+
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='permit_requests'
+    )
+
+    # --- Form Fields ---
+    permit_type = models.CharField(max_length=20, choices=PERMIT_TYPES)
+    applicant_name = models.CharField(max_length=255)
+    address = models.CharField(max_length=255, default='')
+    date_needed = models.DateField()
+    nature = models.CharField(max_length=255)
+    supporting_documents = models.TextField()
+
+    # --- Tracking Fields ---
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    date_requested = models.DateField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_requested']
+
+    def __str__(self):
+        return f"{self.applicant_name} - {self.get_permit_type_display()}"
+    
+class AiQueryStatistic(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    prompt = models.TextField()
+    response = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Query by {self.user} at {self.created_at}"

@@ -39,7 +39,11 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    'DEFAULT_THROTTLE_RATES': {
+        'ai_chat': '5/min', # Limits a user to 5 messages per minute. Adjust as needed.
+    }
 }
+
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
@@ -148,3 +152,5 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWS_CREDENTIALS = True
+
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")

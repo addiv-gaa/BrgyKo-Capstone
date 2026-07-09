@@ -16,14 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from api.views import CreateUserView, CertificateRequestView
+from api.views import AiAssistantView, CreateUserView, CertificateRequestView, PermitRequestView, CustomTokenObtainPairView, CertificateRequestManagerView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/user/register/', CreateUserView.as_view(), name='register'),
-    path('api/token/', TokenObtainPairView.as_view(), name='get_token'),
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='refresh'),
     path('api-auth/', include("rest_framework.urls")), 
-    path('api/certificates/', CertificateRequestView.as_view(), name='certificate-request')
+    path('api/certificates/', CertificateRequestView.as_view(), name='certificate-request'),
+    path('api/permits/', PermitRequestView.as_view(), name='permit-request'),
+    path('api/manager/certificates/', CertificateRequestManagerView.as_view(), name='manager-certificates'),
+    path('api/ai-assistant/', AiAssistantView.as_view(), name='ai-assistant'),
 ]

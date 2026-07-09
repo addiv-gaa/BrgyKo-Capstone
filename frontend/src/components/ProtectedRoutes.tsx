@@ -1,17 +1,25 @@
 import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-import api from "../api"; // Adjust the path if your api.ts is elsewhere
+import api from "../api"; 
 import { REFRESH_TOKEN, ACCESS_TOKEN } from "../constants";
 
-// Define the props for TypeScript
+// 1. Add allowedRoles to your props (make it optional in case you just want a generic login check)
 interface ProtectedRouteProps {
     children: React.ReactNode;
+    allowedRoles?: string[];
 }
 
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-    // null means we are currently checking. true/false means check is complete.
+// 2. Define the shape of your JWT payload so TypeScript doesn't complain about 'roles'
+interface CustomJwtPayload {
+    exp?: number;
+    roles?: string[];
+}
+
+export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
     const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+    // 3. Add a state to hold the user's roles once the token is validated
+    const [userRoles, setUserRoles] = useState<string[]>([]);
 
     useEffect(() => {
         auth().catch(() => setIsAuthorized(false));
@@ -21,13 +29,17 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         const refreshToken = localStorage.getItem(REFRESH_TOKEN);
         
         try {
-            // Replace '/api/token/refresh/' with your actual Django backend refresh endpoint
             const res = await api.post("/api/token/refresh/", {
                 refresh: refreshToken,
             });
             
             if (res.status === 200) {
-                localStorage.setItem(ACCESS_TOKEN, res.data.access);
+                const newAccessToken = res.data.access;
+                localStorage.setItem(ACCESS_TOKEN, newAccessToken);
+                
+                // Decode the NEW token to get the roles
+                const decoded = jwtDecode<CustomJwtPayload>(newAccessToken);
+                setUserRoles(decoded.roles || []);
                 setIsAuthorized(true);
             } else {
                 setIsAuthorized(false);
@@ -46,24 +58,38 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
             return;
         }
 
-        const decoded = jwtDecode(token);
+        const decoded = jwtDecode<CustomJwtPayload>(token);
         const tokenExpiration = decoded.exp;
         const now = Date.now() / 1000;
 
-        // If the token is expired, try to refresh it
         if (tokenExpiration && tokenExpiration < now) {
             await refreshToken();
         } else {
-            // Token is still valid
+            // Token is still valid, set the roles and authorize
+            setUserRoles(decoded.roles || []);
             setIsAuthorized(true);
         }
     };
 
-    // Show a loading state while checking the tokens
     if (isAuthorized === null) {
-        return <div>Loading authentication...</div>; 
+        return <div className="flex h-screen items-center justify-center">Loading authentication...</div>; 
     }
 
-    // If authorized, render the protected component. Otherwise, kick them to login.
-    return isAuthorized ? <>{children}</> : <Navigate to="/login" replace />;
+    // Not logged in at all? Kick to login.
+    if (!isAuthorized) {
+        return <Navigate to="/login" replace />;
+    }
+
+    // 4. If allowedRoles is provided, check if the user has permission
+    if (allowedRoles && allowedRoles.length > 0) {
+        const hasPermission = allowedRoles.some(role => userRoles.includes(role));
+        
+        // Logged in, but wrong role? Kick to an unauthorized/403 page.
+        if (!hasPermission) {
+            return <Navigate to="/unauthorized" replace />;
+        }
+    }
+
+    // If they are authorized and pass the role check (or if no role check was required), render the page
+    return <>{children}</>;
 }
