@@ -19,17 +19,22 @@ export default function InventoryManagement() {
     const [searchQuery, setSearchQuery] = useState("");
     const [isLoading, setIsLoading] = useState(true);
 
-    // NEW: State for controlling the modal and the new item data
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    
+    // NEW: Track if we are editing an existing item. If null, we are adding a new item.
+    const [editingItemId, setEditingItemId] = useState<number | null>(null);
+
     const [newItemData, setNewItemData] = useState({
         name: '',
         category: 'Equipment',
         quantity: 1,
-        status: 'Available'
+        status: 'Available',
+        borrower: '',
+        due_date: ''
     });
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Fetch data from Django
     useEffect(() => {
         const fetchInventory = async () => {
             const token = localStorage.getItem('access');
@@ -51,8 +56,36 @@ export default function InventoryManagement() {
         fetchInventory();
     }, []);
 
-    // NEW: Handle submitting the new item to Django
-    const handleAddItem = async (e: React.FormEvent) => {
+    // NEW: Function to open the modal in Edit Mode
+    const handleEditClick = (item: InventoryItem) => {
+        setEditingItemId(item.id);
+        setNewItemData({
+            name: item.name,
+            category: item.category,
+            quantity: item.quantity,
+            status: item.status,
+            borrower: item.borrower || '',
+            due_date: item.due_date || ''
+        });
+        setIsAddModalOpen(true);
+    };
+
+    // NEW: Helper to reset the form back to default "Add" mode
+    const resetForm = () => {
+        setIsAddModalOpen(false);
+        setEditingItemId(null);
+        setNewItemData({ 
+            name: '', 
+            category: 'Equipment', 
+            quantity: 1, 
+            status: 'Available',
+            borrower: '',
+            due_date: ''
+        });
+    };
+
+    // UPDATED: Now handles both Adding (POST) and Editing (PUT)
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
         if (!newItemData.name.trim()) {
@@ -60,31 +93,47 @@ export default function InventoryManagement() {
             return;
         }
 
+        const payload = { ...newItemData };
+        if (payload.status !== 'Borrowed') {
+            payload.borrower = '';
+            payload.due_date = '';
+        }
+
         setIsSubmitting(true);
         const token = localStorage.getItem('access');
 
+        // Dynamically set URL and Method based on whether we are editing or adding
+        const url = editingItemId 
+            ? `${API_URL}/api/inventory/${editingItemId}/` 
+            : `${API_URL}/api/inventory/`;
+        
+        const method = editingItemId ? 'PUT' : 'POST';
+
         try {
-            const response = await fetch(`${API_URL}/api/inventory/`, {
-                method: 'POST',
+            const response = await fetch(url, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(newItemData)
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
                 const savedItem = await response.json();
                 
-                // Add the new item to the top of the table instantly
-                setItems([savedItem, ...items]); 
+                if (editingItemId) {
+                    // Update the specific item in the table without reloading the page
+                    setItems(items.map(item => item.id === editingItemId ? savedItem : item));
+                } else {
+                    // Add the new item to the top of the table
+                    setItems([savedItem, ...items]); 
+                }
                 
-                // Close modal and reset form
-                setIsAddModalOpen(false);
-                setNewItemData({ name: '', category: 'Equipment', quantity: 1, status: 'Available' });
+                resetForm();
             } else {
-                console.error("Failed to add item:", response.status);
-                alert("Failed to add item to the database.");
+                console.error("Failed to save item:", response.status);
+                alert("Failed to save item to the database.");
             }
         } catch (error) {
             console.error("Network error:", error);
@@ -94,13 +143,11 @@ export default function InventoryManagement() {
         }
     };
 
-    // Calculate Summary Stats
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
     const availableItems = items.filter(i => i.status === 'Available').reduce((sum, item) => sum + item.quantity, 0);
     const borrowedItems = items.filter(i => i.status === 'Borrowed').reduce((sum, item) => sum + item.quantity, 0);
     const repairItems = items.filter(i => i.status === 'For Repair').reduce((sum, item) => sum + item.quantity, 0);
 
-    // Filter for search bar
     const filteredItems = items.filter(item => 
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
         item.category.toLowerCase().includes(searchQuery.toLowerCase())
@@ -134,10 +181,8 @@ export default function InventoryManagement() {
                                 <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
                                 <p className="text-gray-500 text-sm mt-1">Equipment & Supplies Tracker</p>
                             </div>
-                            
-                            {/* NEW: Added onClick handler to open the modal */}
                             <button 
-                                onClick={() => setIsAddModalOpen(true)}
+                                onClick={resetForm} // Ensures modal opens completely blank
                                 className="bg-[#1c4ed8] hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
@@ -234,7 +279,11 @@ export default function InventoryManagement() {
                                                     <td className="px-6 py-4">{item.borrower || '-'}</td>
                                                     <td className="px-6 py-4">{item.due_date || '-'}</td>
                                                     <td className="px-6 py-4">
-                                                        <button className="p-1.5 border border-gray-200 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                                                        {/* NEW: Wired up the Edit button */}
+                                                        <button 
+                                                            onClick={() => handleEditClick(item)}
+                                                            className="p-1.5 border border-gray-200 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                        >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                                                         </button>
                                                     </td>
@@ -249,27 +298,28 @@ export default function InventoryManagement() {
                 </main>
             </div>
 
-            {/* NEW: The Modal Overlay */}
+            {/* The Modal Overlay */}
             {isAddModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden">
                         
-                        {/* Modal Header */}
                         <div className="flex justify-between items-center p-5 border-b border-gray-200">
-                            <h2 className="text-lg font-bold text-gray-900">Add Inventory Item</h2>
+                            {/* Dynamically change the title */}
+                            <h2 className="text-lg font-bold text-gray-900">
+                                {editingItemId ? "Edit Inventory Item" : "Add Inventory Item"}
+                            </h2>
                             <button 
-                                onClick={() => setIsAddModalOpen(false)}
+                                onClick={resetForm}
                                 className="text-gray-400 hover:text-gray-600 p-1 rounded-md border border-gray-200"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
                             </button>
                         </div>
 
-                        {/* Modal Form */}
-                        <form onSubmit={handleAddItem}>
+                        {/* Note: Changed onSubmit from handleAddItem to handleSubmit */}
+                        <form onSubmit={handleSubmit}>
                             <div className="p-6 space-y-5">
                                 
-                                {/* Item Name */}
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Item Name</label>
                                     <input 
@@ -282,7 +332,6 @@ export default function InventoryManagement() {
                                     />
                                 </div>
 
-                                {/* Category and Quantity Grid */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Category</label>
@@ -310,7 +359,6 @@ export default function InventoryManagement() {
                                     </div>
                                 </div>
 
-                                {/* Status / Condition */}
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status</label>
                                     <select 
@@ -324,13 +372,38 @@ export default function InventoryManagement() {
                                     </select>
                                 </div>
 
+                                {newItemData.status === 'Borrowed' && (
+                                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Borrower Name</label>
+                                            <input 
+                                                type="text" 
+                                                required
+                                                placeholder="e.g. Juan dela Cruz"
+                                                className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={newItemData.borrower}
+                                                onChange={(e) => setNewItemData({...newItemData, borrower: e.target.value})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Due Date</label>
+                                            <input 
+                                                type="date" 
+                                                required
+                                                className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                                value={newItemData.due_date}
+                                                onChange={(e) => setNewItemData({...newItemData, due_date: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
                             </div>
 
-                            {/* Modal Footer */}
                             <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
                                 <button 
                                     type="button"
-                                    onClick={() => setIsAddModalOpen(false)}
+                                    onClick={resetForm}
                                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 transition-colors"
                                 >
                                     Cancel
@@ -341,7 +414,8 @@ export default function InventoryManagement() {
                                     className="px-5 py-2 bg-[#1c4ed8] hover:bg-blue-800 text-white rounded-md text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
-                                    {isSubmitting ? 'Adding...' : 'Add Item'}
+                                    {/* Dynamically change the button text */}
+                                    {isSubmitting ? 'Saving...' : (editingItemId ? 'Save Changes' : 'Add Item')}
                                 </button>
                             </div>
                         </form>

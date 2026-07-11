@@ -143,3 +143,8 @@ class InventoryListView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated] 
     queryset = InventoryItem.objects.all().order_by('-created_at')
     serializer_class = InventoryItemSerializer
+
+class InventoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    queryset = InventoryItem.objects.all()
+    serializer_class = InventoryItemSerializer
