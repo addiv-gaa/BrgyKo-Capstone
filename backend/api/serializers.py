@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import CertificateRequest, PermitRequest
+from .models import CertificateRequest, PermitRequest, InventoryItem
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -40,4 +40,12 @@ class PermitRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PermitRequest
+        fields = '__all__'
+
+from rest_framework import serializers
+from .models import InventoryItem
+
+class InventoryItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InventoryItem
         fields = '__all__'

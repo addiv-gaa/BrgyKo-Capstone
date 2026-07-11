@@ -1,4 +1,4 @@
-function Welfare() {
+export default function Welfare() {
 return (
     <div>
         <h1>Welfare</h1>
@@ -7,4 +7,3 @@ return (
 );
 
 }
-export default Welfare;

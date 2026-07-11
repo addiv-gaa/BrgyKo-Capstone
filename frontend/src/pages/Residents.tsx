@@ -1,4 +1,4 @@
-function Residents() {
+export default function Residents() {
 return (
     <div>
         <h1>Residents</h1>
@@ -7,4 +7,3 @@ return (
 );
 
 }
-export default Residents;

@@ -1,4 +1,4 @@
-function SKModule() {
+export default function SKModule() {
 return (
     <div>
         <h1>SK Module</h1>
@@ -7,4 +7,3 @@ return (
 );
 
 }
-export default SKModule;

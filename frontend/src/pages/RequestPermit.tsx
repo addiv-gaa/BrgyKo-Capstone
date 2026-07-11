@@ -12,7 +12,7 @@ interface PermitRecord {
     status: 'PENDING' | 'PROCESSING' | 'RELEASED' | 'REJECTED';
 }
 
-function RequestPermit() {
+export default function RequestPermit() {
     // --- State Management ---
     const [formData, setFormData] = useState({
         permit_type: 'BUSINESS', 
@@ -329,5 +329,3 @@ function RequestPermit() {
         </div>
     );
 }
-
-export default RequestPermit;

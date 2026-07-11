@@ -1,4 +1,4 @@
-function EmergencyContacts() {
+export default function EmergencyContacts() {
 return (
     <div>
         <h1>Emergency Contacts</h1>
@@ -7,4 +7,3 @@ return (
 );
 
 }
-export default EmergencyContacts;

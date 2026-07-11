@@ -5,8 +5,9 @@ from django.shortcuts import render
 from django.contrib.auth.models import User
 from rest_framework import generics
 
-from .models import CertificateRequest, PermitRequest, AiQueryStatistic
-from .serializers import CertificateRequestSerializer, PermitRequestSerializer, UserSerializer
+from .models import CertificateRequest, PermitRequest, AiQueryStatistic, InventoryItem
+from .serializers import CertificateRequestSerializer, PermitRequestSerializer, UserSerializer, InventoryItemSerializer
+
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.throttling import UserRateThrottle
 from .permissions import IsAdminGroup, IsStaffGroup
@@ -136,3 +137,9 @@ class AiAssistantView(APIView):
                 {"error": "The AI is currently unavailable. Please try again later."}, 
                 status=503
             )
+        
+class InventoryListView(generics.ListCreateAPIView):
+    # Depending on your setup, you might want to restrict this to IsStaffGroup
+    permission_classes = [IsAuthenticated] 
+    queryset = InventoryItem.objects.all().order_by('-created_at')
+    serializer_class = InventoryItemSerializer

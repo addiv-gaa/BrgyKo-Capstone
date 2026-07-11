@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from api.views import AiAssistantView, CreateUserView, CertificateRequestView, PermitRequestView, CustomTokenObtainPairView, CertificateRequestManagerView
+from api.views import AiAssistantView, CreateUserView, CertificateRequestView, PermitRequestView, CustomTokenObtainPairView, CertificateRequestManagerView, InventoryListView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
@@ -29,4 +29,5 @@ urlpatterns = [
     path('api/permits/', PermitRequestView.as_view(), name='permit-request'),
     path('api/manager/certificates/', CertificateRequestManagerView.as_view(), name='manager-certificates'),
     path('api/ai-assistant/', AiAssistantView.as_view(), name='ai-assistant'),
+    path('api/inventory/', InventoryListView.as_view(), name='inventory-list'),
 ]

@@ -1,4 +1,4 @@
-function GeoMapping() {
+export default function GeoMapping() {
 return (
     <div>
         <h1>Geo Mapping</h1>
@@ -7,4 +7,3 @@ return (
 );
 
 }
-export default GeoMapping;

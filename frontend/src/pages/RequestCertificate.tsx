@@ -12,7 +12,7 @@ interface CertificateRecord {
     status: 'PENDING' | 'PROCESSING' | 'RELEASED' | 'REJECTED';
 }
 
-function RequestCertificate() {
+export default function RequestCertificate() {
     // --- State Management ---
     const [formData, setFormData] = useState({
         certificate_type: 'CLEARANCE', 
@@ -331,4 +331,3 @@ function RequestCertificate() {
     );
 }
 
-export default RequestCertificate;

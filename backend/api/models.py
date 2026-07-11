@@ -97,3 +97,31 @@ class AiQueryStatistic(models.Model):
 
     def __str__(self):
         return f"Query by {self.user} at {self.created_at}"
+    
+class InventoryItem(models.Model):
+    STATUS_CHOICES = [
+        ('Available', 'Available'),
+        ('Borrowed', 'Borrowed'),
+        ('For Repair', 'For Repair'),
+    ]
+
+    CATEGORY_CHOICES = [
+        ('Emergency', 'Emergency'),
+        ('Equipment', 'Equipment'),
+        ('Supplies', 'Supplies'),
+        ('Office', 'Office'),
+    ]
+
+    name = models.CharField(max_length=255)
+    category = models.CharField(max_length=100, choices=CATEGORY_CHOICES)
+    quantity = models.IntegerField(default=1)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Available')
+    
+    borrower = models.CharField(max_length=255, blank=True, null=True)
+    due_date = models.DateField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.status})"
