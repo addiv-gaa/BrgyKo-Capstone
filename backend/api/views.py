@@ -1,12 +1,16 @@
 from django.conf import settings
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 import google.generativeai as genai
 
 from django.shortcuts import render
 from django.contrib.auth.models import User
+from django.db.models import Sum
 from rest_framework import generics
 
-from .models import CertificateRequest, PermitRequest, AiQueryStatistic, InventoryItem
-from .serializers import CertificateRequestSerializer, PermitRequestSerializer, UserSerializer, InventoryItemSerializer
+from .models import CertificateRequest, PermitRequest, AiQueryStatistic, InventoryItem, Announcement, ReadAnnouncement
+from .serializers import CertificateRequestSerializer, PermitRequestSerializer, UserSerializer, InventoryItemSerializer, AnnouncementSerializer
 
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.throttling import UserRateThrottle
@@ -55,14 +59,6 @@ class PermitRequestView(generics.ListCreateAPIView):
         # Automatically attaches the logged-in user to the request before saving
         serializer.save(user=self.request.user)
 
-class PermitRequestManagerView(APIView):
-    # This locks the endpoint. A standard 'User' will get a 403 Forbidden.
-    permission_classes = [IsStaffGroup]
-
-    def get(self, request):
-        # Your logic to fetch permits for staff to review
-        return Response({"message": "Here are the permit requests."})
-
 class SystemSettingsView(APIView):
     # Only Admins can hit this endpoint.
     permission_classes = [IsAdminGroup]
@@ -78,6 +74,15 @@ class CertificateRequestManagerView(generics.ListAPIView):
     def get_queryset(self):
         # Returns ALL certificates, showing newest first
         return CertificateRequest.objects.all().order_by('date_requested')
+
+class PermitRequestManagerView(generics.ListAPIView):
+    # Only staff can access this list
+    permission_classes = [IsStaffGroup] 
+    serializer_class = PermitRequestSerializer
+    
+    def get_queryset(self):
+        # Returns ALL permits, showing newest first
+        return PermitRequest.objects.all().order_by('date_requested')
     
 class AiChatThrottle(UserRateThrottle):
     scope = 'ai_chat'
@@ -148,3 +153,38 @@ class InventoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     queryset = InventoryItem.objects.all()
     serializer_class = InventoryItemSerializer
+
+class DashboardStatsView(APIView):
+    permission_classes = [IsAuthenticated] # Ensures only logged-in users see this
+
+    def get(self, request):
+        # Calculate your stats
+        stats = {
+            "total_residents": User.objects.count(),
+            "certs_this_month": CertificateRequest.objects.count(), # You can add date filters here
+            "items_borrowed": InventoryItem.objects.filter(status='Borrowed').aggregate(Sum('quantity'))['quantity__sum'] or 0,
+            "welfare_beneficiaries": 430, # Replace with your actual model query
+            "sk_programs": 6,             # Replace with your actual model query
+            "chatbot_queries": AiQueryStatistic.objects.count(),
+        }
+        return Response(stats)
+
+class AnnouncementViewSet(viewsets.ModelViewSet):
+    queryset = Announcement.objects.all()
+    serializer_class = AnnouncementSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        # Only staff can create/edit/delete
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsStaffGroup()]
+        return super().get_permissions()
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def mark_as_read(self, request, pk=None):
+        announcement = self.get_object()
+        ReadAnnouncement.objects.get_or_create(user=request.user, announcement=announcement)
+        return Response({'status': 'marked as read'}, status=status.HTTP_200_OK)

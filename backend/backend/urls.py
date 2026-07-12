@@ -16,8 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from api.views import AiAssistantView, CreateUserView, CertificateRequestView, PermitRequestView, CustomTokenObtainPairView, CertificateRequestManagerView, InventoryListView, InventoryDetailView
+from api.views import AiAssistantView, CreateUserView, CertificateRequestView, PermitRequestView, CustomTokenObtainPairView, CertificateRequestManagerView, PermitRequestManagerView, InventoryListView, InventoryDetailView, DashboardStatsView, AnnouncementViewSet
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
+router.register(r'announcements', AnnouncementViewSet, basename='announcement')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,8 +32,11 @@ urlpatterns = [
     path('api/certificates/', CertificateRequestView.as_view(), name='certificate-request'),
     path('api/permits/', PermitRequestView.as_view(), name='permit-request'),
     path('api/manager/certificates/', CertificateRequestManagerView.as_view(), name='manager-certificates'),
+    path('api/manager/permits/', PermitRequestManagerView.as_view(), name='manager-permits'),
     path('api/ai-assistant/', AiAssistantView.as_view(), name='ai-assistant'),
     path('api/inventory/', InventoryListView.as_view(), name='inventory-list'),
-    path('api/inventory/<int:pk>/', InventoryDetailView.as_view(), name='inventory-detail'), 
+    path('api/inventory/<int:pk>/', InventoryDetailView.as_view(), name='inventory-detail'),
+    path('api/dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('api/', include(router.urls)), 
 ]
 

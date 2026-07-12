@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import CertificateRequest, PermitRequest, InventoryItem
+from .models import CertificateRequest, PermitRequest, InventoryItem, Announcement, ReadAnnouncement
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -13,6 +13,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         
         roles_list = list(user.groups.values_list('name', flat=True))
+        token['username'] = user.username
+        token['first_name'] = user.first_name
         print(f"DEBUG: Found roles: {roles_list}")
         
         token['roles'] = roles_list
@@ -49,3 +51,16 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryItem
         fields = '__all__'
+
+class AnnouncementSerializer(serializers.ModelSerializer):
+    is_read = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Announcement
+        fields = ['id', 'title', 'content', 'category', 'created_at', 'is_read']
+
+    def get_is_read(self, obj):
+        user = self.context['request'].user
+        if user.is_anonymous:
+            return False
+        return ReadAnnouncement.objects.filter(user=user, announcement=obj).exists()

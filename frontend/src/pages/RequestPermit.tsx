@@ -27,48 +27,49 @@ export default function RequestPermit() {
     const [previousRequests, setPreviousRequests] = useState<PermitRecord[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
-// --- Data Fetching (Runs once on component mount) ---
-    useEffect(() => {
-        const fetchPreviousRequests = async () => {
-            // FIX 1: Make sure this exactly matches the key in your handleSubmit
-            const token = localStorage.getItem('access'); 
-            
-            if (!token) {
-                setIsLoading(false);
-                return;
-            }
+    // NEW: State for confirmation modal
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-            try {
-                const response = await fetch(`${API_URL}/api/permits/`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+    // --- Data Fetching ---
+    const fetchPreviousRequests = async () => {
+        const token = localStorage.getItem('access'); 
+        
+        if (!token) {
+            setIsLoading(false);
+            return;
+        }
 
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    // FIX 2: Check if Django paginated the response
-                    if (Array.isArray(data)) {
-                        // If it's a standard array, set it directly
-                        setPreviousRequests(data);
-                    } else if (data.results && Array.isArray(data.results)) {
-                        // If Django wrapped it in a 'results' object, drill down into it
-                        setPreviousRequests(data.results);
-                    } else {
-                        console.error("API returned an unexpected format:", data);
-                        setPreviousRequests([]); // Fallback to prevent crashes
-                    }
-                } else {
-                    console.error("Failed to fetch previous requests. Status:", response.status);
+        try {
+            const response = await fetch(`${API_URL}/api/permits/`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
                 }
-            } catch (error) {
-                console.error("Network error while fetching requests:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+            });
 
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (Array.isArray(data)) {
+                    setPreviousRequests(data);
+                } else if (data.results && Array.isArray(data.results)) {
+                    setPreviousRequests(data.results);
+                } else {
+                    console.error("API returned an unexpected format:", data);
+                    setPreviousRequests([]); 
+                }
+            } else {
+                console.error("Failed to fetch previous requests. Status:", response.status);
+            }
+        } catch (error) {
+            console.error("Network error while fetching requests:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Runs once on component mount
+    useEffect(() => {
         fetchPreviousRequests();
     }, []);
 
@@ -81,15 +82,24 @@ export default function RequestPermit() {
         }));
     };
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    // NEW: Step 1 - Catch the form submission and open the modal
+    const handleInitialSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault(); 
+        // If the code reaches here, all HTML 'required' fields are filled!
+        setIsConfirmModalOpen(true);
+    };
 
+    // NEW: Step 2 - Execute the API call when the user clicks 'Yes' in the modal
+    const handleFinalConfirm = async () => {
         const token = localStorage.getItem('access');
 
         if (!token) {
             alert("You must be logged in to submit a request.");
+            setIsConfirmModalOpen(false);
             return;
         }
+
+        setIsSubmitting(true);
 
         try {
             const response = await fetch(`${API_URL}/api/permits/`, {
@@ -113,12 +123,14 @@ export default function RequestPermit() {
                     supporting_documents: ''
                 });
                 
-                // Optional: You could trigger a re-fetch here to instantly show the new request in the table
-                // fetchPreviousRequests(); 
+                // Close modal and refresh the table instantly
+                setIsConfirmModalOpen(false);
+                fetchPreviousRequests(); 
             } 
             else if (response.status === 401) {
                 console.error("Authentication failed: Token missing or expired.");
                 alert("Your session has expired. Please log in again.");
+                setIsConfirmModalOpen(false);
             } 
             else {
                 const errorData = await response.json();
@@ -128,6 +140,8 @@ export default function RequestPermit() {
         } catch (error) {
             console.error("Network error:", error);
             alert("Network error occurred.");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -145,6 +159,17 @@ export default function RequestPermit() {
             default:
                 return <span className="px-2.5 py-1 bg-gray-50 text-gray-700 text-xs font-medium rounded-md border border-gray-200">{status}</span>;
         }
+    };
+
+    // Helper to make the permit type readable in the modal
+    const getReadablePermitType = (type: string) => {
+        const types: Record<string, string> = {
+            'BUSINESS': 'Business Permit',
+            'CONSTRUCTION': 'Construction Permit',
+            'EVENT': 'Event/Activity Permit',
+            'ZONING': 'Zoning Clearance'
+        };
+        return types[type] || type;
     };
 
     // --- Render ---
@@ -169,7 +194,8 @@ export default function RequestPermit() {
                             <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                                 <h2 className="text-lg font-bold mb-6">Permit Request Form</h2>
                                 
-                                <form className="space-y-5" onSubmit={handleSubmit}>
+                                {/* NOTE: onSubmit is now mapped to handleInitialSubmit */}
+                                <form className="space-y-5" onSubmit={handleInitialSubmit}>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                                             Permit Type
@@ -236,14 +262,14 @@ export default function RequestPermit() {
                                                 Nature
                                             </label>
                                             <input 
-                                            type="text" 
-                                            name="nature"
-                                            value={formData.nature}
-                                            onChange={handleChange}
-                                            placeholder="Enter the nature of the request" 
-                                            required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
-                                        />
+                                                type="text" 
+                                                name="nature"
+                                                value={formData.nature}
+                                                onChange={handleChange}
+                                                placeholder="Enter the nature of the request" 
+                                                required
+                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
+                                            />
                                         </div>
                                     </div>
 
@@ -300,8 +326,7 @@ export default function RequestPermit() {
                                                 ) : (
                                                     previousRequests.map((request) => (
                                                         <tr key={request.id}>
-                                                            {/* Assuming the API returns human-readable types. If not, map them similarly to statuses. */}
-                                                            <td className="py-4">{request.permit_type}</td>
+                                                            <td className="py-4 font-medium">{getReadablePermitType(request.permit_type)}</td>
                                                             <td className="py-4 text-center">{request.date_requested}</td>
                                                             <td className="py-4 text-center">
                                                                 {renderStatusBadge(request.status)}
@@ -318,7 +343,7 @@ export default function RequestPermit() {
                                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                                     <h2 className="text-sm font-bold mb-2">Processing Fee</h2>
                                     <p className="text-sm text-gray-600 leading-relaxed">
-                                        Processing fee: ₱50 for most permits. Present official receipt upon pickup. <span className="font-bold text-gray-800">1–2 business days</span>. You will receive an SMS when your certificate is ready for pickup.
+                                        Processing fee: ₱50 for most permits. Present official receipt upon pickup. <span className="font-bold text-gray-800">1–2 business days</span>. You will receive an SMS when your permit is ready for pickup.
                                     </p>
                                 </div>
                             </div>
@@ -326,6 +351,50 @@ export default function RequestPermit() {
                     </div>
                 </main>
             </div>
+
+            {/* NEW: The Confirmation Modal */}
+            {isConfirmModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden p-6 text-center">
+                        
+                        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-50 mb-4">
+                            <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Submission</h3>
+                        <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                            Are you sure you want to request a <span className="font-semibold text-gray-800">{getReadablePermitType(formData.permit_type)}</span> for <span className="font-semibold text-gray-800">{formData.applicant_name}</span>? 
+                        </p>
+                        
+                        <div className="flex flex-col gap-2 w-full">
+                            <button 
+                                onClick={handleFinalConfirm}
+                                disabled={isSubmitting}
+                                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#1c4ed8] text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Submitting...
+                                    </>
+                                ) : 'Yes, Submit Request'}
+                            </button>
+                            <button 
+                                onClick={() => setIsConfirmModalOpen(false)}
+                                disabled={isSubmitting}
+                                className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                            >
+                                Wait, go back
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

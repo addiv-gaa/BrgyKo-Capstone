@@ -125,3 +125,29 @@ class InventoryItem(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.status})"
+
+class Announcement(models.Model):
+    CATEGORY_CHOICES = [
+        ('Emergency', 'Emergency'),
+        ('Event', 'Event'),
+        ('Welfare', 'Welfare'),
+        ('Services', 'Services'),
+        ('SK', 'SK'),
+    ]
+    
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    class Meta:
+        ordering = ['-created_at']
+
+class ReadAnnouncement(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE)
+    read_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'announcement') # Prevents duplicate "read" entries

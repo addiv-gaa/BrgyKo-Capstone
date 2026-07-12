@@ -1,11 +1,13 @@
 import { createContext, useState, useEffect, type ReactNode } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import { ACCESS_TOKEN, REFRESH_TOKEN } from '../constants'; // Adjust path if needed
+import { ACCESS_TOKEN, REFRESH_TOKEN } from '../constants'; 
 
-// 1. Define the shape of your User and Context
+// 1. UPDATED: Added first_name and username to the global User object definition
 interface User {
     token: string;
     roles: string[];
+    first_name?: string;
+    username?: string;
 }
 
 interface AuthContextType {
@@ -14,28 +16,32 @@ interface AuthContextType {
     logout: () => void;
 }
 
+// UPDATED: Added fields to the JWT definition so jwtDecode knows they exist inside the token
 interface CustomJwtPayload {
     exp?: number;
     roles?: string[];
+    first_name?: string;
+    username?: string;
 }
 
-// 2. Create the Context
 export const AuthContext = createContext<AuthContextType | null>(null);
 
-// 3. Create the Provider
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
-    // Add a loading state so we don't render the app before checking storage
     const [isAppLoading, setIsAppLoading] = useState(true);
 
-    // THIS IS THE MAGIC FIX: When the app starts, check localStorage immediately!
     useEffect(() => {
         const token = localStorage.getItem(ACCESS_TOKEN);
         if (token) {
             try {
                 const decoded = jwtDecode<CustomJwtPayload>(token);
-                // Hydrate the global state with the user's roles
-                setUser({ roles: decoded.roles || [], token });
+                // UPDATED: Extracted fields from decoded token into your application state
+                setUser({ 
+                    roles: decoded.roles || [], 
+                    token,
+                    first_name: decoded.first_name,
+                    username: decoded.username
+                });
             } catch (error) {
                 console.error("Failed to decode token on load", error);
             }
@@ -45,7 +51,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const login = (token: string) => {
         const decoded = jwtDecode<CustomJwtPayload>(token);
-        setUser({ roles: decoded.roles || [], token });
+        // UPDATED: Handled the payload details inside the active login handler
+        setUser({ 
+            roles: decoded.roles || [], 
+            token,
+            first_name: decoded.first_name,
+            username: decoded.username
+        });
     };
 
     const logout = () => {
@@ -56,7 +68,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return (
         <AuthContext.Provider value={{ user, login, logout }}>
-            {/* Wait until we've checked localStorage before rendering the Sidebar and Routes */}
             {!isAppLoading ? children : <div className="flex h-screen items-center justify-center">Loading App...</div>}
         </AuthContext.Provider>
     );

@@ -20,6 +20,7 @@ import BarangayOfficials from "./pages/BarangayOfficials"
 import Documents from "./pages/Documents"
 import CertificateRequests from "./pages/CertificateRequests"
 import Announcements from "./pages/Announcements"
+import PermitRequests from "./pages/PermitRequests"
 import {AuthProvider} from "./components/AuthContext"
 
 function Logout(){
@@ -166,6 +167,15 @@ function App() {
           </ProtectedRoute>
           }
         />
+        <Route
+          path = "/permitrequests"
+          element={
+            <ProtectedRoute>
+              <PermitRequests />
+            </ProtectedRoute>
+          }
+        />
+          
         <Route path="/logout" element={<Logout />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<RegisterAndLogout />} />
