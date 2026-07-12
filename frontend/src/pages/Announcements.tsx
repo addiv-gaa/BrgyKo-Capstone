@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../components/AuthContext";
 import Sidebar from "../components/sidebar";
 import PageHeader from "../components/header";
