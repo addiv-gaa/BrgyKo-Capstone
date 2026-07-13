@@ -71,18 +71,32 @@ export default function InventoryManagement() {
     };
 
     // NEW: Helper to reset the form back to default "Add" mode
-    const resetForm = () => {
-        setIsAddModalOpen(false);
-        setEditingItemId(null);
-        setNewItemData({ 
-            name: '', 
-            category: 'Equipment', 
-            quantity: 1, 
-            status: 'Available',
-            borrower: '',
-            due_date: ''
-        });
-    };
+    const handleOpenAddModal = () => {
+    setEditingItemId(null); // Ensure we are in "Add" mode
+    setNewItemData({ 
+        name: '', 
+        category: 'Equipment', 
+        quantity: 1, 
+        status: 'Available',
+        borrower: '',
+        due_date: ''
+    });
+    setIsAddModalOpen(true); // Open the modal
+};
+
+// 2. Used only for canceling or closing
+const resetForm = () => {
+    setIsAddModalOpen(false);
+    setEditingItemId(null);
+    setNewItemData({ 
+        name: '', 
+        category: 'Equipment', 
+        quantity: 1, 
+        status: 'Available',
+        borrower: '',
+        due_date: ''
+    });
+};
 
     // UPDATED: Now handles both Adding (POST) and Editing (PUT)
     const handleSubmit = async (e: React.FormEvent) => {
@@ -182,7 +196,7 @@ export default function InventoryManagement() {
                                 <p className="text-gray-500 text-sm mt-1">Equipment & Supplies Tracker</p>
                             </div>
                             <button 
-                                onClick={resetForm} // Ensures modal opens completely blank
+                                onClick={handleOpenAddModal} // Ensures modal opens completely blank
                                 className="bg-[#1c4ed8] hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>

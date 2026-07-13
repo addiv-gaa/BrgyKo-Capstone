@@ -62,7 +62,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'api',
     'rest_framework',
-    'corsheaders'
+    'corsheaders',
+    'rest_framework_gis',
+    'django.contrib.gis',
+    'django_filters',
 ]
 
 MIDDLEWARE = [
@@ -101,7 +104,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'brgykodb',
         'USER': 'postgres',
         'PASSWORD': 'root',
@@ -154,3 +157,19 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWS_CREDENTIALS = True
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+
+if os.name == 'nt':
+    # 1. Define the base directory
+    osgeo4w_base = r'C:\Users\David\AppData\Local\Programs\OSGeo4W'
+    osgeo4w_bin = os.path.join(osgeo4w_base, 'bin')
+    
+    # 2. Add it to the Python DLL search path
+    if hasattr(os, 'add_dll_directory'):
+        os.add_dll_directory(osgeo4w_bin)
+
+    # 3. Point explicitly to the GDAL and GEOS files
+    GDAL_LIBRARY_PATH = os.path.join(osgeo4w_bin, 'gdal313.dll')
+    GEOS_LIBRARY_PATH = os.path.join(osgeo4w_bin, 'geos_c.dll')
+    
+    # 4. FIX: Force GDAL to use the correct PROJ database from OSGeo4W
+    os.environ['PROJ_LIB'] = os.path.join(osgeo4w_base, 'share', 'proj')

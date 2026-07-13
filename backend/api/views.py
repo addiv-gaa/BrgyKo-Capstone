@@ -1,5 +1,5 @@
 from django.conf import settings
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 import google.generativeai as genai
@@ -7,10 +7,25 @@ import google.generativeai as genai
 from django.shortcuts import render
 from django.contrib.auth.models import User
 from django.db.models import Sum
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics
 
-from .models import CertificateRequest, PermitRequest, AiQueryStatistic, InventoryItem, Announcement, ReadAnnouncement
-from .serializers import CertificateRequestSerializer, PermitRequestSerializer, UserSerializer, InventoryItemSerializer, AnnouncementSerializer
+from .models import (
+    CertificateRequest, 
+    PermitRequest, 
+    AiQueryStatistic, 
+    InventoryItem, 
+    Announcement, 
+    ReadAnnouncement, 
+    Household,)
+
+from .serializers import (
+    CertificateRequestSerializer, 
+    PermitRequestSerializer, 
+    UserSerializer, 
+    InventoryItemSerializer, 
+    AnnouncementSerializer, 
+    HouseholdSerializer,)
 
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.throttling import UserRateThrottle
@@ -188,3 +203,23 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         announcement = self.get_object()
         ReadAnnouncement.objects.get_or_create(user=request.user, announcement=announcement)
         return Response({'status': 'marked as read'}, status=status.HTTP_200_OK)
+    
+class HouseholdViewSet(viewsets.ModelViewSet):
+    queryset = Household.objects.all()
+    serializer_class = HouseholdSerializer
+    permission_classes = [IsStaffGroup]
+    
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    
+    # NEW: Updated to filter by the new boolean flags instead of the old welfare_status string
+    filterset_fields = [
+        'is_4ps_beneficiary', 
+        'has_senior_citizen', 
+        'has_pwd', 
+        'has_solo_parent',
+        'housing_status',    # Added so staff can filter by Informal Settlers, etc.
+        'dwelling_type'
+    ]
+    
+    # Allows searching by name or specific street address
+    search_fields = ['head_of_household', 'address']

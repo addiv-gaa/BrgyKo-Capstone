@@ -1,8 +1,9 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_gis.serializers import GeoFeatureModelSerializer
 
-from .models import CertificateRequest, PermitRequest, InventoryItem, Announcement, ReadAnnouncement
+from .models import CertificateRequest, PermitRequest, InventoryItem, Announcement, ReadAnnouncement, Household
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -64,3 +65,13 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         if user.is_anonymous:
             return False
         return ReadAnnouncement.objects.filter(user=user, announcement=obj).exists()
+    
+class HouseholdSerializer(GeoFeatureModelSerializer):
+    class Meta:
+        model = Household
+        # CRITICAL: Tell the serializer which field holds the geometry
+        geo_field = "location" 
+        
+        # We can safely use '__all__' to include the new boolean flags, 
+        # housing_status, dwelling_type, etc., in the properties object.
+        fields = '__all__'
