@@ -10,6 +10,7 @@ interface ResidentData {
     id: number;
     first_name: string;
     last_name: string;
+    sex: string;
     purok: string;
     birth_date: string | null;
     civil_status: string;
@@ -222,6 +223,7 @@ export default function ResidentPage() {
                                         <th className="px-6 py-4">Household Status</th>
                                         <th className="px-6 py-4">Purok</th>
                                         <th className="px-6 py-4">Age</th>
+                                        <th className="px-6 py-4">Sex</th>
                                         <th className="px-6 py-4">Civil Status</th>
                                         <th className="px-6 py-4">Welfare</th>
                                         <th className="px-6 py-4 text-center">Actions</th>
@@ -267,6 +269,7 @@ export default function ResidentPage() {
 
                                                 <td className="px-6 py-4 text-sm text-gray-600">{resident.purok}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-600">{calculateAge(resident.birth_date)}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.sex}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-600">{resident.civil_status}</td>
                                                 
                                                 <td className="px-6 py-4">

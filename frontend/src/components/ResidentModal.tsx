@@ -4,6 +4,7 @@ export interface ResidentProperties {
     id?: number;
     first_name: string;
     last_name: string;
+    sex: string;
     purok: string;
     birth_date: string | null;
     civil_status: string;
@@ -48,6 +49,7 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
                     const extractedData: Partial<ResidentProperties> = {
                         first_name: formData.get('first_name') as string,
                         last_name: formData.get('last_name') as string,
+                        sex: formData.get('sex') as string,
                         purok: formData.get('purok') as string,
                         birth_date: formData.get('birth_date') as string,
                         civil_status: formData.get('civil_status') as string,
@@ -80,6 +82,13 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Birth Date</label>
                                 <input type="date" name="birth_date" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-blue-500 focus:border-blue-500" defaultValue={resident?.birth_date || ''} required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Sex</label>
+                                <select name="sex" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-blue-500 focus:border-blue-500" defaultValue={resident?.sex || 'Male'}>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Civil Status</label>

@@ -83,7 +83,7 @@ class ResidentMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resident
         fields = [
-            'id', 'first_name', 'last_name', 'civil_status', 'relationship_to_head',
+            'id', 'first_name', 'last_name', 'sex', 'civil_status', 'relationship_to_head',
             'is_4ps_beneficiary', 'has_senior_citizen', 'has_pwd', 'has_solo_parent'
         ]
     

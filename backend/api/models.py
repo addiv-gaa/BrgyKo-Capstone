@@ -199,11 +199,17 @@ class Resident(models.Model):
         ('Other', 'Other Relative / Non-Relative'),
     ]
 
+    SEX_CHOICES = [
+        ('Male', 'Male'),
+        ('Female', 'Female'),
+    ]
+
     # --- Basic Info ---
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     birth_date = models.DateField(null=True, blank=True)
     civil_status = models.CharField(max_length=50, default='Single')
+    sex = models.CharField(max_length=10, choices=SEX_CHOICES, default='Male')
     
     # ⬆️ MOVED FROM HOUSEHOLD: Contact number belongs to the individual
     contact_number = models.CharField(max_length=20, blank=True, null=True)

@@ -22,8 +22,8 @@ from api.views import (
     CertificateRequestView, 
     PermitRequestView, 
     CustomTokenObtainPairView, 
-    CertificateRequestManagerView, 
-    PermitRequestManagerView, 
+    CertificateRequestManagerViewSet, 
+    PermitRequestManagerViewSet, 
     InventoryListView, 
     InventoryDetailView, 
     DashboardStatsView, 
@@ -38,6 +38,8 @@ router = DefaultRouter()
 router.register(r'announcements', AnnouncementViewSet, basename='announcement')
 router.register(r'households', HouseholdViewSet, basename='household')
 router.register(r'residents', ResidentViewSet, basename='residents')
+router.register(r'manager/certificates', CertificateRequestManagerViewSet, basename='manager-certificates')
+router.register(r'manager/permits', PermitRequestManagerViewSet, basename='manager-permits')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -47,8 +49,6 @@ urlpatterns = [
     path('api-auth/', include("rest_framework.urls")), 
     path('api/certificates/', CertificateRequestView.as_view(), name='certificate-request'),
     path('api/permits/', PermitRequestView.as_view(), name='permit-request'),
-    path('api/manager/certificates/', CertificateRequestManagerView.as_view(), name='manager-certificates'),
-    path('api/manager/permits/', PermitRequestManagerView.as_view(), name='manager-permits'),
     path('api/ai-assistant/', AiAssistantView.as_view(), name='ai-assistant'),
     path('api/inventory/', InventoryListView.as_view(), name='inventory-list'),
     path('api/inventory/<int:pk>/', InventoryDetailView.as_view(), name='inventory-detail'),

@@ -15,6 +15,7 @@ interface ResidentMini {
     id: number;
     first_name: string;
     last_name: string;
+    sex: string;
     civil_status: string;
     relationship_to_head: string;
     is_4ps_beneficiary: boolean;
@@ -324,6 +325,7 @@ export default function MappingPage() {
                                                 <tr className="border-b border-gray-200 text-gray-500">
                                                     <th className="pb-2 font-medium">Name</th>
                                                     <th className="pb-2 font-medium">Role</th>
+                                                    <th className="pb-2 font-medium">Sex</th>
                                                     <th className="pb-2 font-medium">Civil Status</th>
                                                     <th className="pb-2 font-medium">Flags</th>
                                                 </tr>
@@ -338,6 +340,7 @@ export default function MappingPage() {
                                                             )}
                                                         </td>
                                                         <td className="py-2 text-gray-600">{person.relationship_to_head}</td>
+                                                        <td className="py-2 text-gray-600">{person.sex}</td>
                                                         <td className="py-2 text-gray-600">{person.civil_status}</td>
                                                         <td className="py-2 flex gap-1 flex-wrap">
                                                             {person.has_senior_citizen && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Senior</span>}
