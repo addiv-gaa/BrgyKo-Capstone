@@ -166,29 +166,69 @@ class Household(models.Model):
         ('Light Materials', 'Light Materials (Wood/Nipa)'),
     ]
 
-    # --- Basic Info ---
-    head_of_household = models.CharField(max_length=255)
-    contact_number = models.CharField(max_length=20, blank=True, null=True)
+    # --- Physical Location Info ---
     address = models.TextField()
-    member_count = models.IntegerField()
-
-    # --- Vulnerability & Welfare Flags ---
-    is_4ps_beneficiary = models.BooleanField(default=False)
-    has_senior_citizen = models.BooleanField(default=False)
-    has_pwd = models.BooleanField(default=False)
-    has_solo_parent = models.BooleanField(default=False)
+    
+    # --- Geo-Mapping (The GIS Upgrade) ---
+    location = models.PointField(srid=4326, blank=True, null=True) 
 
     # --- Disaster Risk & Socio-Economic ---
     housing_status = models.CharField(max_length=50, choices=HOUSING_CHOICES, blank=True, null=True)
     dwelling_type = models.CharField(max_length=50, choices=DWELLING_CHOICES, blank=True, null=True)
 
-    # --- Geo-Mapping (The GIS Upgrade) ---
-    # Replaces latitude/longitude. SRID 4326 is the standard GPS coordinate system (WGS 84)
-    location = models.PointField(srid=4326) 
-
     # --- Audit Trail ---
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # ❌ REMOVED: head_of_household (Derived from Resident where relationship='Head')
+    # ❌ REMOVED: contact_number (Moved to Resident, usually belongs to a person, not a house)
+    # ❌ REMOVED: member_count (Calculated dynamically via obj.residents.count())
+    # ❌ REMOVED: Vulnerability Flags (4Ps, Senior, PWD, Solo Parent are now on the Resident)
+
     def __str__(self):
-        return f"Household: {self.head_of_household} ({self.address})"
+        # Updated string representation since head_of_household is gone
+        return f"Household: {self.address[:30]}..."
+    
+class Resident(models.Model):
+    RELATIONSHIP_CHOICES = [
+        ('Head', 'Head of Household'),
+        ('Spouse', 'Spouse'),
+        ('Child', 'Child'),
+        ('Parent', 'Parent'),
+        ('Sibling', 'Sibling'),
+        ('Other', 'Other Relative / Non-Relative'),
+    ]
+
+    # --- Basic Info ---
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    birth_date = models.DateField(null=True, blank=True)
+    civil_status = models.CharField(max_length=50, default='Single')
+    
+    # ⬆️ MOVED FROM HOUSEHOLD: Contact number belongs to the individual
+    contact_number = models.CharField(max_length=20, blank=True, null=True)
+    purok = models.CharField(max_length=50)
+    
+    # --- The Database Link ---
+    household = models.ForeignKey(
+        Household, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='residents'
+    )
+    
+    # ⬆️ REPLACES 'head_of_household' string:
+    relationship_to_head = models.CharField(max_length=20, choices=RELATIONSHIP_CHOICES, default='Head')
+
+    # --- ⬆️ MOVED FROM HOUSEHOLD: Vulnerability & Welfare Flags ---
+    is_4ps_beneficiary = models.BooleanField(default=False)
+    has_senior_citizen = models.BooleanField(default=False)
+    has_pwd = models.BooleanField(default=False)
+    has_solo_parent = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}"

@@ -1,15 +1,14 @@
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 
-// Matches the exact fields we discussed for the normalized Django Resident model
 export interface ResidentProperties {
     id?: number;
     first_name: string;
     last_name: string;
     purok: string;
-    birth_date: string;
+    birth_date: string | null;
     civil_status: string;
     relationship_to_head: string;
-    household_id?: number | null; // Nullable, in case they are unmapped!
+    household?: number | null; // The ID of the mapped house
     is_4ps_beneficiary: boolean;
     has_senior_citizen: boolean;
     has_pwd: boolean;
@@ -19,13 +18,13 @@ export interface ResidentProperties {
 interface ResidentModalProps {
     mode: 'add' | 'edit';
     resident: ResidentProperties | null;
+    households: { id: number, address: string }[]; // <--- NEW PROP
     onClose: () => void;
     onSave: (data: Partial<ResidentProperties>) => void;
 }
 
-export default function ResidentModal({ mode, resident, onClose, onSave }: ResidentModalProps) {
+export default function ResidentModal({ mode, resident, households, onClose, onSave }: ResidentModalProps) {
     
-    // Prevent background scrolling when modal is open
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = 'unset'; };
@@ -35,7 +34,6 @@ export default function ResidentModal({ mode, resident, onClose, onSave }: Resid
         <div className="fixed inset-0 z-2000 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 
-                {/* Header */}
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
                     <h2 className="text-xl font-bold text-gray-900">
                         {mode === 'add' ? 'Add New Resident' : 'Edit Resident Details'}
@@ -43,7 +41,6 @@ export default function ResidentModal({ mode, resident, onClose, onSave }: Resid
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
                 </div>
                 
-                {/* Form */}
                 <form className="p-6 space-y-5" onSubmit={(e) => { 
                     e.preventDefault(); 
                     const formData = new FormData(e.currentTarget);
@@ -55,8 +52,9 @@ export default function ResidentModal({ mode, resident, onClose, onSave }: Resid
                         birth_date: formData.get('birth_date') as string,
                         civil_status: formData.get('civil_status') as string,
                         relationship_to_head: formData.get('relationship_to_head') as string,
-                        // Parse household ID if selected, otherwise leave null
-                        household_id: formData.get('household_id') ? parseInt(formData.get('household_id') as string, 10) : null,
+                        
+                        // Grab the household ID and send it to Django
+                        household: formData.get('household') ? parseInt(formData.get('household') as string, 10) : null,
                         
                         is_4ps_beneficiary: formData.get('is_4ps_beneficiary') === 'on',
                         has_senior_citizen: formData.get('has_senior_citizen') === 'on',
@@ -67,7 +65,7 @@ export default function ResidentModal({ mode, resident, onClose, onSave }: Resid
                     onSave(extractedData);
                 }}>
                     
-                    {/* Section 1: Basic Info */}
+                    {/* ... (Keep Section 1: Basic Info exactly the same) ... */}
                     <div>
                         <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-3">Personal Information</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -97,7 +95,6 @@ export default function ResidentModal({ mode, resident, onClose, onSave }: Resid
 
                     <hr className="border-gray-100" />
 
-                    {/* Section 2: Household & Residency */}
                     <div>
                         <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-3">Residency Details</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -122,15 +119,15 @@ export default function ResidentModal({ mode, resident, onClose, onSave }: Resid
                                 </select>
                             </div>
                             
-                            {/* Household Assignment Dropdown */}
+                            {/* THE DYNAMIC HOUSEHOLD DROPDOWN */}
                             <div className="col-span-1 md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Assign to Household (Optional)</label>
-                                <div className="text-xs text-gray-500 mb-2">Leave blank if the household is not mapped yet. You can attach them via the map later.</div>
-                                <select name="household_id" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-blue-500 focus:border-blue-500" defaultValue={resident?.household_id || ''}>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Assign to Mapped Household (Optional)</label>
+                                <div className="text-xs text-gray-500 mb-2">Leave blank if the household is not mapped on the GIS yet.</div>
+                                <select name="household" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-blue-500 focus:border-blue-500" defaultValue={resident?.household || ''}>
                                     <option value="">-- Unmapped / No Household Assigned --</option>
-                                    {/* In a real app, you would map over your fetched households here */}
-                                    <option value="1">123 San Isidro (Juan dela Cruz)</option>
-                                    <option value="2">456 San Isidro (Maria Santos)</option>
+                                    {households.map(h => (
+                                        <option key={h.id} value={h.id}>{h.address}</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>
@@ -138,7 +135,7 @@ export default function ResidentModal({ mode, resident, onClose, onSave }: Resid
 
                     <hr className="border-gray-100" />
 
-                    {/* Section 3: Welfare Flags */}
+                    {/* ... (Keep Section 3: Welfare Flags exactly the same) ... */}
                     <div>
                         <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-3">Welfare & Vulnerability Flags</h3>
                         <div className="grid grid-cols-2 gap-3 bg-gray-50 p-4 rounded-lg border border-gray-100">

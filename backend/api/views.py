@@ -17,7 +17,8 @@ from .models import (
     InventoryItem, 
     Announcement, 
     ReadAnnouncement, 
-    Household,)
+    Household,
+    Resident,)
 
 from .serializers import (
     CertificateRequestSerializer, 
@@ -25,7 +26,8 @@ from .serializers import (
     UserSerializer, 
     InventoryItemSerializer, 
     AnnouncementSerializer, 
-    HouseholdSerializer,)
+    HouseholdSerializer,
+    ResidentSerializer,)
 
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.throttling import UserRateThrottle
@@ -205,21 +207,44 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         return Response({'status': 'marked as read'}, status=status.HTTP_200_OK)
     
 class HouseholdViewSet(viewsets.ModelViewSet):
-    queryset = Household.objects.all()
+    # OPTIMIZATION: prefetch_related is absolutely critical here so the dynamically 
+    # calculated fields in the serializer don't crash your database performance.
+    queryset = Household.objects.prefetch_related('residents').all()
     serializer_class = HouseholdSerializer
-    permission_classes = [IsStaffGroup]
     
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    # Enable filtering and searching
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     
-    # NEW: Updated to filter by the new boolean flags instead of the old welfare_status string
-    filterset_fields = [
-        'is_4ps_beneficiary', 
-        'has_senior_citizen', 
-        'has_pwd', 
-        'has_solo_parent',
-        'housing_status',    # Added so staff can filter by Informal Settlers, etc.
-        'dwelling_type'
+    # This allows the React map search bar to find a house by typing the address
+    # OR by typing the name of anyone who lives there!
+    search_fields = [
+        'address', 
+        'residents__first_name', 
+        'residents__last_name'
     ]
     
-    # Allows searching by name or specific street address
-    search_fields = ['head_of_household', 'address']
+    filterset_fields = ['housing_status', 'dwelling_type']
+
+class ResidentViewSet(viewsets.ModelViewSet):
+    # Use select_related to grab the household address efficiently if needed
+    queryset = Resident.objects.select_related('household').all()
+    serializer_class = ResidentSerializer
+    
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
+    
+    search_fields = [
+        'first_name', 
+        'last_name', 
+        'purok'
+    ]
+    
+    # Allows the React Resident table to filter by specific criteria
+    filterset_fields = [
+        'purok', 
+        'household', 
+        'relationship_to_head',
+        'is_4ps_beneficiary',
+        'has_senior_citizen',
+        'has_pwd',
+        'has_solo_parent'
+    ]

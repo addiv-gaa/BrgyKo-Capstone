@@ -28,7 +28,8 @@ from api.views import (
     InventoryDetailView, 
     DashboardStatsView, 
     AnnouncementViewSet,
-    HouseholdViewSet)
+    HouseholdViewSet,
+    ResidentViewSet,)
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.routers import DefaultRouter
@@ -36,6 +37,7 @@ from rest_framework.routers import DefaultRouter
 router = DefaultRouter()
 router.register(r'announcements', AnnouncementViewSet, basename='announcement')
 router.register(r'households', HouseholdViewSet, basename='household')
+router.register(r'residents', ResidentViewSet, basename='residents')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
