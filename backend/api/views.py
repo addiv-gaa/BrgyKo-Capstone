@@ -150,7 +150,9 @@ class DashboardStatsView(APIView):
     def get(self, request):
         stats = {
             "total_residents": User.objects.count(),
-            "certs_this_month": CertificateRequest.objects.count(), 
+            "certs_this_month": CertificateRequest.objects.count(),
+            "pending_reservations": Reservation.objects.filter(status='PENDING').count(), 
+            "pending_documents": CertificateRequest.objects.filter(status='PENDING').count(),
             "welfare_beneficiaries": 430, 
             "sk_programs": 6,             
             "chatbot_queries": AiQueryStatistic.objects.count(),

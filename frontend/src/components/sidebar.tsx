@@ -12,20 +12,20 @@ const MENU_CONFIG = {
     ],
     community: [
         { label: "Announcements", path: "/announcements" },
+        { label: "Barangay Calendar", path: "/resident/schedule" },
         { label: "Emergency Contacts", path: "/emergencycontacts" },
         { label: "Barangay Officials", path: "/barangayofficials" },
     ],
     administration: [
+        { label: "Barangay Calendar", path: "/barangaycalendarstaff" },
         { label: "Residents", path: "/residents" },
         { label: "Inventory", path: "/inventory" },
         { label: "Welfare", path: "/welfare" },
-        { label: "SK Module", path: "/skmodule" },
         { label: "SMS Blast", path: "/smsblast" },
         { label: "Reports", path: "/reports" },
         { label: "Geo Mapping", path: "/geomapping" },
         { label: "Documents", path: "/documents" },
         { label: "Cert Requests", path: "/certrequests" },
-        { label: "Permit Request", path: "/permitrequests"},
     ]
 };
 

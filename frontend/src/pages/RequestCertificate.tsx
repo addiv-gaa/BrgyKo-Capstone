@@ -379,7 +379,7 @@ export default function RequestCertificate() {
                                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                                     <h2 className="text-sm font-bold mb-2">General Processing</h2>
                                     <p className="text-sm text-gray-600 leading-relaxed">
-                                        Requests are verified by the barangay staff. You will receive an SMS when your certificate is ready for pickup.
+                                        Requests are verified by the barangay staff.
                                     </p>
                                 </div>
                             </div>
