@@ -85,26 +85,38 @@ export default function AiAssistant() {
     };
 
     return (
-        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800 sticky top-0">
-            <PageHeader />
+        // CHANGED: Use h-screen instead of h-full, and removed sticky top-0
+        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
+            {/* CHANGED: Wrapped PageHeader to prevent it from shrinking */}
+            <div className="shrink-0 w-full">
+                <PageHeader />
+            </div>
 
-            {/* FIX APPLIED HERE: Added pt-16 (or mt-16) to push content below the floating PageHeader */}
-            <div className="flex flex-1 overflow-hidden sticky top-0">
-                <Sidebar />
+            {/* CHANGED: Removed sticky top-0 here as well */}
+            <div className="flex flex-1 overflow-hidden">
                 
-                <main className="flex-1 w-full h-full overflow-y-auto p-8 bg-[#f4f7fa]">
+                {/* CHANGED: Wrapped Sidebar to lock its height */}
+                <div className="shrink-0 h-full">
+                    <Sidebar />
+                </div>
+                
+                {/* CHANGED: Added h-full and ensured overflow-y-auto is set here */}
+                <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
                     
                     {/* Centered Wrapper */}
-                    <div className="max-w-4xl mx-auto">
+                    {/* CHANGED: Made this wrapper stretch full height so the chat box can fill it nicely */}
+                    <div className="max-w-4xl mx-auto h-full flex flex-col">
                         
                         {/* Header */}
-                        <div className="mb-6">
+                        <div className="mb-6 shrink-0">
                             <h1 className="text-2xl font-bold text-gray-900">AI Barangay Assistant</h1>
                             <p className="text-gray-500 text-sm mt-1">Get answers to common barangay service questions</p>
                         </div>
 
                         {/* Chat Container Layout */}
-                        <div className="bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col h-150">
+                        {/* CHANGED: Replaced hardcoded h-[75vh] with flex-1 min-h-[500px] so it naturally fills available space without breaking */}
+                        <div className="bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col flex-1 min-h-[500px] mb-8">
                             
                             {/* Message History Area */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -150,8 +162,23 @@ export default function AiAssistant() {
                                 <div ref={messagesEndRef} />
                             </div>
 
-                            {/* Input Form Area */}
-                            <div className="p-4 border-t border-gray-100 bg-white rounded-b-lg">
+                            {/* Input Form & Suggestions Area */}
+                            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg shrink-0">
+                                
+                                {/* Preset Suggestions Chips */}
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    {suggestions.map((suggestion) => (
+                                        <button
+                                            key={suggestion}
+                                            onClick={() => handleSendMessage(suggestion)}
+                                            disabled={isLoading}
+                                            className="px-3 py-1.5 bg-white border border-blue-200 text-blue-700 text-xs font-semibold rounded-full shadow-sm hover:bg-blue-50 transition-colors disabled:opacity-50"
+                                        >
+                                            {suggestion}
+                                        </button>
+                                    ))}
+                                </div>
+
                                 <form onSubmit={onSubmit} className="flex gap-3">
                                     <input 
                                         type="text" 
@@ -159,7 +186,7 @@ export default function AiAssistant() {
                                         onChange={(e) => setInputValue(e.target.value)}
                                         disabled={isLoading}
                                         placeholder="Ask about barangay services..." 
-                                        className="flex-1 border border-gray-300 rounded-md p-3 text-sm outline-none focus:ring-2 focus:ring-blue-600 transition-shadow disabled:bg-gray-50 disabled:text-gray-400"
+                                        className="flex-1 border border-gray-300 rounded-md p-3 text-sm outline-none focus:ring-2 focus:ring-blue-600 transition-shadow disabled:bg-gray-100 disabled:text-gray-400"
                                     />
                                     <button 
                                         type="submit" 
@@ -172,20 +199,6 @@ export default function AiAssistant() {
                                     </button>
                                 </form>
                             </div>
-                        </div>
-
-                        {/* Preset Suggestions Chips */}
-                        <div className="flex flex-wrap gap-2 mt-4">
-                            {suggestions.map((suggestion) => (
-                                <button
-                                    key={suggestion}
-                                    onClick={() => handleSendMessage(suggestion)}
-                                    disabled={isLoading}
-                                    className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-full shadow-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
-                                >
-                                    {suggestion}
-                                </button>
-                            ))}
                         </div>
 
                     </div>
