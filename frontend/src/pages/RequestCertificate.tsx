@@ -11,6 +11,37 @@ interface CertificateRecord {
     status: 'PENDING' | 'PROCESSING' | 'RELEASED' | 'REJECTED';
 }
 
+// NEW: Static data for dropdowns, requirements, and processing times
+const CERTIFICATE_TYPES = [
+    { 
+        id: 'CLEARANCE', 
+        label: 'Barangay Clearance', 
+        time: '1-2 business days',
+        requirements: ['Valid ID (e.g., Passport, Driver\'s License)', 'Recent Cedula (Community Tax Certificate)']
+    },
+    { 
+        id: 'RESIDENCY', 
+        label: 'Certificate of Residency', 
+        time: '1 business day',
+        requirements: ['Valid ID', 'Proof of Billing matching the resident address']
+    },
+    { 
+        id: 'INDIGENCY', 
+        label: 'Certificate of Indigency', 
+        time: '1 business day',
+        requirements: ['Valid ID']
+    }
+];
+
+const PURPOSES = [
+    'Employment',
+    'Bank Requirement',
+    'School Requirement',
+    'Government ID Application',
+    'Financial Assistance',
+    'Other'
+];
+
 export default function RequestCertificate() {
     // --- State Management ---
     const [formData, setFormData] = useState({
@@ -18,14 +49,13 @@ export default function RequestCertificate() {
         full_name: '',
         date_of_birth: '',
         civil_status: 'SINGLE',        
-        purpose: '',
+        purpose: '', // This will now start empty to force dropdown selection
         contact_number: ''
     });
 
     const [previousRequests, setPreviousRequests] = useState<CertificateRecord[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
-    // NEW: State to control the confirmation modal and submission loading
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -79,14 +109,11 @@ export default function RequestCertificate() {
         }));
     };
 
-    // NEW: Step 1 - Intercept form submit and open modal
     const handleInitialSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault(); 
-        // If the code reaches here, all HTML 'required' fields are filled!
         setIsConfirmModalOpen(true);
     };
 
-    // NEW: Step 2 - Execute the API call when the user clicks 'Yes' in the modal
     const handleFinalConfirm = async () => {
         const token = localStorage.getItem('access');
 
@@ -110,7 +137,6 @@ export default function RequestCertificate() {
 
             if (response.ok) {
                 alert("Request submitted successfully!");
-                // Clear the form
                 setFormData({
                     certificate_type: 'CLEARANCE',
                     full_name: '',
@@ -120,7 +146,6 @@ export default function RequestCertificate() {
                     contact_number: ''
                 });
                 
-                // Close modal and instantly refresh the table
                 setIsConfirmModalOpen(false);
                 fetchPreviousRequests(); 
             } 
@@ -158,13 +183,8 @@ export default function RequestCertificate() {
         }
     };
 
-    // Helper to make the certificate type readable in the modal
-    const getReadableCertType = (type: string) => {
-        if (type === 'CLEARANCE') return 'Barangay Clearance';
-        if (type === 'RESIDENCY') return 'Certificate of Residency';
-        if (type === 'INDIGENCY') return 'Certificate of Indigency';
-        return type;
-    };
+    // NEW: Find active certificate config for dynamic display
+    const selectedCert = CERTIFICATE_TYPES.find(c => c.id === formData.certificate_type);
 
     // --- Render ---
     return (
@@ -188,7 +208,6 @@ export default function RequestCertificate() {
                             <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                                 <h2 className="text-lg font-bold mb-6">Certificate Request Form</h2>
                                 
-                                {/* NOTE: onSubmit is now mapped to handleInitialSubmit */}
                                 <form className="space-y-5" onSubmit={handleInitialSubmit}>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
@@ -200,11 +219,29 @@ export default function RequestCertificate() {
                                             onChange={handleChange}
                                             className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
                                         >
-                                            <option value="CLEARANCE">Barangay Clearance</option>
-                                            <option value="RESIDENCY">Certificate of Residency</option>
-                                            <option value="INDIGENCY">Certificate of Indigency</option>
+                                            {/* NEW: Map through the array instead of hardcoding */}
+                                            {CERTIFICATE_TYPES.map(cert => (
+                                                <option key={cert.id} value={cert.id}>{cert.label}</option>
+                                            ))}
                                         </select>
                                     </div>
+
+                                    {/* NEW: Dynamic Requirements Box */}
+                                    {selectedCert && selectedCert.requirements.length > 0 && (
+                                        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r mt-2">
+                                            <h4 className="font-semibold text-blue-800 text-xs uppercase tracking-wider mb-2">
+                                                Required Documents for {selectedCert.label}
+                                            </h4>
+                                            <ul className="list-disc pl-5 text-sm text-blue-900 space-y-1">
+                                                {selectedCert.requirements.map((req, index) => (
+                                                    <li key={index}>{req}</li>
+                                                ))}
+                                            </ul>
+                                            <p className="text-xs text-blue-700 mt-3 italic">
+                                                * Please bring these documents when claiming your certificate at the barangay hall.
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <div>
                                         <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
@@ -257,15 +294,19 @@ export default function RequestCertificate() {
                                         <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                                             Purpose
                                         </label>
-                                        <input 
-                                            type="text" 
+                                        {/* NEW: Converted from text input to select dropdown */}
+                                        <select 
                                             name="purpose"
                                             value={formData.purpose}
                                             onChange={handleChange}
-                                            placeholder="e.g. Employment, Scholarship" 
                                             required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
-                                        />
+                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                                        >
+                                            <option value="" disabled>Select a purpose...</option>
+                                            {PURPOSES.map((purpose, index) => (
+                                                <option key={index} value={purpose}>{purpose}</option>
+                                            ))}
+                                        </select>
                                     </div>
 
                                     <div>
@@ -321,7 +362,7 @@ export default function RequestCertificate() {
                                                 ) : (
                                                     previousRequests.map((request) => (
                                                         <tr key={request.id}>
-                                                            <td className="py-4 font-medium">{getReadableCertType(request.certificate_type)}</td>
+                                                            <td className="py-4 font-medium">{CERTIFICATE_TYPES.find(c => c.id === request.certificate_type)?.label || request.certificate_type}</td>
                                                             <td className="py-4 text-center">{request.date_requested}</td>
                                                             <td className="py-4 text-center">
                                                                 {renderStatusBadge(request.status)}
@@ -336,9 +377,9 @@ export default function RequestCertificate() {
 
                                 {/* Processing Time Info Box */}
                                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-                                    <h2 className="text-sm font-bold mb-2">Processing Time</h2>
+                                    <h2 className="text-sm font-bold mb-2">General Processing</h2>
                                     <p className="text-sm text-gray-600 leading-relaxed">
-                                        Most certificates ready within <span className="font-bold text-gray-800">1–2 business days</span>. You will receive an SMS when your certificate is ready for pickup.
+                                        Requests are verified by the barangay staff. You will receive an SMS when your certificate is ready for pickup.
                                     </p>
                                 </div>
                             </div>
@@ -347,7 +388,7 @@ export default function RequestCertificate() {
                 </main>
             </div>
 
-            {/* NEW: The Confirmation Modal */}
+            {/* The Confirmation Modal */}
             {isConfirmModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden p-6 text-center">
@@ -359,10 +400,17 @@ export default function RequestCertificate() {
                         </div>
                         
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Submission</h3>
-                        <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-                            Are you sure you want to request a <span className="font-semibold text-gray-800">{getReadableCertType(formData.certificate_type)}</span> for <span className="font-semibold text-gray-800">{formData.full_name}</span>? 
+                        <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+                            Are you sure you want to request a <span className="font-semibold text-gray-800">{selectedCert?.label}</span> for <span className="font-semibold text-gray-800">{formData.full_name}</span>? 
                         </p>
                         
+                        {/* NEW: Dynamic Processing Time Alert */}
+                        <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-md mb-6 text-left">
+                            <p className="text-sm text-yellow-800">
+                                <span className="font-semibold">Estimated Processing:</span> {selectedCert?.time}
+                            </p>
+                        </div>
+
                         <div className="flex flex-col gap-2 w-full">
                             <button 
                                 onClick={handleFinalConfirm}

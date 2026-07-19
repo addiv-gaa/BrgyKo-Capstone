@@ -5,12 +5,15 @@ from rest_framework_gis.serializers import GeoFeatureModelSerializer
 
 from .models import (
     CertificateRequest, 
-    PermitRequest, 
-    InventoryItem, 
+    PermitRequest,  
     Announcement, 
     ReadAnnouncement, 
     Household, 
-    Resident)
+    Resident,
+    Facility, 
+    Equipment, 
+    Event, 
+    Reservation,)
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -50,14 +53,6 @@ class PermitRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PermitRequest
-        fields = '__all__'
-
-from rest_framework import serializers
-from .models import InventoryItem
-
-class InventoryItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InventoryItem
         fields = '__all__'
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -133,3 +128,29 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
 
     def get_has_solo_parent(self, obj):
         return obj.residents.filter(has_solo_parent=True).exists()
+    
+class FacilitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Facility
+        fields = '__all__'
+
+class EquipmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Equipment
+        fields = '__all__'
+
+class EventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = '__all__'
+        read_only_fields = ['organizer', 'created_at']
+
+class ReservationSerializer(serializers.ModelSerializer):
+    facility_name = serializers.ReadOnlyField(source='facility.name')
+    equipment_name = serializers.ReadOnlyField(source='equipment.name')
+    
+    class Meta:
+        model = Reservation
+        fields = '__all__'
+        # Security enhancement: prevents users from injecting their own approved status or manipulating timestamps/user binding.
+        read_only_fields = ['user', 'status', 'date_requested']

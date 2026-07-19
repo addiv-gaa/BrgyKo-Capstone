@@ -138,7 +138,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Manila'
 
 USE_I18N = True
 
@@ -173,3 +173,4 @@ if os.name == 'nt':
     
     # 4. FIX: Force GDAL to use the correct PROJ database from OSGeo4W
     os.environ['PROJ_LIB'] = os.path.join(osgeo4w_base, 'share', 'proj')
+

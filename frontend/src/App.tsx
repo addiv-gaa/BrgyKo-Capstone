@@ -22,6 +22,9 @@ import CertificateRequests from "./pages/CertificateRequests"
 import Announcements from "./pages/Announcements"
 import PermitRequests from "./pages/PermitRequests"
 import {AuthProvider} from "./components/AuthContext"
+import StaffSchedulePage from "./pages/BarangayCalendarStaff"
+import ResidentSchedulePage from "./pages/BarangayCalendarUser"
+import ReservationForm from "./pages/ReservationForm"
 
 function Logout(){
   localStorage.clear()
@@ -175,7 +178,30 @@ function App() {
             </ProtectedRoute>
           }
         />
-          
+         <Route
+          path = "/barangaycalendarstaff"
+          element={
+            <ProtectedRoute>
+              <StaffSchedulePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path = "/resident/schedule"
+          element={
+            <ProtectedRoute>
+              <ResidentSchedulePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path = "/reservations/request"
+          element={
+            <ProtectedRoute>
+              <ReservationForm />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/logout" element={<Logout />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<RegisterAndLogout />} />

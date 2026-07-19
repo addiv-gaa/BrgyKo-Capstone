@@ -98,33 +98,89 @@ class AiQueryStatistic(models.Model):
     def __str__(self):
         return f"Query by {self.user} at {self.created_at}"
     
-class InventoryItem(models.Model):
+class Facility(models.Model):
     STATUS_CHOICES = [
         ('Available', 'Available'),
-        ('Borrowed', 'Borrowed'),
-        ('For Repair', 'For Repair'),
-    ]
-
-    CATEGORY_CHOICES = [
-        ('Emergency', 'Emergency'),
-        ('Equipment', 'Equipment'),
-        ('Supplies', 'Supplies'),
-        ('Office', 'Office'),
+        ('Maintenance', 'Maintenance'),
+        ('Unavailable', 'Unavailable'),
     ]
 
     name = models.CharField(max_length=255)
-    category = models.CharField(max_length=100, choices=CATEGORY_CHOICES)
-    quantity = models.IntegerField(default=1)
+    description = models.TextField(blank=True, null=True)
+    location = models.CharField(max_length=255, blank=True, help_text="Specific area in the barangay")
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Available')
-    
-    borrower = models.CharField(max_length=255, blank=True, null=True)
-    due_date = models.DateField(blank=True, null=True)
-    
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.name} ({self.status})"
+
+
+class Equipment(models.Model):
+    STATUS_CHOICES = [
+        ('Available', 'Available'),
+        ('Maintenance', 'Maintenance'),
+        ('Out of Stock', 'Out of Stock'),
+    ]
+
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    total_quantity = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Available')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} - Total: {self.total_quantity}"
+
+
+class Event(models.Model):
+    EVENT_TYPES = [
+        ('ACTIVITY', 'Barangay Activity'),
+        ('ABSENCE', 'Official Absence'),
+    ]
+    """For official Barangay events that will show on the calendar."""
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES, default='ACTIVITY') # NEW
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    organizer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"[{self.event_type}] {self.title}"
+
+
+class Reservation(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reservations')
+    
+    # A reservation can be for a Facility OR Equipment (or both). 
+    # null=True allows one to be blank while the other is filled.
+    facility = models.ForeignKey(Facility, on_delete=models.CASCADE, null=True, blank=True)
+    equipment = models.ForeignKey(Equipment, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Crucial for equipment: How many chairs/tents are they borrowing?
+    equipment_quantity = models.PositiveIntegerField(default=0, blank=True, null=True)
+    
+    purpose = models.CharField(max_length=255)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    date_requested = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_time']
+
+    def __str__(self):
+        item_name = self.facility.name if self.facility else getattr(self.equipment, 'name', 'Multiple Items')
+        return f"[{self.status}] {self.user.username} - {item_name}"
 
 class Announcement(models.Model):
     CATEGORY_CHOICES = [

@@ -24,12 +24,16 @@ from api.views import (
     CustomTokenObtainPairView, 
     CertificateRequestManagerViewSet, 
     PermitRequestManagerViewSet, 
-    InventoryListView, 
-    InventoryDetailView, 
     DashboardStatsView, 
     AnnouncementViewSet,
     HouseholdViewSet,
-    ResidentViewSet,)
+    ResidentViewSet,
+    FacilityViewSet,       # NEW
+    EquipmentViewSet,      # NEW
+    EventViewSet,          # NEW
+    ReservationViewSet,    # NEW
+    calendar_feed,         # NEW
+)
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.routers import DefaultRouter
@@ -41,6 +45,12 @@ router.register(r'residents', ResidentViewSet, basename='residents')
 router.register(r'manager/certificates', CertificateRequestManagerViewSet, basename='manager-certificates')
 router.register(r'manager/permits', PermitRequestManagerViewSet, basename='manager-permits')
 
+# --- NEW: Scheduling & Reservation Routers ---
+router.register(r'facilities', FacilityViewSet, basename='facility')
+router.register(r'equipment', EquipmentViewSet, basename='equipment')
+router.register(r'events', EventViewSet, basename='event')
+router.register(r'reservations', ReservationViewSet, basename='reservation')
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/user/register/', CreateUserView.as_view(), name='register'),
@@ -50,9 +60,10 @@ urlpatterns = [
     path('api/certificates/', CertificateRequestView.as_view(), name='certificate-request'),
     path('api/permits/', PermitRequestView.as_view(), name='permit-request'),
     path('api/ai-assistant/', AiAssistantView.as_view(), name='ai-assistant'),
-    path('api/inventory/', InventoryListView.as_view(), name='inventory-list'),
-    path('api/inventory/<int:pk>/', InventoryDetailView.as_view(), name='inventory-detail'),
     path('api/dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    
+    # --- NEW: Custom Calendar Endpoint ---
+    path('api/calendar-feed/', calendar_feed, name='calendar-feed'),
+    
     path('api/', include(router.urls)), 
 ]
-
