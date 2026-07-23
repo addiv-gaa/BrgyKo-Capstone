@@ -1,4 +1,7 @@
 from django.conf import settings
+import random
+from django.utils import timezone
+from django.core.mail import send_mail
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
@@ -7,6 +10,8 @@ import google.generativeai as genai
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
+from datetime import datetime, timedelta
+
 
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.throttling import UserRateThrottle
@@ -34,6 +39,7 @@ from .models import (
     Reservation,
     Event,
     OfficialDocument,
+    UserProfile,
 )
 
 from .serializers import (
@@ -431,3 +437,219 @@ class OfficialDocumentViewSet(viewsets.ModelViewSet):
         ids = request.data.get('ids', [])
         OfficialDocument.objects.filter(id__in=ids).update(is_archived=True)
         return Response(status=204)
+    
+class ClaimResidentProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        # Check if user already has a profile linked
+        if hasattr(user, 'resident_profile') and user.resident_profile is not None:
+            return Response({"error": "An account is already linked to a resident profile."}, status=status.HTTP_400_BAD_REQUEST)
+
+        first_name = request.data.get('first_name', '').strip()
+        last_name = request.data.get('last_name', '').strip()
+        birthdate = request.data.get('birthdate')
+
+        if not first_name or not last_name or not birthdate:
+            return Response({"error": "First name, last name, and birthdate are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Search the pre-existing resident database for a matching record
+            resident = Resident.objects.get(
+                first_name__iexact=first_name,
+                last_name__iexact=last_name,
+                birth_date=birthdate,
+                user__isnull=True # Ensure this profile hasn't already been claimed by someone else!
+            )
+        except Resident.DoesNotExist:
+            return Response({"error": "No unlinked resident record found matching these details. Please contact barangay staff."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Link the resident profile to the logged-in user and set status to PENDING verification
+        resident.user = user
+        resident.approval_status = 'PENDING'
+        resident.save()
+
+        return Response({"message": "Profile successfully claimed! Waiting for staff approval."})
+    
+class ResidentApprovalViewSet(viewsets.ModelViewSet):
+    queryset = Resident.objects.all().order_by('-id')
+    serializer_class = ResidentSerializer
+    permission_classes = [IsStaffGroup]
+
+    # Custom endpoint to list only pending residents: /api/resident-approvals/pending/
+    @action(detail=False, methods=['get'])
+    def pending(self, request):
+        pending_residents = Resident.objects.filter(approval_status='PENDING', user__isnull=False)
+        serializer = self.get_serializer(pending_residents, many=True)
+        return Response(serializer.data)
+
+    # Custom endpoint to approve/reject: /api/resident-approvals/<id>/update_status/
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        resident = self.get_object()
+        new_status = request.data.get('status') # Expects 'APPROVED' or 'REJECTED'
+
+        if new_status not in ['APPROVED', 'REJECTED']:
+            return Response({"error": "Invalid status value."}, status=status.HTTP_400_BAD_REQUEST)
+
+        resident.approval_status = new_status
+        resident.save()
+
+        return Response({"message": f"Resident profile successfully {new_status.lower()}."}, status=status.HTTP_200_OK)
+    
+class RegisterWithEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get('username')
+        email = request.data.get('email')
+        password = request.data.get('password')
+
+        if not username or not email or not password:
+            return Response({"error": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if a user with this email already exists
+        user_qs = User.objects.filter(email=email)
+        
+        if user_qs.exists():
+            user = user_qs.first()
+            if user.is_active:
+                return Response({"error": "Email is already registered and active."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                # GHOST USER FIX: Account exists but is inactive. 
+                # Update credentials just in case they changed them on this new attempt.
+                user.set_password(password)
+                user.username = username
+                user.save()
+                
+                # Fetch or create the profile, then generate a new OTP
+                profile, created = UserProfile.objects.get_or_create(user=user)
+                otp = str(random.randint(100000, 999999))
+                profile.email_otp = otp
+                profile.otp_created_at = timezone.now()
+                profile.save()
+        else:
+            # Create a brand new user
+            user = User.objects.create_user(username=username, email=email, password=password)
+            user.is_active = False
+            user.save()
+            
+            # Generate new OTP profile
+            otp = str(random.randint(100000, 999999))
+            UserProfile.objects.create(user=user, email_otp=otp, otp_created_at=timezone.now())
+
+        # Guarantee the OTP prints to the terminal
+        print("\n" + "="*40)
+        print(f"🔑 YOUR OTP CODE FOR {email}: {otp}")
+        print("="*40 + "\n")
+
+        # Safely attempt to send mail
+        try:
+            send_mail(
+                'Your Barangay System Verification Code',
+                f'Your 6-digit verification code is: {otp}',
+                'no-reply@barangay.gov',
+                [email],
+                fail_silently=True, 
+            )
+        except Exception as e:
+            print(f"Could not send email: {e}")
+
+        return Response({
+            "message": "Registration successful. Check your terminal console for the OTP code.", 
+            "user_id": user.id
+        }, status=status.HTTP_200_OK)
+
+class VerifyEmailOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        entered_otp = request.data.get('otp')
+
+        try:
+            profile = UserProfile.objects.get(user__id=user_id)
+        except UserProfile.DoesNotExist:
+            return Response({"error": "User profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # 1. Check if they are locked out (5 or more failed attempts)
+        if profile.otp_attempts >= 5:
+            return Response(
+                {"error": "Too many invalid attempts. Please click 'Resend OTP' to get a new code."}, 
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
+        # 2. Check if OTP is wrong
+        if profile.email_otp != entered_otp:
+            # Increment the failed attempt counter
+            profile.otp_attempts += 1
+            profile.save()
+            return Response(
+                {"error": f"Invalid OTP code. {5 - profile.otp_attempts} attempts remaining."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Check if OTP expired
+        if timezone.now() - profile.otp_created_at > timedelta(minutes=10):
+            return Response({"error": "OTP has expired. Please request a new one."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 4. Success! Activate the user
+        user = profile.user
+        user.is_active = True
+        user.save()
+
+        # Clear OTP and reset attempts
+        profile.email_otp = ''
+        profile.otp_attempts = 0
+        profile.save()
+
+        return Response({"message": "Email successfully verified! You can now log in."}, status=status.HTTP_200_OK)
+
+
+class ResendOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        
+        if not user_id:
+            return Response({"error": "User ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(id=user_id)
+            profile = UserProfile.objects.get(user=user)
+        except (User.DoesNotExist, UserProfile.DoesNotExist):
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user.is_active:
+            return Response({"error": "Account is already verified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate a new 6-digit OTP
+        otp = str(random.randint(100000, 999999))
+        profile.email_otp = otp
+        profile.otp_created_at = timezone.now()
+        
+        # NEW: Reset the attempts counter since they have a fresh code
+        profile.otp_attempts = 0
+        profile.save()
+
+        # Guarantee the new OTP prints to the terminal
+        print("\n" + "="*40)
+        print(f"🔄 RESENT OTP CODE FOR {user.email}: {otp}")
+        print("="*40 + "\n")
+
+        # Safely attempt to send mail
+        try:
+            send_mail(
+                'Your New Verification Code',
+                f'Your new 6-digit verification code is: {otp}',
+                'no-reply@barangay.gov',
+                [user.email],
+                fail_silently=True, 
+            )
+        except Exception as e:
+            print(f"Could not send email: {e}")
+
+        return Response({"message": "A new OTP has been sent."}, status=status.HTTP_200_OK)

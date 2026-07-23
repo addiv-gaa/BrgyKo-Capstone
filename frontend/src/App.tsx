@@ -25,6 +25,8 @@ import {AuthProvider} from "./components/AuthContext"
 import StaffSchedulePage from "./pages/BarangayCalendarStaff"
 import ResidentSchedulePage from "./pages/BarangayCalendarUser"
 import ReservationForm from "./pages/ReservationForm"
+import ClaimProfile from "./pages/ClaimProfile"
+import ResidentApprovals from "./pages/ResidentApproval"
 
 function Logout(){
   localStorage.clear()
@@ -199,6 +201,22 @@ function App() {
           element={
             <ProtectedRoute>
               <ReservationForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path = "/claimprofile"
+          element={
+            <ProtectedRoute>
+              <ClaimProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path = "/residentapproval"
+          element={
+            <ProtectedRoute>
+              <ResidentApprovals />
             </ProtectedRoute>
           }
         />

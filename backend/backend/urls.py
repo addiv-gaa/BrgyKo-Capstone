@@ -23,7 +23,8 @@ from api.views import (
     CreateUserView, 
     CertificateRequestView, 
     PermitRequestView, 
-    CustomTokenObtainPairView, 
+    CustomTokenObtainPairView,
+    ClaimResidentProfileView, 
     CertificateRequestManagerViewSet, 
     PermitRequestManagerViewSet, 
     DashboardStatsView, 
@@ -36,6 +37,10 @@ from api.views import (
     ReservationViewSet,    
     calendar_feed,         
     OfficialDocumentViewSet,
+    ResidentApprovalViewSet,
+    RegisterWithEmailView,
+    VerifyEmailOTPView,
+    ResendOTPView,
 )
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -52,10 +57,10 @@ router.register(r'equipment', EquipmentViewSet, basename='equipment')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'reservations', ReservationViewSet, basename='reservation')
 router.register(r'official-documents', OfficialDocumentViewSet, basename='official-documents')
+router.register(r'resident-approvals', ResidentApprovalViewSet, basename='resident-approvals')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/user/register/', CreateUserView.as_view(), name='register'),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='refresh'),
     path('api-auth/', include("rest_framework.urls")), 
@@ -64,6 +69,10 @@ urlpatterns = [
     path('api/ai-assistant/', AiAssistantView.as_view(), name='ai-assistant'),
     path('api/dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('api/calendar-feed/', calendar_feed, name='calendar-feed'),
+    path('api/claim-profile/', ClaimResidentProfileView.as_view(), name='claim-profile'),
+    path('api/register/', RegisterWithEmailView.as_view(), name='register'),
+    path('api/verify-otp/', VerifyEmailOTPView.as_view(), name='verify-otp'),
+    path('api/resend-otp/', ResendOTPView.as_view(), name='resend-otp'),
     path('api/', include(router.urls)), 
 ]
 

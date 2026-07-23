@@ -2,6 +2,15 @@ from django.contrib.gis.db import models
 from django.contrib.auth.models import User
 from django.conf import settings
 
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='otp_profile')
+    email_otp = models.CharField(max_length=6, blank=True, null=True)
+    otp_created_at = models.DateTimeField(blank=True, null=True)
+    otp_attempts = models.IntegerField(default=0)
+
+    def __str__(self):
+        return self.user.email
+
 class CertificateRequest(models.Model):
     # --- Dropdown Choices ---
     CERTIFICATE_TYPES = [
@@ -260,6 +269,27 @@ class Resident(models.Model):
         ('Male', 'Male'),
         ('Female', 'Female'),
     ]
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='resident_profile'
+    )
+    
+    # Core identifying fields used for matching during Approach A
+    first_name = models.CharField(max_length=100, null=True, blank=True)
+    last_name = models.CharField(max_length=100, null=True, blank=True)
+    birthdate = models.DateField(null=True, blank=True)
+    
+    # Approval / Verification Workflow
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Verification'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+    approval_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
 
     # --- Basic Info ---
     first_name = models.CharField(max_length=100)
