@@ -4,6 +4,17 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 import google.generativeai as genai
 
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.filters import OrderingFilter
+from rest_framework.response import Response
+
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.throttling import UserRateThrottle
+from .permissions import IsAdminGroup, IsStaffGroup
+from rest_framework.views import APIView
+from .serializers import CustomTokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+
 from django.shortcuts import render
 from django.contrib.auth.models import User
 from django.db.models import Sum, Q
@@ -22,6 +33,7 @@ from .models import (
     Equipment, 
     Reservation,
     Event,
+    OfficialDocument,
 )
 
 from .serializers import (
@@ -34,15 +46,10 @@ from .serializers import (
     ReservationSerializer,
     FacilitySerializer, 
     EquipmentSerializer, 
-    EventSerializer
+    EventSerializer,
+    OfficialDocumentSerializer,
 )
 
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.throttling import UserRateThrottle
-from .permissions import IsAdminGroup, IsStaffGroup
-from rest_framework.views import APIView
-from .serializers import CustomTokenObtainPairSerializer
-from rest_framework_simplejwt.views import TokenObtainPairView
 
 genai.configure(api_key=settings.GOOGLE_API_KEY)
 
@@ -387,3 +394,40 @@ def calendar_feed(request):
         })
         
     return Response(calendar_data)
+
+class DocumentPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+
+class OfficialDocumentViewSet(viewsets.ModelViewSet):
+    queryset = OfficialDocument.objects.all()
+    serializer_class = OfficialDocumentSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = DocumentPagination # Attach pagination
+    
+    # 2. Add OrderingFilter to backends
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, OrderingFilter]
+    
+    # 3. Expose is_archived to the filterset
+    filterset_fields = ['document_type', 'is_archived'] 
+    search_fields = ['title']
+    
+    # 4. Define allowed sorting fields and default order
+    ordering_fields = ['title', 'document_type', 'uploaded_at']
+    ordering = ['-uploaded_at'] 
+
+    def perform_create(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
+
+    # 5. Custom Endpoints for Bulk Actions
+    @action(detail=False, methods=['post'])
+    def bulk_delete(self, request):
+        ids = request.data.get('ids', [])
+        OfficialDocument.objects.filter(id__in=ids).delete()
+        return Response(status=204)
+
+    @action(detail=False, methods=['post'])
+    def bulk_archive(self, request):
+        ids = request.data.get('ids', [])
+        OfficialDocument.objects.filter(id__in=ids).update(is_archived=True)
+        return Response(status=204)

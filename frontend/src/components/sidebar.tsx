@@ -7,7 +7,6 @@ const MENU_CONFIG = {
     services: [
         { label: "Dashboard", path: "/" },
         { label: "Request Certificate", path: "/requestcertificate" },
-        { label: "Request Permit", path: "/requestpermit" },
         { label: "Ai Assistant", path: "/aiassistant" },
     ],
     community: [

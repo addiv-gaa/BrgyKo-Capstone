@@ -1,5 +1,6 @@
 from django.contrib.gis.db import models
 from django.contrib.auth.models import User
+from django.conf import settings
 
 class CertificateRequest(models.Model):
     # --- Dropdown Choices ---
@@ -294,3 +295,30 @@ class Resident(models.Model):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
+    
+class OfficialDocument(models.Model):
+    DOCUMENT_TYPES = [
+        ('Ordinance', 'Ordinances (Mga Ordinansa)'),
+        ('Resolution', 'Resolutions (Mga Resolusyon)'),
+        ('EO', 'Executive Orders (EO)'),
+        ('Memo', 'Memorandums'),
+        ('Minutes', 'Meeting Minutes'),
+        ('Financial', 'Financial & Procurement'),
+        ('Template', 'Templates & Forms'),
+        ('Others', 'Others'),
+    ]
+
+    title = models.CharField(max_length=255)
+    file = models.FileField(upload_to='official_documents/')
+    document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPES)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        related_name='uploaded_documents'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_archived = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.title} ({self.document_type})"

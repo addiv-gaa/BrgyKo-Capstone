@@ -14,6 +14,8 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from api.views import (
@@ -28,11 +30,12 @@ from api.views import (
     AnnouncementViewSet,
     HouseholdViewSet,
     ResidentViewSet,
-    FacilityViewSet,       # NEW
-    EquipmentViewSet,      # NEW
-    EventViewSet,          # NEW
-    ReservationViewSet,    # NEW
-    calendar_feed,         # NEW
+    FacilityViewSet,       
+    EquipmentViewSet,      
+    EventViewSet,          
+    ReservationViewSet,    
+    calendar_feed,         
+    OfficialDocumentViewSet,
 )
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -44,12 +47,11 @@ router.register(r'households', HouseholdViewSet, basename='household')
 router.register(r'residents', ResidentViewSet, basename='residents')
 router.register(r'manager/certificates', CertificateRequestManagerViewSet, basename='manager-certificates')
 router.register(r'manager/permits', PermitRequestManagerViewSet, basename='manager-permits')
-
-# --- NEW: Scheduling & Reservation Routers ---
 router.register(r'facilities', FacilityViewSet, basename='facility')
 router.register(r'equipment', EquipmentViewSet, basename='equipment')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'reservations', ReservationViewSet, basename='reservation')
+router.register(r'official-documents', OfficialDocumentViewSet, basename='official-documents')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -61,9 +63,9 @@ urlpatterns = [
     path('api/permits/', PermitRequestView.as_view(), name='permit-request'),
     path('api/ai-assistant/', AiAssistantView.as_view(), name='ai-assistant'),
     path('api/dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
-    
-    # --- NEW: Custom Calendar Endpoint ---
     path('api/calendar-feed/', calendar_feed, name='calendar-feed'),
-    
     path('api/', include(router.urls)), 
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

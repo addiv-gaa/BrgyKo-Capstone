@@ -13,7 +13,9 @@ from .models import (
     Facility, 
     Equipment, 
     Event, 
-    Reservation,)
+    Reservation,
+    OfficialDocument, 
+)
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -154,3 +156,26 @@ class ReservationSerializer(serializers.ModelSerializer):
         fields = '__all__'
         # Security enhancement: prevents users from injecting their own approved status or manipulating timestamps/user binding.
         read_only_fields = ['user', 'status', 'date_requested']
+
+class OfficialDocumentSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.SerializerMethodField()
+    file_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OfficialDocument
+        fields = [
+            'id', 'title', 'file', 'file_name', 'document_type', 
+            'uploaded_by', 'uploaded_by_name', 'uploaded_at', 'is_archived' # Added is_archived
+        ]
+        read_only_fields = ['uploaded_by', 'uploaded_at']
+
+    def get_uploaded_by_name(self, obj):
+        if obj.uploaded_by:
+            name = f"{obj.uploaded_by.first_name} {obj.uploaded_by.last_name}".strip()
+            return name if name else obj.uploaded_by.username
+        return "Unknown"
+
+    def get_file_name(self, obj):
+        if obj.file:
+            return obj.file.name.split('/')[-1]
+        return None
