@@ -7,6 +7,8 @@ export default function ClaimProfile() {
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
     const [birthdate, setBirthdate] = useState("");
+    const [idFile, setIdFile] = useState<File | null>(null); // NEW: State for ID upload file
+    
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -24,18 +26,25 @@ export default function ClaimProfile() {
             return;
         }
 
+        // Use FormData to send text fields and the image file securely together
+        const formData = new FormData();
+        formData.append("first_name", firstName);
+        formData.append("last_name", lastName);
+        formData.append("birthdate", birthdate);
+        
+        if (idFile) {
+            formData.append("id_picture", idFile);
+        }
+
         try {
             const response = await fetch(`${API_URL}/api/claim-profile/`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
+                    // Note: Do NOT set 'Content-Type': 'application/json' when using FormData. 
+                    // The browser will automatically assign the multipart boundary.
                 },
-                body: JSON.stringify({
-                    first_name: firstName,
-                    last_name: lastName,
-                    birthdate: birthdate
-                })
+                body: formData
             });
 
             const data = await response.json();
@@ -43,7 +52,7 @@ export default function ClaimProfile() {
             if (response.ok) {
                 setSuccess(data.message);
                 setTimeout(() => {
-                    navigate('/dashboard'); // Redirect to home/dashboard after success
+                    navigate('/dashboard'); 
                 }, 2000);
             } else {
                 setError(data.error || "Failed to claim profile.");
@@ -61,7 +70,7 @@ export default function ClaimProfile() {
             <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-8 border border-gray-200">
                 <div className="text-center mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">Link Your Resident Profile</h1>
-                    <p className="text-sm text-gray-500 mt-1">Enter your pre-registered barangay registry details to unlock document requests.</p>
+                    <p className="text-sm text-gray-500 mt-1">Enter your pre-registered barangay registry details and upload a valid ID to unlock document requests.</p>
                 </div>
 
                 {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md">{error}</div>}
@@ -72,7 +81,7 @@ export default function ClaimProfile() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                         <input 
                             type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)}
-                            placeholder="e.g. Juan" className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+                            placeholder="e.g. Juan" className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 bg-white"
                         />
                     </div>
 
@@ -80,7 +89,7 @@ export default function ClaimProfile() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                         <input 
                             type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)}
-                            placeholder="e.g. Dela Cruz" className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+                            placeholder="e.g. Dela Cruz" className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 bg-white"
                         />
                     </div>
 
@@ -88,8 +97,21 @@ export default function ClaimProfile() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Birthdate</label>
                         <input 
                             type="date" required value={birthdate} onChange={(e) => setBirthdate(e.target.value)}
-                            className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+                            className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 bg-white"
                         />
+                    </div>
+
+                    {/* NEW: Upload ID Section */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Upload Valid ID / Proof of Residency</label>
+                        <input 
+                            type="file" 
+                            accept="image/*"
+                            onChange={(e) => e.target.files && setIdFile(e.target.files[0])}
+                            required
+                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md p-1 bg-white"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">Required for staff to verify your account safely from home.</p>
                     </div>
 
                     <button 

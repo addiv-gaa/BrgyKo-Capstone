@@ -27,6 +27,8 @@ import ResidentSchedulePage from "./pages/BarangayCalendarUser"
 import ReservationForm from "./pages/ReservationForm"
 import ClaimProfile from "./pages/ClaimProfile"
 import ResidentApprovals from "./pages/ResidentApproval"
+import Profile from "./pages/UserProfile"
+import ProfileUpdateApprovals from "./pages/ProfileUpdateApprovals"
 
 function Logout(){
   localStorage.clear()
@@ -217,6 +219,21 @@ function App() {
           element={
             <ProtectedRoute>
               <ResidentApprovals />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path = "profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        /><Route
+          path = "/profileupdate"
+          element={
+            <ProtectedRoute>
+              <ProfileUpdateApprovals />
             </ProtectedRoute>
           }
         />

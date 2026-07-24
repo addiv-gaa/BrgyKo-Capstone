@@ -14,7 +14,8 @@ from .models import (
     Equipment, 
     Event, 
     Reservation,
-    OfficialDocument, 
+    OfficialDocument,
+    ProfileUpdateRequest, 
 )
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -70,10 +71,37 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             return False
         return ReadAnnouncement.objects.filter(user=user, announcement=obj).exists()
 
+
+# --- 1. Admin Resident Serializer (Full Access) ---
 class ResidentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resident
         fields = '__all__'
+
+# --- NEW: User-Facing Profile Serializer (Locked Down) ---
+class ResidentProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Resident
+        fields = [
+            'first_name', 
+            'last_name', 
+            'birth_date', 
+            'civil_status', 
+            'sex', 
+            'contact_number', 
+            'purok', 
+            'approval_status'
+        ]
+        # Protect official data from being changed via the web form
+        read_only_fields = [
+            'first_name', 
+            'last_name', 
+            'birth_date', 
+            'civil_status', 
+            'sex', 
+            'purok', 
+            'approval_status'
+        ]
 
 # --- 2. Mini Resident Serializer (Nested inside the Map Details Panel) ---
 class ResidentMiniSerializer(serializers.ModelSerializer):
@@ -179,3 +207,16 @@ class OfficialDocumentSerializer(serializers.ModelSerializer):
         if obj.file:
             return obj.file.name.split('/')[-1]
         return None
+
+
+
+class ProfileUpdateRequestSerializer(serializers.ModelSerializer):
+    resident_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProfileUpdateRequest
+        fields = '__all__'
+        read_only_fields = ['user', 'resident', 'created_at']
+
+    def get_resident_name(self, obj):
+        return f"{obj.resident.first_name} {obj.resident.last_name}"

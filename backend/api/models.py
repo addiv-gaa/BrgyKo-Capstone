@@ -352,3 +352,27 @@ class OfficialDocument(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.document_type})"
+
+class ProfileUpdateRequest(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile_updates')
+    resident = models.ForeignKey(Resident, on_delete=models.CASCADE, related_name='update_requests')
+    
+    # The requested changes
+    requested_first_name = models.CharField(max_length=100, blank=True, null=True)
+    requested_last_name = models.CharField(max_length=100, blank=True, null=True)
+    requested_birth_date = models.DateField(blank=True, null=True)
+    requested_civil_status = models.CharField(max_length=50, blank=True, null=True)
+    reason = models.TextField(help_text="Reason for update (e.g., bedridden, PWD)")
+
+    id_picture = models.ImageField(upload_to='profile_corrections_ids/', blank=True, null=True)
+    
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Review'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Update Request for {self.resident} - {self.status}"

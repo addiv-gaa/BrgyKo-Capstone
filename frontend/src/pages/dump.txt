@@ -790,3 +790,55 @@ export default function HouseholdModal({ mode, household, coords, onClose, onSav
         </div>
     );
 }
+
+class ProfileUpdateRequestSerializer(serializers.ModelSerializer):
+    resident_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProfileUpdateRequest
+        fields = '__all__'
+        read_only_fields = ['user', 'resident', 'created_at']
+
+    def get_resident_name(self, obj):
+        return f"{obj.resident.first_name} {obj.resident.last_name}"
+
+class StaffProfileUpdateListView(generics.ListAPIView):
+    serializer_class = ProfileUpdateRequestSerializer
+    permission_classes = [permissions.IsAuthenticated] # Add role check if you have staff group validation
+
+    def get_queryset(self):
+        # Staff can view all pending or historical correction requests
+        return ProfileUpdateRequest.objects.all().order_by('-created_at')
+
+class StaffProfileUpdateActionView(generics.UpdateAPIView):
+    queryset = ProfileUpdateRequest.objects.all()
+    serializer_class = ProfileUpdateRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        update_request = self.get_object()
+        action_status = request.data.get('status') # 'APPROVED' or 'REJECTED'
+
+        if action_status not in ['APPROVED', 'REJECTED']:
+            return Response({"error": "Invalid status action."}, status=status.HTTP_400_BAD_REQUEST)
+
+        update_request.status = action_status
+        update_request.save()
+
+        # If approved, automatically update the official Resident record!
+        if action_status == 'APPROVED':
+            resident = update_request.resident
+            if update_request.requested_first_name:
+                resident.first_name = update_request.requested_first_name
+            if update_request.requested_last_name:
+                resident.last_name = update_request.requested_last_name
+            if update_request.requested_birth_date:
+                resident.birth_date = update_request.requested_birth_date
+            if update_request.requested_civil_status:
+                resident.civil_status = update_request.requested_civil_status
+            resident.save()
+
+        return Response({"message": f"Request {action_status.lower()} successfully."})
+
+    path('api/manager/profile-updates/', StaffProfileUpdateListView.as_view(), name='staff-profile-updates'),
+    path('api/manager/profile-updates/<int:pk>/', StaffProfileUpdateActionView.as_view(), name='staff-profile-update-action'),

@@ -10,6 +10,7 @@ interface ResidentData {
     id: number;
     first_name: string;
     last_name: string;
+    contact_number?: string; // NEW: Added contact number
     sex: string;
     purok: string;
     birth_date: string | null;
@@ -47,14 +48,15 @@ export default function ResidentPage() {
     // --- State ---
     const [residents, setResidents] = useState<ResidentData[]>([]);
     
-    // NEW: Store the list of households for the dropdown
+    // Store the list of households for the dropdown
     const [householdOptions, setHouseholdOptions] = useState<{id: number, address: string}[]>([]);
     
     const [searchQuery, setSearchQuery] = useState('');
     
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+    // CHANGED: Added 'view' to modal modes
+    const [modalMode, setModalMode] = useState<'add' | 'edit' | 'view'>('add');
     const [selectedResident, setSelectedResident] = useState<ResidentProperties | null>(null);
 
     // --- API Integration ---
@@ -86,7 +88,7 @@ export default function ResidentPage() {
         }
     };
 
-    // NEW 2. Fetch Households for the Dropdown Modal
+    // 2. Fetch Households for the Dropdown Modal
     const fetchHouseholdsForDropdown = async () => {
         try {
             const response = await fetch(`${API_URL}/api/households/`, { headers: getAuthHeaders() });
@@ -219,7 +221,8 @@ export default function ResidentPage() {
                                         <th className="px-6 py-4">#</th>
                                         <th className="px-6 py-4 w-24">Photo</th>
                                         <th className="px-6 py-4">Name</th>
-                                        {/* NEW COLUMN: Household Status */}
+                                        {/* NEW COLUMN: Contact */}
+                                        <th className="px-6 py-4">Contact</th>
                                         <th className="px-6 py-4">Household Status</th>
                                         <th className="px-6 py-4">Purok</th>
                                         <th className="px-6 py-4">Age</th>
@@ -251,7 +254,11 @@ export default function ResidentPage() {
                                                     {resident.first_name} {resident.last_name}
                                                 </td>
 
-                                                {/* NEW DATA CELL: Displaying the address or Unmapped status */}
+                                                {/* NEW CELL: Contact Number */}
+                                                <td className="px-6 py-4 text-sm text-gray-600">
+                                                    {resident.contact_number || 'N/A'}
+                                                </td>
+
                                                 <td className="px-6 py-4 text-sm">
                                                     {mappedHouse ? (
                                                         <div>
@@ -280,19 +287,35 @@ export default function ResidentPage() {
                                                 
                                                 <td className="px-6 py-4 text-center">
                                                     <div className="flex items-center justify-center gap-2">
-                                                        {/* Edit Button */}
+                                                        
+                                                        {/* CHANGED: View Details Button */}
+                                                        <button 
+                                                            onClick={() => {
+                                                                setModalMode('view');
+                                                                setSelectedResident(resident as any);
+                                                                setIsModalOpen(true);
+                                                            }}
+                                                            className="p-1.5 border border-gray-200 rounded text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors" 
+                                                            title="View Details"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                            </svg>
+                                                        </button>
+
+                                                        {/* CHANGED: Edit Details Button */}
                                                         <button 
                                                             onClick={() => {
                                                                 setModalMode('edit');
                                                                 setSelectedResident(resident as any);
                                                                 setIsModalOpen(true);
                                                             }}
-                                                            className="p-1.5 border border-gray-200 rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors" 
-                                                            title="View/Edit Details"
+                                                            className="p-1.5 border border-gray-200 rounded text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors" 
+                                                            title="Edit Details"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                             </svg>
                                                         </button>
 
@@ -312,7 +335,7 @@ export default function ResidentPage() {
                                         );
                                     }) : (
                                         <tr>
-                                            <td colSpan={9} className="px-6 py-8 text-center text-gray-500 italic">
+                                            <td colSpan={10} className="px-6 py-8 text-center text-gray-500 italic">
                                                 No residents found. Add a resident or adjust your search.
                                             </td>
                                         </tr>

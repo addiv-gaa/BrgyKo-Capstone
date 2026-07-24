@@ -9,9 +9,9 @@ import google.generativeai as genai
 
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import OrderingFilter
-from rest_framework.response import Response
+from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.exceptions import NotFound
 from datetime import datetime, timedelta
-
 
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.throttling import UserRateThrottle
@@ -19,6 +19,7 @@ from .permissions import IsAdminGroup, IsStaffGroup
 from rest_framework.views import APIView
 from .serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework import permissions
 
 from django.shortcuts import render
 from django.contrib.auth.models import User
@@ -40,6 +41,7 @@ from .models import (
     Event,
     OfficialDocument,
     UserProfile,
+    ProfileUpdateRequest,
 )
 
 from .serializers import (
@@ -54,6 +56,8 @@ from .serializers import (
     EquipmentSerializer, 
     EventSerializer,
     OfficialDocumentSerializer,
+    ResidentProfileSerializer,
+    ProfileUpdateRequestSerializer,
 )
 
 
@@ -167,7 +171,7 @@ class DashboardStatsView(APIView):
             "pending_reservations": Reservation.objects.filter(status='PENDING').count(), 
             "pending_documents": CertificateRequest.objects.filter(status='PENDING').count(),
             "welfare_beneficiaries": 430, 
-            "sk_programs": 6,             
+            "sk_programs": 6,            
             "chatbot_queries": AiQueryStatistic.objects.count(),
         }
         return Response(stats)
@@ -325,7 +329,6 @@ class ReservationViewSet(viewsets.ModelViewSet):
         
         return Response({"message": "Reservation successfully cancelled."})
     
-# CHANGED: Inherit from ModelViewSet instead of ReadOnlyModelViewSet
 class FacilityViewSet(viewsets.ModelViewSet):
     """View for facilities. Residents can view, Staff can manage."""
     queryset = Facility.objects.all()
@@ -338,7 +341,6 @@ class FacilityViewSet(viewsets.ModelViewSet):
             return [IsStaffGroup()]
         return super().get_permissions()
 
-# CHANGED: Inherit from ModelViewSet instead of ReadOnlyModelViewSet
 class EquipmentViewSet(viewsets.ModelViewSet):
     """View for equipment. Residents can view, Staff can manage."""
     queryset = Equipment.objects.all()
@@ -364,8 +366,6 @@ class EventViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(organizer=self.request.user)
-
-# --- ADD THIS CUSTOM ENDPOINT FOR THE REACT CALENDAR ---
 
 @api_view(['GET'])
 def calendar_feed(request):
@@ -494,11 +494,39 @@ class ResidentApprovalViewSet(viewsets.ModelViewSet):
         if new_status not in ['APPROVED', 'REJECTED']:
             return Response({"error": "Invalid status value."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # CHANGED: Automate the unlinking process on rejection to protect resident data
+        if new_status == 'REJECTED':
+            resident.user = None
+            resident.approval_status = 'PENDING' # Reset for future valid claims
+            resident.save()
+            return Response({"message": "Claim rejected and user unlinked securely."}, status=status.HTTP_200_OK)
+
         resident.approval_status = new_status
         resident.save()
 
         return Response({"message": f"Resident profile successfully {new_status.lower()}."}, status=status.HTTP_200_OK)
     
+class ResetRejectedClaimView(APIView):
+    """Allows users who were rejected to securely reset their claim state and try again."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            resident = request.user.resident_profile
+            
+            # Security Check: Only allow reset if they are actually rejected
+            if resident.approval_status == 'REJECTED':
+                resident.user = None
+                # Reset the status so the real resident can claim this record later
+                resident.approval_status = 'PENDING' 
+                resident.save()
+                return Response({"message": "Claim reset successfully. You may now submit a new claim."}, status=status.HTTP_200_OK)
+            
+            return Response({"error": "Profile is not in a rejected state."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Resident.DoesNotExist:
+            return Response({"error": "No profile currently linked."}, status=status.HTTP_404_NOT_FOUND)
+
 class RegisterWithEmailView(APIView):
     permission_classes = [AllowAny]
 
@@ -653,3 +681,68 @@ class ResendOTPView(APIView):
             print(f"Could not send email: {e}")
 
         return Response({"message": "A new OTP has been sent."}, status=status.HTTP_200_OK)
+
+class UserProfileView(RetrieveUpdateAPIView):
+    serializer_class = ResidentProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        # Look for the resident record linked to the logged-in user
+        try:
+            return self.request.user.resident_profile
+        except Resident.DoesNotExist:
+            # If they haven't claimed a profile yet, return a 404
+            raise NotFound(detail="You have not claimed a resident profile yet.")
+
+class StaffProfileUpdateListView(generics.ListAPIView):
+    serializer_class = ProfileUpdateRequestSerializer
+    permission_classes = [permissions.IsAuthenticated] # Add role check if you have staff group validation
+
+    def get_queryset(self):
+        # Staff can view all pending or historical correction requests
+        return ProfileUpdateRequest.objects.all().order_by('-created_at')
+
+class StaffProfileUpdateActionView(generics.UpdateAPIView):
+    queryset = ProfileUpdateRequest.objects.all()
+    serializer_class = ProfileUpdateRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        update_request = self.get_object()
+        action_status = request.data.get('status') # 'APPROVED' or 'REJECTED'
+
+        if action_status not in ['APPROVED', 'REJECTED']:
+            return Response({"error": "Invalid status action."}, status=status.HTTP_400_BAD_REQUEST)
+
+        update_request.status = action_status
+        update_request.save()
+
+        # If approved, automatically update the official Resident record!
+        if action_status == 'APPROVED':
+            resident = update_request.resident
+            if update_request.requested_first_name:
+                resident.first_name = update_request.requested_first_name
+            if update_request.requested_last_name:
+                resident.last_name = update_request.requested_last_name
+            if update_request.requested_birth_date:
+                resident.birth_date = update_request.requested_birth_date
+            if update_request.requested_civil_status:
+                resident.civil_status = update_request.requested_civil_status
+            resident.save()
+
+        return Response({"message": f"Request {action_status.lower()} successfully."})
+
+class CreateProfileUpdateRequestView(generics.CreateAPIView):
+    queryset = ProfileUpdateRequest.objects.all()
+    serializer_class = ProfileUpdateRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        # We need to automatically attach the user and their official resident record
+        try:
+            resident = self.request.user.resident_profile
+        except Resident.DoesNotExist:
+            raise NotFound("You must claim a resident profile before requesting corrections.")
+        
+        # Save the request with the user and resident attached
+        serializer.save(user=self.request.user, resident=resident)

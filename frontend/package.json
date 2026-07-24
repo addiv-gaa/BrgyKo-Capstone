@@ -17,11 +17,13 @@
     "leaflet": "^1.9.4",
     "leaflet-geosearch": "^4.4.0",
     "lucide-react": "^1.21.0",
+    "pdf-lib": "^1.17.1",
     "react": "^19.2.6",
     "react-big-calendar": "^1.20.0",
     "react-dom": "^19.2.6",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.0",
+    "react-to-print": "^3.3.0",
     "recharts": "^3.9.2"
   },
   "devDependencies": {

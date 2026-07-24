@@ -41,6 +41,11 @@ from api.views import (
     RegisterWithEmailView,
     VerifyEmailOTPView,
     ResendOTPView,
+    UserProfileView,
+    StaffProfileUpdateActionView,
+    StaffProfileUpdateListView,
+    CreateProfileUpdateRequestView,
+    ResetRejectedClaimView,
 )
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -73,6 +78,11 @@ urlpatterns = [
     path('api/register/', RegisterWithEmailView.as_view(), name='register'),
     path('api/verify-otp/', VerifyEmailOTPView.as_view(), name='verify-otp'),
     path('api/resend-otp/', ResendOTPView.as_view(), name='resend-otp'),
+    path('api/user/profile/', UserProfileView.as_view(), name='user-profile'),
+    path('api/manager/profile-updates/', StaffProfileUpdateListView.as_view(), name='staff-profile-updates'),
+    path('api/manager/profile-updates/<int:pk>/', StaffProfileUpdateActionView.as_view(), name='staff-profile-update-action'),
+    path('api/user/profile-update-request/', CreateProfileUpdateRequestView.as_view(), name='profile-update-request'),
+    path('api/user/reset-claim/', ResetRejectedClaimView.as_view(), name='reset-claim'),
     path('api/', include(router.urls)), 
 ]
 

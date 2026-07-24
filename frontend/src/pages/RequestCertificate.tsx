@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/header";
 import Sidebar from "../components/sidebar";
 
@@ -11,7 +12,6 @@ interface CertificateRecord {
     status: 'PENDING' | 'PROCESSING' | 'RELEASED' | 'REJECTED';
 }
 
-// NEW: Static data for dropdowns, requirements, and processing times
 const CERTIFICATE_TYPES = [
     { 
         id: 'CLEARANCE', 
@@ -43,23 +43,71 @@ const PURPOSES = [
 ];
 
 export default function RequestCertificate() {
+    const navigate = useNavigate();
+    
     // --- State Management ---
     const [formData, setFormData] = useState({
         certificate_type: 'CLEARANCE', 
         full_name: '',
         date_of_birth: '',
         civil_status: 'SINGLE',        
-        purpose: '', // This will now start empty to force dropdown selection
+        purpose: '', 
         contact_number: ''
     });
 
+    const [customPurpose, setCustomPurpose] = useState('');
     const [previousRequests, setPreviousRequests] = useState<CertificateRecord[]>([]);
+    
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
+    const [error, setError] = useState(""); // NEW: Error state for the conditional block
 
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // --- Data Fetching (Runs once on component mount) ---
+    // --- Data Fetching ---
+    const fetchUserProfile = async () => {
+        const token = localStorage.getItem('access');
+        if (!token) return;
+
+        try {
+            const response = await fetch(`${API_URL}/api/user/profile/`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const profile = await response.json();
+                
+                // NEW: Security Check - Block access if not APPROVED
+                if (profile.approval_status === 'PENDING') {
+                    setError("Your resident profile is currently pending verification. You can request certificates once barangay staff approves your account.");
+                    setIsProfileLoading(false);
+                    return; // Stop execution here so the form doesn't load
+                } else if (profile.approval_status === 'REJECTED') {
+                    setError("Your resident profile claim was rejected. Please contact the barangay hall for assistance.");
+                    setIsProfileLoading(false);
+                    return; 
+                }
+                
+                // If they are APPROVED, proceed to fill the form
+                setFormData(prev => ({
+                    ...prev,
+                    full_name: `${profile.first_name} ${profile.last_name}`,
+                    date_of_birth: profile.birth_date || '',
+                    civil_status: profile.civil_status ? profile.civil_status.toUpperCase() : 'SINGLE',
+                    contact_number: profile.contact_number || ''
+                }));
+            } else if (response.status === 404) {
+                setError("You must claim your resident profile before you can request a certificate.");
+            }
+        } catch (error) {
+            console.error("Failed to fetch profile:", error);
+            setError("Failed to load your profile data.");
+        } finally {
+            setIsProfileLoading(false);
+        }
+    };
+
     const fetchPreviousRequests = async () => {
         const token = localStorage.getItem('access'); 
         
@@ -97,6 +145,7 @@ export default function RequestCertificate() {
     };
 
     useEffect(() => {
+        fetchUserProfile();
         fetchPreviousRequests();
     }, []);
 
@@ -125,6 +174,11 @@ export default function RequestCertificate() {
 
         setIsSubmitting(true);
 
+        const finalPayload = {
+            ...formData,
+            purpose: formData.purpose === 'Other' ? customPurpose : formData.purpose
+        };
+
         try {
             const response = await fetch(`${API_URL}/api/certificates/`, {
                 method: 'POST',
@@ -132,31 +186,26 @@ export default function RequestCertificate() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}` 
                 },
-                body: JSON.stringify(formData) 
+                body: JSON.stringify(finalPayload) 
             });
 
             if (response.ok) {
                 alert("Request submitted successfully!");
-                setFormData({
+                setFormData(prev => ({
+                    ...prev,
                     certificate_type: 'CLEARANCE',
-                    full_name: '',
-                    date_of_birth: '',
-                    civil_status: 'SINGLE',
-                    purpose: '',
-                    contact_number: ''
-                });
+                    purpose: ''
+                }));
+                setCustomPurpose('');
                 
                 setIsConfirmModalOpen(false);
                 fetchPreviousRequests(); 
             } 
             else if (response.status === 401) {
-                console.error("Authentication failed: Token missing or expired.");
                 alert("Your session has expired. Please log in again.");
                 setIsConfirmModalOpen(false);
             } 
             else {
-                const errorData = await response.json();
-                console.error("Validation errors from Django:", errorData);
                 alert("Failed to submit. Check the console for details.");
             }
         } catch (error) {
@@ -183,8 +232,8 @@ export default function RequestCertificate() {
         }
     };
 
-    // NEW: Find active certificate config for dynamic display
     const selectedCert = CERTIFICATE_TYPES.find(c => c.id === formData.certificate_type);
+    const displayPurpose = formData.purpose === 'Other' ? customPurpose : formData.purpose;
 
     // --- Render ---
     return (
@@ -208,137 +257,165 @@ export default function RequestCertificate() {
                             <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                                 <h2 className="text-lg font-bold mb-6">Certificate Request Form</h2>
                                 
-                                <form className="space-y-5" onSubmit={handleInitialSubmit}>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-                                            Certificate Type
-                                        </label>
-                                        <select 
-                                            name="certificate_type"
-                                            value={formData.certificate_type}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
-                                        >
-                                            {/* NEW: Map through the array instead of hardcoding */}
-                                            {CERTIFICATE_TYPES.map(cert => (
-                                                <option key={cert.id} value={cert.id}>{cert.label}</option>
-                                            ))}
-                                        </select>
+                                {/* NEW: The Conditional Block */}
+                                {isProfileLoading ? (
+                                    <div className="py-10 text-center text-gray-500">
+                                        Fetching official records...
                                     </div>
-
-                                    {/* NEW: Dynamic Requirements Box */}
-                                    {selectedCert && selectedCert.requirements.length > 0 && (
-                                        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r mt-2">
-                                            <h4 className="font-semibold text-blue-800 text-xs uppercase tracking-wider mb-2">
-                                                Required Documents for {selectedCert.label}
-                                            </h4>
-                                            <ul className="list-disc pl-5 text-sm text-blue-900 space-y-1">
-                                                {selectedCert.requirements.map((req, index) => (
-                                                    <li key={index}>{req}</li>
-                                                ))}
-                                            </ul>
-                                            <p className="text-xs text-blue-700 mt-3 italic">
-                                                * Please bring these documents when claiming your certificate at the barangay hall.
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-                                            Full Name
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="full_name"
-                                            value={formData.full_name}
-                                            onChange={handleChange}
-                                            placeholder="Enter your full name" 
-                                            required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
-                                        />
+                                ) : error ? (
+                                    <div className="p-5 mb-6 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+                                        <p className="font-medium text-base mb-1">Action Required</p>
+                                        <p>{error}</p>
+                                        {error.includes("claim") && (
+                                            <button 
+                                                onClick={() => navigate('/claimprofile')}
+                                                className="mt-3 inline-block font-semibold text-red-800 hover:text-red-900 bg-red-100 px-4 py-2 rounded border border-red-200 transition-colors"
+                                            >
+                                                Go to Claim Profile page &rarr;
+                                            </button>
+                                        )}
                                     </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                ) : (
+                                    <form className="space-y-5" onSubmit={handleInitialSubmit}>
                                         <div>
                                             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-                                                Date of Birth
-                                            </label>
-                                            <input 
-                                                type="date" 
-                                                name="date_of_birth"
-                                                value={formData.date_of_birth}
-                                                onChange={handleChange}
-                                                required
-                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 text-gray-600"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-                                                Civil Status
+                                                Certificate Type
                                             </label>
                                             <select 
-                                                name="civil_status"
-                                                value={formData.civil_status}
+                                                name="certificate_type"
+                                                value={formData.certificate_type}
                                                 onChange={handleChange}
                                                 className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
                                             >
-                                                <option value="SINGLE">Single</option>
-                                                <option value="MARRIED">Married</option>
-                                                <option value="WIDOWED">Widowed</option>
-                                                <option value="SEPARATED">Legally Separated</option>
+                                                {CERTIFICATE_TYPES.map(cert => (
+                                                    <option key={cert.id} value={cert.id}>{cert.label}</option>
+                                                ))}
                                             </select>
                                         </div>
-                                    </div>
 
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-                                            Purpose
-                                        </label>
-                                        {/* NEW: Converted from text input to select dropdown */}
-                                        <select 
-                                            name="purpose"
-                                            value={formData.purpose}
-                                            onChange={handleChange}
-                                            required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
-                                        >
-                                            <option value="" disabled>Select a purpose...</option>
-                                            {PURPOSES.map((purpose, index) => (
-                                                <option key={index} value={purpose}>{purpose}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                        {selectedCert && selectedCert.requirements.length > 0 && (
+                                            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r mt-2">
+                                                <h4 className="font-semibold text-blue-800 text-xs uppercase tracking-wider mb-2">
+                                                    Required Documents for {selectedCert.label}
+                                                </h4>
+                                                <ul className="list-disc pl-5 text-sm text-blue-900 space-y-1">
+                                                    {selectedCert.requirements.map((req, index) => (
+                                                        <li key={index}>{req}</li>
+                                                    ))}
+                                                </ul>
+                                                <p className="text-xs text-blue-700 mt-3 italic">
+                                                    * Please bring these documents when claiming your certificate at the barangay hall.
+                                                </p>
+                                            </div>
+                                        )}
 
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-                                            Contact Number
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="contact_number"
-                                            value={formData.contact_number}
-                                            onChange={handleChange}
-                                            placeholder="09XX-XXX-XXXX" 
-                                            required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
-                                        />
-                                    </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                                                Full Name
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                name="full_name"
+                                                value={formData.full_name}
+                                                disabled 
+                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none bg-gray-100 text-gray-500 cursor-not-allowed"
+                                            />
+                                        </div>
 
-                                    <div className="pt-2">
-                                        <button 
-                                            type="submit" 
-                                            className="w-full bg-[#1c4ed8] hover:bg-blue-800 text-white font-medium rounded-md py-3 flex items-center justify-center transition-colors"
-                                        >
-                                            Submit Request
-                                        </button>
-                                    </div>
-                                </form>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                                                    Date of Birth
+                                                </label>
+                                                <input 
+                                                    type="date" 
+                                                    name="date_of_birth"
+                                                    value={formData.date_of_birth}
+                                                    disabled 
+                                                    className="w-full border border-gray-300 rounded-md p-2.5 outline-none bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                                                    Civil Status
+                                                </label>
+                                                <select 
+                                                    name="civil_status"
+                                                    value={formData.civil_status}
+                                                    disabled 
+                                                    className="w-full border border-gray-300 rounded-md p-2.5 outline-none bg-gray-100 text-gray-500 cursor-not-allowed appearance-none"
+                                                >
+                                                    <option value="SINGLE">Single</option>
+                                                    <option value="MARRIED">Married</option>
+                                                    <option value="WIDOWED">Widowed</option>
+                                                    <option value="SEPARATED">Legally Separated</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                                                Purpose
+                                            </label>
+                                            <select 
+                                                name="purpose"
+                                                value={formData.purpose}
+                                                onChange={handleChange}
+                                                required
+                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                                            >
+                                                <option value="" disabled>Select a purpose...</option>
+                                                {PURPOSES.map((purpose, index) => (
+                                                    <option key={index} value={purpose}>{purpose}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {formData.purpose === 'Other' && (
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                                                    Please Specify Purpose
+                                                </label>
+                                                <input 
+                                                    type="text" 
+                                                    value={customPurpose}
+                                                    onChange={(e) => setCustomPurpose(e.target.value)}
+                                                    placeholder="Type your specific purpose here..."
+                                                    required
+                                                    className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400 bg-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                                                Contact Number
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                name="contact_number"
+                                                value={formData.contact_number}
+                                                disabled 
+                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none bg-gray-100 text-gray-500 cursor-not-allowed"
+                                            />
+                                        </div>
+
+                                        <div className="pt-2">
+                                            <button 
+                                                type="submit" 
+                                                disabled={isSubmitting}
+                                                className="w-full bg-[#1c4ed8] hover:bg-blue-800 text-white font-medium rounded-md py-3 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Submit Request
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
                             </div>
 
                             {/* Right Column: Stacked Cards */}
                             <div className="flex flex-col gap-6">
                                 
-                                {/* Dynamic Previous Requests Table */}
                                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                                     <h2 className="text-sm font-bold mb-4">My Previous Requests</h2>
                                     <div className="overflow-x-auto">
@@ -375,7 +452,6 @@ export default function RequestCertificate() {
                                     </div>
                                 </div>
 
-                                {/* Processing Time Info Box */}
                                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                                     <h2 className="text-sm font-bold mb-2">General Processing</h2>
                                     <p className="text-sm text-gray-600 leading-relaxed">
@@ -401,10 +477,9 @@ export default function RequestCertificate() {
                         
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Submission</h3>
                         <p className="text-sm text-gray-500 mb-4 leading-relaxed">
-                            Are you sure you want to request a <span className="font-semibold text-gray-800">{selectedCert?.label}</span> for <span className="font-semibold text-gray-800">{formData.full_name}</span>? 
+                            Are you sure you want to request a <span className="font-semibold text-gray-800">{selectedCert?.label}</span> for <span className="font-semibold text-gray-800">{formData.full_name}</span> with purpose: <span className="font-semibold text-gray-800">{displayPurpose}</span>? 
                         </p>
                         
-                        {/* NEW: Dynamic Processing Time Alert */}
                         <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-md mb-6 text-left">
                             <p className="text-sm text-yellow-800">
                                 <span className="font-semibold">Estimated Processing:</span> {selectedCert?.time}
