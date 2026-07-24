@@ -44,9 +44,6 @@ export default function Documents() {
     const [formState, setFormState] = useState<{title: string, type: string, file: File | null}>({ title: "", type: "Memo", file: null });
     const [isSaving, setIsSaving] = useState(false);
 
-    // Preview Modal State
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
     // --- Data Fetching ---
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => { fetchDocuments(); }, 300);
@@ -310,7 +307,8 @@ export default function Documents() {
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(doc.uploaded_at).toLocaleDateString()}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                         <div className="flex justify-end gap-2">
-                                                            <button onClick={() => setPreviewUrl(doc.file)} className="text-blue-600 bg-blue-50 p-2 rounded hover:bg-blue-100" title="Preview">
+                                                            {/* CHANGED: Open preview securely in a new tab */}
+                                                            <button onClick={() => window.open(doc.file, '_blank', 'noopener,noreferrer')} className="text-blue-600 bg-blue-50 p-2 rounded hover:bg-blue-100" title="Preview">
                                                                 <EyeIcon />
                                                             </button>
                                                             <a href={doc.file} download className="text-green-600 bg-green-50 p-2 rounded hover:bg-green-100" title="Download">
@@ -346,22 +344,6 @@ export default function Documents() {
                     </div>
                 </main>
             </div>
-
-            {/* In-App Preview Modal */}
-            {previewUrl && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
-                        <div className="bg-gray-900 px-4 py-3 flex justify-between items-center shrink-0">
-                            <h2 className="text-sm font-semibold text-white">Document Preview</h2>
-                            <button onClick={() => setPreviewUrl(null)} className="text-gray-400 hover:text-white font-bold">&times; Close</button>
-                        </div>
-                        <div className="flex-1 w-full bg-gray-100">
-                            {/* Iframe renders PDFs directly in browser */}
-                            <iframe src={previewUrl} className="w-full h-full border-0" title="Document Preview" />
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Form Modal (Upload & Edit) */}
             {isFormModalOpen && (

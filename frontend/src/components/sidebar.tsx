@@ -25,6 +25,7 @@ const MENU_CONFIG = {
         { label: "Geo Mapping", path: "/geomapping" },
         { label: "Documents", path: "/documents" },
         { label: "Cert Requests", path: "/certrequests" },
+        { label: "Profile Approvals", path: "/profileupdate" },
     ]
 };
 
