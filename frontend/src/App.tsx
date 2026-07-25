@@ -130,11 +130,11 @@ function App() {
             />
             <Route 
               path="/claimprofile" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT']}><ClaimProfile /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['RESIDENT', 'TANOD', 'SECRETARY', 'CAPTAIN']}><ClaimProfile /></ProtectedRoute>} 
             />
             <Route 
               path="/reportincident" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT']}><ReportIncident /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['RESIDENT', 'TANOD', 'SECRETARY', 'CAPTAIN']}><ReportIncident /></ProtectedRoute>} 
             />
             <Route 
               path="/announcements" 

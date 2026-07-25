@@ -13,7 +13,7 @@ interface ResidentProfile {
     contact_number: string;
     purok: string;
     approval_status: string;
-    rejection_reason?: string; // NEW: Added rejection reason field
+    rejection_reason?: string; 
 }
 
 export default function Profile() {
@@ -43,20 +43,29 @@ export default function Profile() {
         const fetchProfile = async () => {
             try {
                 const res = await api.get('/api/user/profile/');
-                setProfile(res.data);
-                setContactNumber(res.data.contact_number || "");
+                const data = res.data;
+
+                // Only redirect to claim-profile if it's strictly UNCLAIMED
+                if (data.approval_status === 'UNCLAIMED') {
+                    navigate('/claimprofile');
+                    return;
+                }
+
+                // If PENDING, REJECTED, or APPROVED, let them stay on this page to view status/records
+                setProfile(data);
+                setContactNumber(data.contact_number || "");
                 
                 // Pre-populate modal fields with current values for convenience
                 setCorrectionData({
-                    requested_first_name: res.data.first_name || "",
-                    requested_last_name: res.data.last_name || "",
-                    requested_birth_date: res.data.birth_date || "",
-                    requested_civil_status: res.data.civil_status ? res.data.civil_status.toUpperCase() : "SINGLE",
+                    requested_first_name: data.first_name || "",
+                    requested_last_name: data.last_name || "",
+                    requested_birth_date: data.birth_date || "",
+                    requested_civil_status: data.civil_status ? data.civil_status.toUpperCase() : "SINGLE",
                     reason: ""
                 });
             } catch (err: any) {
                 if (err.response?.status === 404) {
-                    setError("You have not claimed a resident profile yet. Please complete the claim process.");
+                    navigate('/claimprofile'); 
                 } else {
                     setError("Failed to load profile data.");
                 }
@@ -65,7 +74,7 @@ export default function Profile() {
             }
         };
         fetchProfile();
-    }, []);
+    }, [navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -107,7 +116,7 @@ export default function Profile() {
     const handleResetClaim = async () => {
         try {
             await api.post('/api/user/reset-rejected-claim/');
-            window.location.reload(); // Reload to trigger the claim flow state reset
+            navigate('/claimprofile'); 
         } catch (err) {
             alert("Failed to reset claim. Please try again.");
         }
@@ -138,17 +147,30 @@ export default function Profile() {
                             <div className="p-5 bg-red-50 border border-red-200 text-red-700 rounded-md">
                                 <p className="font-medium text-base mb-1">Action Required</p>
                                 <p className="text-sm mb-3">{error}</p>
-                                {error.includes("claim") && (
-                                    <button 
-                                        onClick={() => navigate('/claimprofile')}
-                                        className="inline-block font-semibold text-red-800 hover:text-red-900 bg-red-100 px-4 py-2 rounded border border-red-200 transition-colors text-sm"
-                                    >
-                                        Go to Claim Profile page &rarr;
-                                    </button>
-                                )}
+                                <button 
+                                    onClick={() => navigate('/claimprofile')}
+                                    className="inline-block font-semibold text-red-800 hover:text-red-900 bg-red-100 px-4 py-2 rounded border border-red-200 transition-colors text-sm"
+                                >
+                                    Go to Claim Profile page &rarr;
+                                </button>
                             </div>
                         ) : loading ? (
                             <p className="text-gray-500 text-center py-8">Loading profile...</p>
+                        ) : profile && profile.approval_status === 'PENDING' ? (
+                            /* Notice View for Pending Status */
+                            <div className="p-8 bg-orange-50 border border-orange-200 rounded-lg text-center">
+                                <svg className="w-12 h-12 text-orange-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <h3 className="text-xl font-bold text-orange-800 mb-2">Application Under Review</h3>
+                                <p className="text-sm text-orange-700 mb-4 max-w-md mx-auto">
+                                    Your resident application has been successfully submitted and is currently pending verification by the Barangay Secretary.
+                                </p>
+                                <div className="p-4 bg-white border border-orange-200 rounded-md max-w-md mx-auto text-left shadow-sm">
+                                    <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-1">Submitted Applicant Name:</p>
+                                    <p className="text-sm font-semibold text-gray-800">{profile.first_name} {profile.last_name}</p>
+                                </div>
+                            </div>
                         ) : profile && profile.approval_status === 'REJECTED' ? (
                             /* Security Block for Rejected Profiles with Rejection Reason Display */
                             <div className="p-8 bg-red-50 border border-red-200 rounded-lg text-center">
@@ -160,7 +182,6 @@ export default function Profile() {
                                     Your request to link this profile was declined by barangay staff. To protect resident privacy, official records have been hidden.
                                 </p>
                                 
-                                {/* NEW: Explicitly show why it was rejected if available */}
                                 {profile.rejection_reason && (
                                     <div className="mb-6 p-4 bg-white border border-red-200 rounded-md max-w-md mx-auto text-left shadow-sm">
                                         <p className="text-xs font-bold text-red-600 uppercase tracking-wider mb-1">Reason from Barangay Staff:</p>

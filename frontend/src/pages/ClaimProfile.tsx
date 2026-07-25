@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../components/AuthContext"; // Import AuthContext to refresh user status
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -7,6 +8,9 @@ const PUROK_CHOICES = ["Purok 1", "Purok 2", "Purok 3", "Purok 4", "Purok 5", "P
 const CIVIL_STATUS_CHOICES = ["Single", "Married", "Widowed", "Legally Separated"];
 
 export default function ClaimProfile() {
+    const auth = useContext(AuthContext); // Access context to update global state
+    const navigate = useNavigate();
+
     // Shared State
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
@@ -19,12 +23,14 @@ export default function ClaimProfile() {
     const [purok, setPurok] = useState("Purok 1");
     const [contactNumber, setContactNumber] = useState("");
     
+    // NEW: ID Picture state for verification
+    const [idPicture, setIdPicture] = useState<File | null>(null);
+    
     // UI State
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     
-    const navigate = useNavigate();
 
     // --- STEP 1: Attempt Automatic Match ---
     const handleClaim = async (e: React.FormEvent) => {
@@ -54,7 +60,9 @@ export default function ClaimProfile() {
 
             if (response.ok) {
                 setSuccess("Success! Your profile was found and instantly linked.");
-                setTimeout(() => navigate('/dashboard'), 2000);
+                // Refresh global user state so the app knows they are now APPROVED
+                if (auth?.refreshUser) await auth.refreshUser(); 
+                setTimeout(() => navigate('/'), 2000);
             } else if (response.status === 404) {
                 // If not found, switch to the New Application form
                 setError(data.message || "Record not found. Please fill out the rest of the form to submit a new application.");
@@ -74,33 +82,45 @@ export default function ClaimProfile() {
         e.preventDefault();
         setError("");
         setSuccess("");
-        setIsLoading(true);
+        
+        // Ensure ID is uploaded
+        if (!idPicture) {
+            setError("Please upload a valid ID picture for verification.");
+            return;
+        }
 
+        setIsLoading(true);
         const token = localStorage.getItem('access');
+
+        // CHANGED: Use FormData instead of JSON to support the file upload
+        const formData = new FormData();
+        formData.append("first_name", firstName);
+        formData.append("last_name", lastName);
+        formData.append("birth_date", birthdate); // Matching backend expectation
+        formData.append("sex", sex);
+        formData.append("civil_status", civilStatus);
+        formData.append("purok", purok);
+        formData.append("contact_number", contactNumber);
+        formData.append("id_picture", idPicture);
 
         try {
             const response = await fetch(`${API_URL}/api/submit-resident-application/`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    // Note: Do NOT set 'Content-Type' when sending FormData. The browser sets the multipart boundary automatically.
                 },
-                body: JSON.stringify({
-                    first_name: firstName,
-                    last_name: lastName,
-                    birth_date: birthdate, // Note: Django model expects birth_date
-                    sex,
-                    civil_status: civilStatus,
-                    purok,
-                    contact_number: contactNumber
-                })
+                body: formData
             });
 
             if (response.ok) {
                 setSuccess("Application submitted successfully! Please wait for the Barangay Secretary to approve it.");
-                setTimeout(() => navigate('/dashboard'), 3000);
+                // Refresh global user state so the app knows they are now PENDING
+                if (auth?.refreshUser) await auth.refreshUser(); 
+                setTimeout(() => navigate('/'), 3000);
             } else {
-                setError("Failed to submit application. Please check your inputs.");
+                const data = await response.json();
+                setError(data.error || "Failed to submit application. Please check your inputs.");
             }
         } catch (err) {
             setError("A network error occurred.");
@@ -190,6 +210,17 @@ export default function ClaimProfile() {
                                     type="text" required value={contactNumber} onChange={(e) => setContactNumber(e.target.value)}
                                     placeholder="09..." className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 bg-white"
                                 />
+                            </div>
+
+                            {/* NEW: File Upload for ID */}
+                            <div className="col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Upload Valid ID (Image)</label>
+                                <input 
+                                    type="file" accept="image/*" required
+                                    onChange={(e) => setIdPicture(e.target.files ? e.target.files[0] : null)}
+                                    className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm focus:ring-2 focus:ring-blue-600 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                                <p className="text-[11px] text-gray-500 mt-1">Provide a clear photo of a government-issued ID for verification.</p>
                             </div>
                         </div>
                     )}

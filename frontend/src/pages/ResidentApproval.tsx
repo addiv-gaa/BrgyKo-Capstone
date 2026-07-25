@@ -8,6 +8,12 @@ export default function ResidentApprovals() {
     const [pendingResidents, setPendingResidents] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Modal States for ID viewing, Full Info viewing, and Rejection Reason input
+    const [selectedIdImage, setSelectedIdImage] = useState<string | null>(null);
+    const [viewingResident, setViewingResident] = useState<any | null>(null); // NEW: State for full info modal
+    const [rejectingId, setRejectingId] = useState<number | null>(null);
+    const [rejectionReason, setRejectionReason] = useState("");
+
     useEffect(() => {
         fetchPendingResidents();
     }, []);
@@ -28,7 +34,7 @@ export default function ResidentApprovals() {
         }
     };
 
-    const handleAction = async (id: number, status: 'APPROVED' | 'REJECTED') => {
+    const handleAction = async (id: number, status: 'APPROVED' | 'REJECTED', reason = '') => {
         const token = localStorage.getItem('access');
         try {
             const response = await fetch(`${API_URL}/api/resident-approvals/${id}/update_status/`, {
@@ -37,12 +43,15 @@ export default function ResidentApprovals() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ status })
+                body: JSON.stringify({ status, rejection_reason: reason })
             });
 
             if (response.ok) {
                 // Remove the handled item from state instantly
                 setPendingResidents(pendingResidents.filter(r => r.id !== id));
+                setRejectingId(null);
+                setRejectionReason("");
+                setViewingResident(null); // Close info modal if open
             } else {
                 alert("Failed to update status.");
             }
@@ -62,7 +71,7 @@ export default function ResidentApprovals() {
                     <div className="w-full">
                         <div className="mb-6">
                             <h1 className="text-2xl font-bold text-gray-900 mb-1">Resident Account Approvals</h1>
-                            <p className="text-gray-500 text-sm">Verify and approve resident registration profiles claiming pre-registered records.</p>
+                            <p className="text-gray-500 text-sm">Verify and approve resident registration profiles claiming pre-registered records or submitting new applications.</p>
                         </div>
 
                         <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
@@ -70,8 +79,8 @@ export default function ResidentApprovals() {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Resident Name</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Birthdate</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Linked User Email</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Birthdate / Purok</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Valid ID</th>
                                         <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th>
                                     </tr>
                                 </thead>
@@ -87,13 +96,30 @@ export default function ResidentApprovals() {
                                                     {resident.first_name} {resident.last_name}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {resident.birth_date}
+                                                    <div>{resident.birth_date}</div>
+                                                    <span className="text-xs text-gray-400">Purok: {resident.purok}</span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                                    {resident.user_email || "N/A"}
+                                                    {resident.id_picture ? (
+                                                        <button 
+                                                            onClick={() => setSelectedIdImage(resident.id_picture)}
+                                                            className="text-blue-600 hover:underline text-xs font-medium bg-blue-50 px-2.5 py-1 rounded-md"
+                                                        >
+                                                            View ID
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">No ID Attached</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                     <div className="flex justify-end gap-2">
+                                                        {/* NEW: View Full Info Button */}
+                                                        <button 
+                                                            onClick={() => setViewingResident(resident)}
+                                                            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-semibold shadow-sm transition-colors"
+                                                        >
+                                                            View Info
+                                                        </button>
                                                         <button 
                                                             onClick={() => handleAction(resident.id, 'APPROVED')}
                                                             className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
@@ -101,7 +127,7 @@ export default function ResidentApprovals() {
                                                             Approve
                                                         </button>
                                                         <button 
-                                                            onClick={() => handleAction(resident.id, 'REJECTED')}
+                                                            onClick={() => setRejectingId(resident.id)}
                                                             className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
                                                         >
                                                             Reject
@@ -117,6 +143,150 @@ export default function ResidentApprovals() {
                     </div>
                 </main>
             </div>
+
+            {/* NEW: FULL INFO MODAL */}
+            {viewingResident && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-lg w-full p-6 shadow-xl relative max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-4 border-b pb-3">
+                            <h3 className="text-lg font-bold text-gray-900">Application Information</h3>
+                            <button 
+                                onClick={() => setViewingResident(null)}
+                                className="text-gray-400 hover:text-gray-600 font-bold text-lg"
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 text-sm">
+                            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-md border border-gray-200">
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">First Name</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.first_name}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Last Name</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.last_name}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Middle Name</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.middle_name || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Suffix</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.suffix || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Birthdate</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.birth_date}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Sex</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.sex}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Civil Status</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.civil_status}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Purok</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.purok}</span>
+                                </div>
+                                <div className="col-span-2">
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Contact Number</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.contact_number || 'N/A'}</span>
+                                </div>
+                                <div className="col-span-2">
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase">Occupation</span>
+                                    <span className="font-medium text-gray-900">{viewingResident.occupation || 'N/A'}</span>
+                                </div>
+                            </div>
+
+                            {viewingResident.id_picture && (
+                                <div>
+                                    <span className="block text-xs font-semibold text-gray-500 uppercase mb-2">Attached Valid ID Preview</span>
+                                    <div className="flex justify-center bg-gray-100 p-2 rounded-md border border-gray-200 max-h-48 overflow-auto">
+                                        <img src={viewingResident.id_picture} alt="Resident ID" className="max-h-40 object-contain rounded" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-2 border-t pt-4">
+                            <button 
+                                onClick={() => {
+                                    const id = viewingResident.id;
+                                    setViewingResident(null);
+                                    setRejectingId(id);
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-semibold"
+                            >
+                                Reject
+                            </button>
+                            <button 
+                                onClick={() => handleAction(viewingResident.id, 'APPROVED')}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold"
+                            >
+                                Approve Application
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ID PREVIEW MODAL */}
+            {selectedIdImage && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-lg w-full p-6 shadow-xl relative">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Submitted Valid ID</h3>
+                        <div className="flex justify-center bg-gray-100 p-2 rounded-md border border-gray-200 max-h-[60vh] overflow-auto">
+                            <img src={selectedIdImage} alt="Resident ID" className="max-h-[50vh] object-contain rounded" />
+                        </div>
+                        <div className="mt-6 flex justify-end">
+                            <button 
+                                onClick={() => setSelectedIdImage(null)}
+                                className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-semibold"
+                            >
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* REJECTION REASON MODAL */}
+            {rejectingId !== null && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-xl">
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Reject Resident Application</h3>
+                        <p className="text-sm text-gray-500 mb-4">Please provide a reason for rejection so the resident knows what to fix.</p>
+                        
+                        <textarea 
+                            rows={3}
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            placeholder="e.g., ID picture is blurry or name does not match records..."
+                            className="w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none mb-4"
+                        />
+
+                        <div className="flex justify-end gap-2">
+                            <button 
+                                onClick={() => { setRejectingId(null); setRejectionReason(""); }}
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm font-semibold"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => handleAction(rejectingId, 'REJECTED', rejectionReason)}
+                                disabled={!rejectionReason.trim()}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-50"
+                            >
+                                Confirm Rejection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

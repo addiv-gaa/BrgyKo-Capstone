@@ -17,7 +17,8 @@ from .models import (
     OfficialDocument,
     ProfileUpdateRequest,
     IncidentReport,
-    BarangaySettings, # NEW: Imported IncidentReport
+    BarangaySettings,
+    ResidentApplication,
 )
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -29,7 +30,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['username'] = user.username
         token['first_name'] = user.first_name
         
-        # --- CHANGED: Extract the specific RBAC role from the UserProfile ---
+        # Extract the specific RBAC role from the UserProfile
         try:
             role = user.otp_profile.role
         except Exception:
@@ -56,7 +57,7 @@ class CertificateRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = CertificateRequest
         fields = '__all__'
-        # NEW: Protect tracking and admin fields from user manipulation
+        # Protect tracking and admin fields from user manipulation
         read_only_fields = ['status', 'rejection_reason', 'date_requested']
 
 class PermitRequestSerializer(serializers.ModelSerializer):
@@ -65,7 +66,7 @@ class PermitRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = PermitRequest
         fields = '__all__'
-        # NEW: Protect tracking and admin fields
+        # Protect tracking and admin fields
         read_only_fields = ['status', 'rejection_reason', 'date_requested']
 
 class EventNestedSerializer(serializers.ModelSerializer):
@@ -75,7 +76,7 @@ class EventNestedSerializer(serializers.ModelSerializer):
 
 class AnnouncementSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source='author.username', read_only=True)
-    linked_event_details = EventNestedSerializer(source='linked_event', read_only=True) # NEW: Pulls start/end time
+    linked_event_details = EventNestedSerializer(source='linked_event', read_only=True) 
     
     class Meta:
         model = Announcement
@@ -88,7 +89,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             'tags',            
             'attachment',      
             'linked_event',    
-            'linked_event_details', # NEW field for the frontend card
+            'linked_event_details', 
             'created_at', 
             'author', 
             'author_name'
@@ -102,6 +103,13 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         return ReadAnnouncement.objects.filter(user=user, announcement=obj).exists()
 
 
+class ResidentApplicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResidentApplication
+        fields = '__all__'
+        # Protect these fields so users cannot force their status to 'APPROVED' upon submission
+        read_only_fields = ['user', 'status', 'rejection_reason', 'created_at']
+
 # --- 1. Admin Resident Serializer (Full Access) ---
 class ResidentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -114,25 +122,22 @@ class ResidentProfileSerializer(serializers.ModelSerializer):
         model = Resident
         fields = [
             'first_name', 
+            'middle_name',
             'last_name', 
+            'suffix',
             'birth_date', 
             'civil_status', 
             'sex', 
             'contact_number', 
-            'purok', 
-            'approval_status',
-            'rejection_reason' # NEW: Expose rejection reason so they know why it failed
+            'purok',
+            'occupation',
+            'id_picture'
         ]
-        # Protect official data from being changed via the web form
+        # Protect official data from being changed via the web form directly
         read_only_fields = [
-            'first_name', 
-            'last_name', 
-            'birth_date', 
-            'civil_status', 
-            'sex', 
-            'purok', 
-            'approval_status',
-            'rejection_reason'
+            'first_name', 'middle_name', 'last_name', 'suffix',
+            'birth_date', 'civil_status', 'sex', 'purok',
+            'occupation', 'id_picture'
         ]
 
 # --- 3. Mini Resident Serializer (Nested inside the Map Details Panel) ---
@@ -141,7 +146,7 @@ class ResidentMiniSerializer(serializers.ModelSerializer):
         model = Resident
         fields = [
             'id', 'first_name', 'last_name', 'sex', 'civil_status', 'relationship_to_head',
-            'is_4ps_beneficiary', 'has_senior_citizen', 'has_pwd', 'has_solo_parent'
+            'is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent'
         ]
     
 class HouseholdSerializer(GeoFeatureModelSerializer):
@@ -150,9 +155,9 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
     head_of_household = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
     is_4ps_beneficiary = serializers.SerializerMethodField()
-    has_senior_citizen = serializers.SerializerMethodField()
-    has_pwd = serializers.SerializerMethodField()
-    has_solo_parent = serializers.SerializerMethodField()
+    is_senior_citizen = serializers.SerializerMethodField()
+    is_pwd = serializers.SerializerMethodField()
+    is_solo_parent = serializers.SerializerMethodField()
 
     class Meta:
         model = Household
@@ -160,7 +165,7 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
         fields = [
             'id', 'address', 'housing_status', 'dwelling_type', 
             'head_of_household', 'member_count', 'residents',
-            'is_4ps_beneficiary', 'has_senior_citizen', 'has_pwd', 'has_solo_parent'
+            'is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent'
         ]
 
     def get_head_of_household(self, obj):
@@ -175,14 +180,14 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
     def get_is_4ps_beneficiary(self, obj):
         return obj.residents.filter(is_4ps_beneficiary=True).exists()
 
-    def get_has_senior_citizen(self, obj):
-        return obj.residents.filter(has_senior_citizen=True).exists()
+    def get_is_senior_citizen(self, obj):
+        return obj.residents.filter(is_senior_citizen=True).exists()
 
-    def get_has_pwd(self, obj):
-        return obj.residents.filter(has_pwd=True).exists()
+    def get_is_pwd(self, obj):
+        return obj.residents.filter(is_pwd=True).exists()
 
-    def get_has_solo_parent(self, obj):
-        return obj.residents.filter(has_solo_parent=True).exists()
+    def get_is_solo_parent(self, obj):
+        return obj.residents.filter(is_solo_parent=True).exists()
     
 class FacilitySerializer(serializers.ModelSerializer):
     class Meta:
@@ -207,7 +212,6 @@ class ReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
         fields = '__all__'
-        # NEW: Added rejection_reason to protected fields
         read_only_fields = ['user', 'status', 'rejection_reason', 'date_requested']
 
 class OfficialDocumentSerializer(serializers.ModelSerializer):
@@ -239,13 +243,11 @@ class ProfileUpdateRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProfileUpdateRequest
         fields = '__all__'
-        # NEW: Added rejection_reason
         read_only_fields = ['user', 'resident', 'created_at', 'rejection_reason']
 
     def get_resident_name(self, obj):
         return f"{obj.resident.first_name} {obj.resident.last_name}"
 
-# --- NEW: Incident Report Serializer ---
 class IncidentReportSerializer(serializers.ModelSerializer):
     reporter_name = serializers.SerializerMethodField()
 

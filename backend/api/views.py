@@ -47,6 +47,7 @@ from .models import (
     ProfileUpdateRequest,
     IncidentReport,
     BarangaySettings,
+    ResidentApplication,
 )
 
 from .serializers import (
@@ -65,6 +66,7 @@ from .serializers import (
     ProfileUpdateRequestSerializer,
     IncidentReportSerializer,
     BarangaySettingsSerializer,
+    ResidentApplicationSerializer,
 )
 
 genai.configure(api_key=settings.GOOGLE_API_KEY)
@@ -230,15 +232,31 @@ class ResendOTPView(APIView):
 # ==========================================
 # 3. RESIDENT IDENTITY & PROFILES
 # ==========================================
-class UserProfileView(RetrieveUpdateAPIView):
-    serializer_class = ResidentProfileSerializer
+from .models import ResidentApplication
+
+class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get_object(self):
-        try:
-            return self.request.user.resident_profile
-        except Resident.DoesNotExist:
-            raise NotFound(detail="You have not claimed a resident profile yet.")
+    def get(self, request):
+        # 1. Check if they are already an officially verified resident
+        if hasattr(request.user, 'resident_profile') and request.user.resident_profile is not None:
+            serializer = ResidentProfileSerializer(request.user.resident_profile)
+            data = serializer.data
+            data['approval_status'] = 'APPROVED'
+            return Response(data)
+        
+        # 2. Check if they have an active or pending application in the staging table
+        application = ResidentApplication.objects.filter(user=request.user).order_by('-created_at').first()
+        if application:
+            return Response({
+                "approval_status": application.status,
+                "rejection_reason": application.rejection_reason,
+                "first_name": application.first_name,
+                "last_name": application.last_name,
+            })
+            
+        # 3. If neither exists, they are completely unclaimed
+        return Response({"approval_status": "UNCLAIMED"})
 
 class ClaimResidentProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -257,6 +275,7 @@ class ClaimResidentProfileView(APIView):
             return Response({"error": "First name, last name, and birthdate are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            # Look for an exact match in the official registry
             resident = Resident.objects.get(
                 first_name__iexact=first_name,
                 last_name__iexact=last_name,
@@ -264,15 +283,19 @@ class ClaimResidentProfileView(APIView):
                 user__isnull=True 
             )
             
+            # Match found: Instantly link them!
             resident.user = user
-            resident.approval_status = 'APPROVED'
             resident.save()
+            
+            # Clean up any pending applications they might have made previously
+            ResidentApplication.objects.filter(user=user).delete()
+            
             return Response({"message": "Profile successfully matched and linked!"}, status=status.HTTP_200_OK)
 
         except Resident.DoesNotExist:
             return Response({
                 "error": "not_found", 
-                "message": "No matching record found in the barangay registry. Would you like to submit a new application?"
+                "message": "No matching record found in the barangay registry. Please submit a new application."
             }, status=status.HTTP_404_NOT_FOUND)
         
         except Resident.MultipleObjectsReturned:
@@ -286,12 +309,18 @@ class SubmitResidentApplicationView(APIView):
 
     def post(self, request):
         user = request.user
+        
+        # Guard rails
         if hasattr(user, 'resident_profile') and user.resident_profile is not None:
             return Response({"error": "An account is already linked."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if ResidentApplication.objects.filter(user=user, status='PENDING').exists():
+            return Response({"error": "You already have an application under review."}, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = ResidentSerializer(data=request.data)
+        # Save to the Staging Table
+        serializer = ResidentApplicationSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(user=user, approval_status='PENDING')
+            serializer.save(user=user, status='PENDING')
             return Response({"message": "New application submitted for review."}, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -301,10 +330,14 @@ class UnlinkProfileView(APIView):
 
     def post(self, request):
         try:
+            # Unlink the official profile
             resident = request.user.resident_profile
             resident.user = None
-            resident.approval_status = 'PENDING'
             resident.save()
+            
+            # Also clear any lingering applications so they start totally fresh
+            ResidentApplication.objects.filter(user=request.user).delete()
+            
             return Response({"message": "Account successfully unlinked."}, status=status.HTTP_200_OK)
         except Resident.DoesNotExist:
             return Response({"error": "No profile to unlink."}, status=status.HTTP_404_NOT_FOUND)
@@ -313,16 +346,15 @@ class ResetRejectedClaimView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            resident = request.user.resident_profile
-            if resident.approval_status == 'REJECTED':
-                resident.user = None
-                resident.approval_status = 'PENDING' 
-                resident.save()
-                return Response({"message": "Claim reset successfully."}, status=status.HTTP_200_OK)
-            return Response({"error": "Profile is not in a rejected state."}, status=status.HTTP_400_BAD_REQUEST)
-        except Resident.DoesNotExist:
-            return Response({"error": "No profile currently linked."}, status=status.HTTP_404_NOT_FOUND)
+        # Reset a rejected application in the staging table
+        application = ResidentApplication.objects.filter(user=request.user, status='REJECTED').first()
+        if application:
+            application.status = 'PENDING'
+            application.rejection_reason = ''
+            application.save()
+            return Response({"message": "Claim reset successfully."}, status=status.HTTP_200_OK)
+        
+        return Response({"error": "Profile is not in a rejected state."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ==========================================
@@ -490,19 +522,19 @@ class PermitRequestManagerViewSet(viewsets.ModelViewSet):
     serializer_class = PermitRequestSerializer
 
 class ResidentApprovalViewSet(viewsets.ModelViewSet):
-    queryset = Resident.objects.all().order_by('-id')
-    serializer_class = ResidentSerializer
+    queryset = ResidentApplication.objects.all().order_by('-created_at')
+    serializer_class = ResidentApplicationSerializer
     permission_classes = [IsStaffGroup]
 
     @action(detail=False, methods=['get'])
-    def pending(self):
-        pending_residents = Resident.objects.filter(approval_status='PENDING', user__isnull=False)
-        serializer = self.get_serializer(pending_residents, many=True)
+    def pending(self, request):
+        pending_apps = ResidentApplication.objects.filter(status='PENDING')
+        serializer = self.get_serializer(pending_apps, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
-        resident = self.get_object()
+        application = self.get_object()
         new_status = request.data.get('status') 
         rejection_reason = request.data.get('rejection_reason', '') 
 
@@ -510,16 +542,31 @@ class ResidentApprovalViewSet(viewsets.ModelViewSet):
             return Response({"error": "Invalid status value."}, status=status.HTTP_400_BAD_REQUEST)
 
         if new_status == 'REJECTED':
-            resident.rejection_reason = rejection_reason 
-            resident.user = None
-            resident.approval_status = 'PENDING' 
-            resident.save()
-            return Response({"message": "Claim rejected securely."}, status=status.HTTP_200_OK)
+            application.status = 'REJECTED'
+            application.rejection_reason = rejection_reason 
+            application.save()
+            return Response({"message": "Application rejected."}, status=status.HTTP_200_OK)
 
-        resident.approval_status = new_status
-        resident.rejection_reason = '' 
-        resident.save()
-        return Response({"message": f"Resident profile {new_status.lower()}."}, status=status.HTTP_200_OK)
+        if new_status == 'APPROVED':
+            official_resident = Resident.objects.create(
+                user=application.user,
+                first_name=application.first_name,
+                middle_name=application.middle_name,
+                last_name=application.last_name,
+                suffix=application.suffix,
+                birth_date=application.birth_date,
+                sex=application.sex,
+                civil_status=application.civil_status,
+                purok=application.purok,
+                contact_number=application.contact_number,
+                occupation=application.occupation,
+                id_picture=application.id_picture,
+            )
+            
+            application.status = 'APPROVED'
+            application.save()
+            
+            return Response({"message": f"Resident {application.first_name} officially added to the registry."}, status=status.HTTP_200_OK)
 
 class HouseholdViewSet(viewsets.ModelViewSet):
     queryset = Household.objects.prefetch_related('residents').all()
@@ -534,8 +581,13 @@ class ResidentViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     search_fields = ['first_name', 'last_name', 'purok']
     filterset_fields = [
-        'purok', 'household', 'relationship_to_head',
-        'is_4ps_beneficiary', 'has_senior_citizen', 'has_pwd', 'has_solo_parent'
+        'purok', 
+        'household', 
+        'relationship_to_head',
+        'is_4ps_beneficiary', 
+        'is_senior_citizen', 
+        'is_pwd', 
+        'is_solo_parent'
     ]
 
 
@@ -565,6 +617,20 @@ class EquipmentViewSet(viewsets.ModelViewSet):
 class ReservationViewSet(viewsets.ModelViewSet):
     queryset = Reservation.objects.all()
     serializer_class = ReservationSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        try:
+            role = user.otp_profile.role.upper()
+        except Exception:
+            role = 'RESIDENT'
+            
+        # Staff and management roles can view all reservations
+        if role in ['CAPTAIN', 'SECRETARY', 'TREASURER', 'COUNCIL', 'SK', 'TANOD']:
+            return Reservation.objects.all().order_by('-date_requested')
+            
+        # Regular residents can only see their own reservations
+        return Reservation.objects.filter(user=user).order_by('-date_requested')
 
     def create(self, request, *args, **kwargs):
         facility_id = request.data.get('facility')

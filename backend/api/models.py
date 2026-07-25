@@ -358,34 +358,33 @@ class Resident(models.Model):
         ('Female', 'Female'),
     ]
 
+    # Links to the auth account (Only verified users get linked here)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='resident_profile')
     
-    # Approval / Verification Workflow
-    STATUS_CHOICES = [
-        ('PENDING', 'Pending Verification'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
-    ]
-    approval_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    rejection_reason = models.TextField(blank=True, null=True, help_text="Reason for declining account link or new application") # NEW
-
     # --- Basic Info ---
     first_name = models.CharField(max_length=100)
+    middle_name = models.CharField(max_length=100, blank=True, null=True)
     last_name = models.CharField(max_length=100)
+    suffix = models.CharField(max_length=10, blank=True, null=True, help_text="e.g., Jr., Sr., III")
+    
     birth_date = models.DateField(null=True, blank=True)
     civil_status = models.CharField(max_length=50, default='Single')
     sex = models.CharField(max_length=10, choices=SEX_CHOICES, default='Male')
     contact_number = models.CharField(max_length=20, blank=True, null=True)
     purok = models.CharField(max_length=50)
+    occupation = models.CharField(max_length=100, blank=True, null=True)
     
     household = models.ForeignKey(Household, on_delete=models.SET_NULL, null=True, blank=True, related_name='residents')
     relationship_to_head = models.CharField(max_length=20, choices=RELATIONSHIP_CHOICES, default='Head')
 
+    # --- Official Records ---
+    id_picture = models.ImageField(upload_to='residents/ids/', blank=True, null=True)
+
     # --- Vulnerability & Welfare Flags ---
     is_4ps_beneficiary = models.BooleanField(default=False)
-    has_senior_citizen = models.BooleanField(default=False)
-    has_pwd = models.BooleanField(default=False)
-    has_solo_parent = models.BooleanField(default=False)
+    is_senior_citizen = models.BooleanField(default=False)
+    is_pwd = models.BooleanField(default=False)
+    is_solo_parent = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -393,7 +392,43 @@ class Resident(models.Model):
     history = HistoricalRecords()
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name}"
+        name = f"{self.first_name} {self.last_name}"
+        if self.suffix:
+            name += f" {self.suffix}"
+        return name
+
+
+class ResidentApplication(models.Model):
+    """ Staging table for unverified users requesting a Resident profile """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='resident_applications')
+    
+    first_name = models.CharField(max_length=100)
+    middle_name = models.CharField(max_length=100, blank=True, null=True)
+    last_name = models.CharField(max_length=100)
+    suffix = models.CharField(max_length=10, blank=True, null=True)
+    
+    birth_date = models.DateField()
+    sex = models.CharField(max_length=10, choices=Resident.SEX_CHOICES, default='Male')
+    civil_status = models.CharField(max_length=50, default='Single')
+    purok = models.CharField(max_length=50)
+    contact_number = models.CharField(max_length=20)
+    occupation = models.CharField(max_length=100, blank=True, null=True)
+    
+    id_picture = models.ImageField(upload_to='applications/ids/')
+    
+    # Approval Tracking
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'), 
+        ('APPROVED', 'Approved'), 
+        ('REJECTED', 'Rejected')
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    rejection_reason = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Application: {self.first_name} {self.last_name}"
     
 
 class OfficialDocument(models.Model):

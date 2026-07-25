@@ -35,6 +35,7 @@ interface AuthContextType {
     login: (token: string) => void;
     logout: () => void;
     refreshSettings: () => void;
+    refreshUser: () => Promise<void>; // Added to TypeScript interface
 }
 
 interface CustomJwtPayload {
@@ -63,26 +64,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const refreshUser = async () => {
+        const token = localStorage.getItem(ACCESS_TOKEN);
+        if (token) {
+            try {
+                const decoded = jwtDecode<CustomJwtPayload>(token);
+                setUser({ 
+                    roles: decoded.roles || [], 
+                    token,
+                    first_name: decoded.first_name,
+                    username: decoded.username
+                });
+            } catch (error) {
+                console.error("Failed to decode token on refresh", error);
+            }
+        } else {
+            setUser(null);
+        }
+    };
+
     useEffect(() => {
         const initializeAuthAndSettings = async () => {
             // 1. Fetch System Settings
             await fetchSettings();
 
             // 2. Decode User Token
-            const token = localStorage.getItem(ACCESS_TOKEN);
-            if (token) {
-                try {
-                    const decoded = jwtDecode<CustomJwtPayload>(token);
-                    setUser({ 
-                        roles: decoded.roles || [], 
-                        token,
-                        first_name: decoded.first_name,
-                        username: decoded.username
-                    });
-                } catch (error) {
-                    console.error("Failed to decode token on load", error);
-                }
-            }
+            await refreshUser();
+            
             setIsAppLoading(false);
         };
 
@@ -90,6 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const login = (token: string) => {
+        localStorage.setItem(ACCESS_TOKEN, token);
         const decoded = jwtDecode<CustomJwtPayload>(token);
         setUser({ 
             roles: decoded.roles || [], 
@@ -106,7 +115,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, settings, login, logout, refreshSettings: fetchSettings }}>
+        <AuthContext.Provider value={{ user, settings, login, logout, refreshSettings: fetchSettings, refreshUser }}>
             {!isAppLoading ? children : <div className="flex h-screen items-center justify-center">Loading App...</div>}
         </AuthContext.Provider>
     );

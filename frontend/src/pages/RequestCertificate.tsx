@@ -80,21 +80,26 @@ export default function RequestCertificate() {
         if (!token) return;
 
         try {
-            const response = await fetch(`${API_URL}/api/user/profile/`, {
+            const response = await fetch(`${API_URL}/api/profile/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (response.ok) {
                 const profile = await response.json();
                 
+                // Handle Staging / Official profile states
                 if (profile.approval_status === 'PENDING') {
-                    setError("Your resident profile is currently pending verification. You can request certificates once barangay staff approves your account.");
+                    setError("Your resident profile application is currently under review by barangay staff. You can request certificates once your account is approved.");
                     setIsProfileLoading(false);
                     return; 
                 } else if (profile.approval_status === 'REJECTED') {
-                    setError("Your resident profile claim was rejected. Please contact the barangay hall for assistance.");
+                    setError(`Your resident application was declined. Reason: ${profile.rejection_reason || 'Please contact the barangay hall for assistance.'}`);
                     setIsProfileLoading(false);
                     return; 
+                } else if (profile.approval_status === 'UNCLAIMED') {
+                    setError("You must claim or submit your resident profile application before you can request a certificate.");
+                    setIsProfileLoading(false);
+                    return;
                 }
                 
                 setFormData(prev => ({
@@ -308,14 +313,12 @@ export default function RequestCertificate() {
                                     <div className="p-5 mb-6 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
                                         <p className="font-medium text-base mb-1">Action Required</p>
                                         <p>{error}</p>
-                                        {error.includes("claim") && (
-                                            <button 
-                                                onClick={() => navigate('/claimprofile')}
-                                                className="mt-3 inline-block font-semibold text-red-800 hover:text-red-900 bg-red-100 px-4 py-2 rounded border border-red-200 transition-colors"
-                                            >
-                                                Go to Claim Profile page &rarr;
-                                            </button>
-                                        )}
+                                        <button 
+                                            onClick={() => navigate('/claimprofile')}
+                                            className="mt-3 inline-block font-semibold text-red-800 hover:text-red-900 bg-red-100 px-4 py-2 rounded border border-red-200 transition-colors"
+                                        >
+                                            Go to Claim Profile page &rarr;
+                                        </button>
                                     </div>
                                 ) : (
                                     <form className="space-y-5" onSubmit={handleInitialSubmit}>

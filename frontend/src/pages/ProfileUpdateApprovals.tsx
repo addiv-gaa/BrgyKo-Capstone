@@ -1,263 +1,193 @@
 import React, { useState, useEffect } from "react";
-import api from "../api";
 import PageHeader from "../components/header";
 import Sidebar from "../components/sidebar";
 
-interface PendingResident {
-    id: number;
-    first_name: string;
-    last_name: string;
-    birth_date: string;
-    civil_status: string;
-    sex: string;
-    purok: string;
-    approval_status: string;
-}
+const API_URL = import.meta.env.VITE_API_URL;
 
-interface CorrectionRequest {
-    id: number;
-    resident_name: string;
-    requested_first_name: string;
-    requested_last_name: string;
-    requested_birth_date: string;
-    requested_civil_status: string;
-    reason: string;
-    status: 'PENDING' | 'APPROVED' | 'REJECTED';
-    created_at: string;
-}
+export default function ResidentApprovals() {
+    const [pendingResidents, setPendingResidents] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-export default function VerificationHub() {
-    const [activeTab, setActiveTab] = useState<'claims' | 'corrections'>('claims');
-    
-    // States for Pending Claims
-    const [pendingResidents, setPendingResidents] = useState<PendingResident[]>([]);
-    const [loadingClaims, setLoadingClaims] = useState(true);
-
-    // States for Profile Corrections
-    const [corrections, setCorrections] = useState<CorrectionRequest[]>([]);
-    const [loadingCorrections, setLoadingCorrections] = useState(true);
-    const [actionLoading, setActionLoading] = useState<number | null>(null);
-
-    // Fetch Initial Claims
-    const fetchPendingClaims = async () => {
-        try {
-            const res = await api.get('/api/resident-approvals/pending/');
-            setPendingResidents(res.data);
-        } catch (error) {
-            console.error("Failed to fetch pending claims", error);
-        } finally {
-            setLoadingClaims(false);
-        }
-    };
-
-    // Fetch Profile Correction Requests
-    const fetchCorrections = async () => {
-        try {
-            const res = await api.get('/api/manager/profile-updates/');
-            setCorrections(res.data);
-        } catch (error) {
-            console.error("Failed to fetch profile corrections", error);
-        } finally {
-            setLoadingCorrections(false);
-        }
-    };
+    // Modal States for ID viewing and Rejection Reason input
+    const [selectedIdImage, setSelectedIdImage] = useState<string | null>(null);
+    const [rejectingId, setRejectingId] = useState<number | null>(null);
+    const [rejectionReason, setRejectionReason] = useState("");
 
     useEffect(() => {
-        fetchPendingClaims();
-        fetchCorrections();
+        fetchPendingResidents();
     }, []);
 
-    // Handle Claim Action (Approve/Reject Initial Link)
-    const handleClaimAction = async (id: number, status: 'APPROVED' | 'REJECTED') => {
-        setActionLoading(id);
+    const fetchPendingResidents = async () => {
+        const token = localStorage.getItem('access');
         try {
-            await api.post(`/api/resident-approvals/${id}/update_status/`, { status });
-            await fetchPendingClaims();
+            const response = await fetch(`${API_URL}/api/resident-approvals/pending/`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                setPendingResidents(await response.json());
+            }
         } catch (error) {
-            alert("Failed to process claim.");
+            console.error("Error fetching pending residents:", error);
         } finally {
-            setActionLoading(null);
+            setIsLoading(false);
         }
     };
 
-    // Handle Correction Action (Approve/Reject Online Updates)
-    const handleCorrectionAction = async (id: number, status: 'APPROVED' | 'REJECTED') => {
-        setActionLoading(id);
+    const handleAction = async (id: number, status: 'APPROVED' | 'REJECTED', reason = '') => {
+        const token = localStorage.getItem('access');
         try {
-            await api.patch(`/api/manager/profile-updates/${id}/`, { status });
-            await fetchCorrections();
+            const response = await fetch(`${API_URL}/api/resident-approvals/${id}/update_status/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ status, rejection_reason: reason })
+            });
+
+            if (response.ok) {
+                // Remove the handled item from state instantly
+                setPendingResidents(pendingResidents.filter(r => r.id !== id));
+                setRejectingId(null);
+                setRejectionReason("");
+            } else {
+                alert("Failed to update status.");
+            }
         } catch (error) {
-            alert("Failed to process correction request.");
-        } finally {
-            setActionLoading(null);
+            console.error("Error updating resident status:", error);
         }
     };
 
     return (
         <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+            <div className="shrink-0 w-full"><PageHeader /></div>
+            
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
-                <main className="flex-1 w-full overflow-y-auto p-8 bg-[#f4f7fa]">
-                    <div className="w-full space-y-6">
-                        
-                        {/* Page Header */}
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Resident Verification Hub</h1>
-                            <p className="text-gray-500 text-sm mt-1">Manage initial account claims and accessibility-driven profile correction requests.</p>
+                <div className="shrink-0 h-full"><Sidebar /></div>
+                
+                <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
+                    <div className="w-full">
+                        <div className="mb-6">
+                            <h1 className="text-2xl font-bold text-gray-900 mb-1">Resident Account Approvals</h1>
+                            <p className="text-gray-500 text-sm">Verify and approve resident registration profiles claiming pre-registered records or submitting new applications.</p>
                         </div>
 
-                        {/* Tab Switcher */}
-                        <div className="flex border-b border-gray-200 gap-6">
-                            <button
-                                onClick={() => setActiveTab('claims')}
-                                className={`pb-3 text-sm font-semibold transition-colors border-b-2 ${
-                                    activeTab === 'claims' 
-                                        ? 'border-blue-600 text-blue-600' 
-                                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                                }`}
-                            >
-                                Pending Initial Claims ({pendingResidents.length})
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('corrections')}
-                                className={`pb-3 text-sm font-semibold transition-colors border-b-2 ${
-                                    activeTab === 'corrections' 
-                                        ? 'border-blue-600 text-blue-600' 
-                                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                                }`}
-                            >
-                                Profile Correction Requests ({corrections.filter(c => c.status === 'PENDING').length})
-                            </button>
+                        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Resident Name</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Birthdate / Purok</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Valid ID</th>
+                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {isLoading ? (
+                                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">Loading pending accounts...</td></tr>
+                                    ) : pendingResidents.length === 0 ? (
+                                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">No pending resident approvals found.</td></tr>
+                                    ) : (
+                                        pendingResidents.map((resident) => (
+                                            <tr key={resident.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                                                    {resident.first_name} {resident.last_name}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    <div>{resident.birth_date}</div>
+                                                    <span className="text-xs text-gray-400">Purok: {resident.purok}</span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {resident.id_picture ? (
+                                                        <button 
+                                                            onClick={() => setSelectedIdImage(resident.id_picture)}
+                                                            className="text-blue-600 hover:underline text-xs font-medium bg-blue-50 px-2.5 py-1 rounded-md"
+                                                        >
+                                                            View ID
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">No ID Attached</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button 
+                                                            onClick={() => handleAction(resident.id, 'APPROVED')}
+                                                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+                                                        >
+                                                            Approve
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setRejectingId(resident.id)}
+                                                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+                                                        >
+                                                            Reject
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-
-                        {/* TAB 1: PENDING INITIAL CLAIMS */}
-                        {activeTab === 'claims' && (
-                            <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-x-auto w-full">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
-                                        <tr>
-                                            <th className="px-6 py-4 font-semibold">Resident Name</th>
-                                            <th className="px-6 py-4 font-semibold">Birth Date</th>
-                                            <th className="px-6 py-4 font-semibold">Civil Status</th>
-                                            <th className="px-6 py-4 font-semibold">Purok</th>
-                                            <th className="px-6 py-4 font-semibold text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {loadingClaims ? (
-                                            <tr><td colSpan={5} className="py-8 text-center text-gray-500 font-medium">Loading claims...</td></tr>
-                                        ) : pendingResidents.length === 0 ? (
-                                            <tr><td colSpan={5} className="py-8 text-center text-gray-500 font-medium">No pending profile claims found.</td></tr>
-                                        ) : (
-                                            pendingResidents.map((res) => (
-                                                <tr key={res.id} className="hover:bg-gray-50 transition-colors">
-                                                    <td className="px-6 py-4 font-bold text-gray-900">{res.first_name} {res.last_name}</td>
-                                                    <td className="px-6 py-4 text-gray-600">{res.birth_date}</td>
-                                                    <td className="px-6 py-4 text-gray-600">{res.civil_status}</td>
-                                                    <td className="px-6 py-4 text-gray-600">{res.purok}</td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <div className="flex justify-center gap-2">
-                                                            <button 
-                                                                onClick={() => handleClaimAction(res.id, 'APPROVED')}
-                                                                disabled={actionLoading === res.id}
-                                                                className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:opacity-50"
-                                                            >
-                                                                Approve Claim
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleClaimAction(res.id, 'REJECTED')}
-                                                                disabled={actionLoading === res.id}
-                                                                className="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50"
-                                                            >
-                                                                Reject
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-
-                        {/* TAB 2: PROFILE CORRECTIONS (Accessibility Focus) */}
-                        {activeTab === 'corrections' && (
-                            <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-x-auto w-full">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
-                                        <tr>
-                                            <th className="px-6 py-4 font-semibold">Resident</th>
-                                            <th className="px-6 py-4 font-semibold">Requested Changes</th>
-                                            <th className="px-6 py-4 font-semibold">Accessibility Reason / Note</th>
-                                            <th className="px-6 py-4 font-semibold text-center">Status</th>
-                                            <th className="px-6 py-4 font-semibold text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {loadingCorrections ? (
-                                            <tr><td colSpan={5} className="py-8 text-center text-gray-500 font-medium">Loading requests...</td></tr>
-                                        ) : corrections.length === 0 ? (
-                                            <tr><td colSpan={5} className="py-8 text-center text-gray-500 font-medium">No pending profile corrections.</td></tr>
-                                        ) : (
-                                            corrections.map((req) => (
-                                                <tr key={req.id} className="hover:bg-gray-50 transition-colors">
-                                                    <td className="px-6 py-4 font-bold text-gray-900">{req.resident_name}</td>
-                                                    <td className="px-6 py-4 text-xs space-y-1">
-                                                        {req.requested_first_name || req.requested_last_name ? (
-                                                            <p><span className="font-semibold text-gray-700">Name:</span> {req.requested_first_name} {req.requested_last_name}</p>
-                                                        ) : null}
-                                                        {req.requested_birth_date ? (
-                                                            <p><span className="font-semibold text-gray-700">Birthdate:</span> {req.requested_birth_date}</p>
-                                                        ) : null}
-                                                        {req.requested_civil_status ? (
-                                                            <p><span className="font-semibold text-gray-700">Civil Status:</span> {req.requested_civil_status}</p>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-gray-600 italic max-w-xs">"{req.reason}"</td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
-                                                            req.status === 'APPROVED' ? 'bg-green-100 text-green-800 border border-green-200' :
-                                                            req.status === 'REJECTED' ? 'bg-red-100 text-red-800 border border-red-200' : 
-                                                            'bg-orange-100 text-orange-800 border border-orange-200'
-                                                        }`}>
-                                                            {req.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        {req.status === 'PENDING' ? (
-                                                            <div className="flex justify-center gap-2">
-                                                                <button 
-                                                                    onClick={() => handleCorrectionAction(req.id, 'APPROVED')}
-                                                                    disabled={actionLoading === req.id}
-                                                                    className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:opacity-50"
-                                                                >
-                                                                    Approve
-                                                                </button>
-                                                                <button 
-                                                                    onClick={() => handleCorrectionAction(req.id, 'REJECTED')}
-                                                                    disabled={actionLoading === req.id}
-                                                                    className="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50"
-                                                                >
-                                                                    Reject
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-xs text-gray-400 font-medium">Processed</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-
                     </div>
                 </main>
             </div>
+
+            {/* ID PREVIEW MODAL */}
+            {selectedIdImage && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-lg w-full p-6 shadow-xl relative">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Submitted Valid ID</h3>
+                        <div className="flex justify-center bg-gray-100 p-2 rounded-md border border-gray-200 max-h-[60vh] overflow-auto">
+                            <img src={selectedIdImage} alt="Resident ID" className="max-h-[50vh] object-contain rounded" />
+                        </div>
+                        <div className="mt-6 flex justify-end">
+                            <button 
+                                onClick={() => setSelectedIdImage(null)}
+                                className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-semibold"
+                            >
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* REJECTION REASON MODAL */}
+            {rejectingId !== null && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-xl">
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Reject Resident Application</h3>
+                        <p className="text-sm text-gray-500 mb-4">Please provide a reason for rejection so the resident knows what to fix.</p>
+                        
+                        <textarea 
+                            rows={3}
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            placeholder="e.g., ID picture is blurry or name does not match records..."
+                            className="w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none mb-4"
+                        />
+
+                        <div className="flex justify-end gap-2">
+                            <button 
+                                onClick={() => { setRejectingId(null); setRejectionReason(""); }}
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm font-semibold"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => handleAction(rejectingId, 'REJECTED', rejectionReason)}
+                                disabled={!rejectionReason.trim()}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-50"
+                            >
+                                Confirm Rejection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
