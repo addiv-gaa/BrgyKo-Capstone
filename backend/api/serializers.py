@@ -15,23 +15,29 @@ from .models import (
     Event, 
     Reservation,
     OfficialDocument,
-    ProfileUpdateRequest, 
+    ProfileUpdateRequest,
+    IncidentReport,
+    BarangaySettings, # NEW: Imported IncidentReport
 )
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
-        # Everything below this line MUST be indented with 4 or 8 spaces!
-        print(f"DEBUG: Generating token for user: {user.username}")
-        
         token = super().get_token(user)
         
-        roles_list = list(user.groups.values_list('name', flat=True))
+        # Inject user details
         token['username'] = user.username
         token['first_name'] = user.first_name
-        print(f"DEBUG: Found roles: {roles_list}")
         
-        token['roles'] = roles_list
+        # --- CHANGED: Extract the specific RBAC role from the UserProfile ---
+        try:
+            role = user.otp_profile.role
+        except Exception:
+            role = 'RESIDENT' # Fallback if profile is missing
+            
+        token['role'] = role 
+        
+        print(f"DEBUG: Generating token for {user.username} with role: {role}")
         return token
 
 class UserSerializer(serializers.ModelSerializer):
@@ -50,6 +56,8 @@ class CertificateRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = CertificateRequest
         fields = '__all__'
+        # NEW: Protect tracking and admin fields from user manipulation
+        read_only_fields = ['status', 'rejection_reason', 'date_requested']
 
 class PermitRequestSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
@@ -57,13 +65,35 @@ class PermitRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = PermitRequest
         fields = '__all__'
+        # NEW: Protect tracking and admin fields
+        read_only_fields = ['status', 'rejection_reason', 'date_requested']
+
+class EventNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = ['start_time', 'end_time']
 
 class AnnouncementSerializer(serializers.ModelSerializer):
-    is_read = serializers.SerializerMethodField()
-
+    author_name = serializers.CharField(source='author.username', read_only=True)
+    linked_event_details = EventNestedSerializer(source='linked_event', read_only=True) # NEW: Pulls start/end time
+    
     class Meta:
         model = Announcement
-        fields = ['id', 'title', 'content', 'category', 'created_at', 'is_read']
+        fields = [
+            'id', 
+            'title', 
+            'content', 
+            'categories',      
+            'is_urgent',       
+            'tags',            
+            'attachment',      
+            'linked_event',    
+            'linked_event_details', # NEW field for the frontend card
+            'created_at', 
+            'author', 
+            'author_name'
+        ]
+        read_only_fields = ['author', 'created_at']
 
     def get_is_read(self, obj):
         user = self.context['request'].user
@@ -78,7 +108,7 @@ class ResidentSerializer(serializers.ModelSerializer):
         model = Resident
         fields = '__all__'
 
-# --- NEW: User-Facing Profile Serializer (Locked Down) ---
+# --- 2. User-Facing Profile Serializer (Locked Down) ---
 class ResidentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resident
@@ -90,7 +120,8 @@ class ResidentProfileSerializer(serializers.ModelSerializer):
             'sex', 
             'contact_number', 
             'purok', 
-            'approval_status'
+            'approval_status',
+            'rejection_reason' # NEW: Expose rejection reason so they know why it failed
         ]
         # Protect official data from being changed via the web form
         read_only_fields = [
@@ -100,10 +131,11 @@ class ResidentProfileSerializer(serializers.ModelSerializer):
             'civil_status', 
             'sex', 
             'purok', 
-            'approval_status'
+            'approval_status',
+            'rejection_reason'
         ]
 
-# --- 2. Mini Resident Serializer (Nested inside the Map Details Panel) ---
+# --- 3. Mini Resident Serializer (Nested inside the Map Details Panel) ---
 class ResidentMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resident
@@ -113,14 +145,10 @@ class ResidentMiniSerializer(serializers.ModelSerializer):
         ]
     
 class HouseholdSerializer(GeoFeatureModelSerializer):
-    # Nest the residents inside the household payload
     residents = ResidentMiniSerializer(many=True, read_only=True)
     
-    # Dynamically calculate the fields we removed from the database model
     head_of_household = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
-    
-    # Dynamically bubble up the vulnerability flags to color the map markers
     is_4ps_beneficiary = serializers.SerializerMethodField()
     has_senior_citizen = serializers.SerializerMethodField()
     has_pwd = serializers.SerializerMethodField()
@@ -128,16 +156,14 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
 
     class Meta:
         model = Household
-        geo_field = 'location' # Tells DRF-GIS which field holds the coordinates
+        geo_field = 'location' 
         fields = [
             'id', 'address', 'housing_status', 'dwelling_type', 
             'head_of_household', 'member_count', 'residents',
             'is_4ps_beneficiary', 'has_senior_citizen', 'has_pwd', 'has_solo_parent'
         ]
 
-    # --- Dynamic Calculation Methods ---
     def get_head_of_household(self, obj):
-        # Look through the attached residents and find the head
         head = obj.residents.filter(relationship_to_head='Head').first()
         if head:
             return f"{head.first_name} {head.last_name}"
@@ -147,7 +173,6 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
         return obj.residents.count()
 
     def get_is_4ps_beneficiary(self, obj):
-        # Returns True if ANY resident in this house is a 4Ps beneficiary
         return obj.residents.filter(is_4ps_beneficiary=True).exists()
 
     def get_has_senior_citizen(self, obj):
@@ -182,8 +207,8 @@ class ReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
         fields = '__all__'
-        # Security enhancement: prevents users from injecting their own approved status or manipulating timestamps/user binding.
-        read_only_fields = ['user', 'status', 'date_requested']
+        # NEW: Added rejection_reason to protected fields
+        read_only_fields = ['user', 'status', 'rejection_reason', 'date_requested']
 
 class OfficialDocumentSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.SerializerMethodField()
@@ -193,7 +218,7 @@ class OfficialDocumentSerializer(serializers.ModelSerializer):
         model = OfficialDocument
         fields = [
             'id', 'title', 'file', 'file_name', 'document_type', 
-            'uploaded_by', 'uploaded_by_name', 'uploaded_at', 'is_archived' # Added is_archived
+            'uploaded_by', 'uploaded_by_name', 'uploaded_at', 'is_archived' 
         ]
         read_only_fields = ['uploaded_by', 'uploaded_at']
 
@@ -208,15 +233,34 @@ class OfficialDocumentSerializer(serializers.ModelSerializer):
             return obj.file.name.split('/')[-1]
         return None
 
-
-
 class ProfileUpdateRequestSerializer(serializers.ModelSerializer):
     resident_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ProfileUpdateRequest
         fields = '__all__'
-        read_only_fields = ['user', 'resident', 'created_at']
+        # NEW: Added rejection_reason
+        read_only_fields = ['user', 'resident', 'created_at', 'rejection_reason']
 
     def get_resident_name(self, obj):
         return f"{obj.resident.first_name} {obj.resident.last_name}"
+
+# --- NEW: Incident Report Serializer ---
+class IncidentReportSerializer(serializers.ModelSerializer):
+    reporter_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IncidentReport
+        fields = '__all__'
+        # Protect admin-only fields from being set by the resident
+        read_only_fields = ['user', 'status', 'resolution_notes', 'created_at', 'updated_at']
+
+    def get_reporter_name(self, obj):
+        if obj.user.first_name:
+            return f"{obj.user.first_name} {obj.user.last_name}".strip()
+        return obj.user.username
+
+class BarangaySettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BarangaySettings
+        fields = '__all__'

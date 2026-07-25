@@ -66,12 +66,22 @@ function Form({ route, method }: FormProps) {
                 if (auth) auth.login(res.data.access);
                 navigate("/");
             } else {
-                const res = await api.post('/api/register/', { username, email, password });
+                const res = await api.post('/api/auth/register/', { username, email, password });
                 
-                // NEW: Save the userId to sessionStorage
-                const newUserId = res.data.user_id;
+                // DEBUG: Print exactly what Django sent back to your browser console (F12)
+                console.log("Django Registration Response:", res.data); 
+                
+                // NEW: Failsafe check for user_id or id
+                const newUserId = res.data.user_id || res.data.id; 
+                
+                if (newUserId === undefined) {
+                    throw new Error("Backend did not return a user ID. Please restart your Django server.");
+                }
+
                 setUserId(newUserId);
-                sessionStorage.setItem("registrationUserId", newUserId.toString());
+                
+                // Use String() instead of .toString() to prevent hard crashes if it's ever null
+                sessionStorage.setItem("registrationUserId", String(newUserId)); 
                 
                 setStep('verify');
                 setOtpMessage("Verification code sent! Check your email or terminal console.");
@@ -90,7 +100,7 @@ function Form({ route, method }: FormProps) {
         setLoading(true);
 
         try {
-            const res = await api.post('/api/verify-otp/', { user_id: userId, otp });
+            const res = await api.post('/api/auth/verify-otp/', { user_id: userId, otp });
             if (res.status === 200) {
                 // NEW: Clear the sessionStorage upon successful verification
                 sessionStorage.removeItem("registrationUserId");

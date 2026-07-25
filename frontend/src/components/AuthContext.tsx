@@ -2,7 +2,8 @@ import { createContext, useState, useEffect, type ReactNode } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '../constants'; 
 
-// 1. UPDATED: Added first_name and username to the global User object definition
+const API_URL = import.meta.env.VITE_API_URL;
+
 interface User {
     token: string;
     roles: string[];
@@ -10,13 +11,32 @@ interface User {
     username?: string;
 }
 
-interface AuthContextType {
-    user: User | null;
-    login: (token: string) => void;
-    logout: () => void;
+interface SystemSettings {
+    barangay_name: string;
+    captain_name: string;
+    barangay_hall_address: string;
+    official_contact_email: string;
+    official_contact_number: string;
+    barangay_seal_url: string;
+    emergency_hotline: string;
+    police_hotline: string;
+    fire_hotline: string;
+    ai_chatbot_enabled: boolean;
+    accept_permit_requests: boolean;
+    accept_reservations: boolean;
+    maintenance_mode: boolean;
+    max_pending_requests_per_user: number;
+    reservation_lead_time_days: number;
 }
 
-// UPDATED: Added fields to the JWT definition so jwtDecode knows they exist inside the token
+interface AuthContextType {
+    user: User | null;
+    settings: SystemSettings | null;
+    login: (token: string) => void;
+    logout: () => void;
+    refreshSettings: () => void;
+}
+
 interface CustomJwtPayload {
     exp?: number;
     roles?: string[];
@@ -28,30 +48,49 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
+    const [settings, setSettings] = useState<SystemSettings | null>(null);
     const [isAppLoading, setIsAppLoading] = useState(true);
 
-    useEffect(() => {
-        const token = localStorage.getItem(ACCESS_TOKEN);
-        if (token) {
-            try {
-                const decoded = jwtDecode<CustomJwtPayload>(token);
-                // UPDATED: Extracted fields from decoded token into your application state
-                setUser({ 
-                    roles: decoded.roles || [], 
-                    token,
-                    first_name: decoded.first_name,
-                    username: decoded.username
-                });
-            } catch (error) {
-                console.error("Failed to decode token on load", error);
+    const fetchSettings = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/system/settings/`);
+            if (res.ok) {
+                const data = await res.json();
+                setSettings(data);
             }
+        } catch (error) {
+            console.error("Failed to fetch system settings", error);
         }
-        setIsAppLoading(false);
+    };
+
+    useEffect(() => {
+        const initializeAuthAndSettings = async () => {
+            // 1. Fetch System Settings
+            await fetchSettings();
+
+            // 2. Decode User Token
+            const token = localStorage.getItem(ACCESS_TOKEN);
+            if (token) {
+                try {
+                    const decoded = jwtDecode<CustomJwtPayload>(token);
+                    setUser({ 
+                        roles: decoded.roles || [], 
+                        token,
+                        first_name: decoded.first_name,
+                        username: decoded.username
+                    });
+                } catch (error) {
+                    console.error("Failed to decode token on load", error);
+                }
+            }
+            setIsAppLoading(false);
+        };
+
+        initializeAuthAndSettings();
     }, []);
 
     const login = (token: string) => {
         const decoded = jwtDecode<CustomJwtPayload>(token);
-        // UPDATED: Handled the payload details inside the active login handler
         setUser({ 
             roles: decoded.roles || [], 
             token,
@@ -67,7 +106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout }}>
+        <AuthContext.Provider value={{ user, settings, login, logout, refreshSettings: fetchSettings }}>
             {!isAppLoading ? children : <div className="flex h-screen items-center justify-center">Loading App...</div>}
         </AuthContext.Provider>
     );

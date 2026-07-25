@@ -1,22 +1,42 @@
 from django.contrib.gis.db import models
 from django.contrib.auth.models import User
 from django.conf import settings
+from simple_history.models import HistoricalRecords
 
 class UserProfile(models.Model):
+    # --- NEW: User Roles for RBAC ---
+    ROLE_CHOICES = [
+        ('RESIDENT', 'Resident'),
+        ('SECRETARY', 'Secretary (Admin)'),
+        ('CAPTAIN', 'Barangay Captain (Admin)'),
+        ('COUNCIL', 'Barangay Council / Konsehal'),
+        ('TREASURER', 'Treasurer'),
+        ('TANOD', 'Tanod'),
+        ('SK', 'SK (Sangguniang Kabataan)'),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='otp_profile')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='RESIDENT') # New Role Field
     email_otp = models.CharField(max_length=6, blank=True, null=True)
     otp_created_at = models.DateTimeField(blank=True, null=True)
     otp_attempts = models.IntegerField(default=0)
+    
+    history = HistoricalRecords()
 
     def __str__(self):
-        return self.user.email
+        return f"{self.user.email} - {self.get_role_display()}"
+
 
 class CertificateRequest(models.Model):
-    # --- Dropdown Choices ---
+    # --- Expanded Dropdown Choices ---
     CERTIFICATE_TYPES = [
         ('CLEARANCE', 'Barangay Clearance'),
         ('RESIDENCY', 'Certificate of Residency'),
         ('INDIGENCY', 'Certificate of Indigency'),
+        ('GOOD_MORAL', 'Certificate of Good Moral Character'),
+        ('LOW_INCOME', 'Certificate of Low Income'),
+        ('SOLO_PARENT', 'Solo Parent Certification'),
+        ('JOB_SEEKER', 'First Time Job Seeker'),
     ]
 
     CIVIL_STATUSES = [
@@ -32,12 +52,17 @@ class CertificateRequest(models.Model):
         ('RELEASED', 'Released'),
         ('REJECTED', 'Rejected'),
     ]
+    
+    REQUEST_FOR_CHOICES = [
+        ('SELF', 'For Myself'),
+        ('OTHER', 'For Someone Else'),
+    ]
 
-    user = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        related_name='certificate_requests'
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='certificate_requests')
+
+    # --- NEW: Request Type & Authorization ---
+    request_for = models.CharField(max_length=10, choices=REQUEST_FOR_CHOICES, default='SELF')
+    relationship_to_document_owner = models.CharField(max_length=100, blank=True, null=True, help_text="Required if requesting for someone else")
 
     # --- Form Fields ---
     certificate_type = models.CharField(max_length=20, choices=CERTIFICATE_TYPES)
@@ -47,26 +72,27 @@ class CertificateRequest(models.Model):
     purpose = models.CharField(max_length=255)
     contact_number = models.CharField(max_length=15) 
 
-    # --- Tracking Fields ---
+    # --- Tracking & Auditing ---
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    rejection_reason = models.TextField(blank=True, null=True, help_text="Reason for rejecting the request") # NEW
     date_requested = models.DateField(auto_now_add=True)
+    
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['-date_requested']
 
     def __str__(self):
         return f"{self.full_name} - {self.get_certificate_type_display()}"
-    
+
 
 class PermitRequest(models.Model):
-    # --- Dropdown Choices ---
     PERMIT_TYPES = [
         ('BUSINESS', 'Business Permit'),
         ('CONSTRUCTION', 'Construction Permit'),
         ('EVENT', 'Event/Activity Permit'),
         ('ZONING', 'Zoning Clearance'),
     ]
-
 
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
@@ -75,13 +101,8 @@ class PermitRequest(models.Model):
         ('REJECTED', 'Rejected'),
     ]
 
-    user = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        related_name='permit_requests'
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='permit_requests')
 
-    # --- Form Fields ---
     permit_type = models.CharField(max_length=20, choices=PERMIT_TYPES)
     applicant_name = models.CharField(max_length=255)
     address = models.CharField(max_length=255, default='')
@@ -89,16 +110,19 @@ class PermitRequest(models.Model):
     nature = models.CharField(max_length=255)
     supporting_documents = models.TextField()
 
-    # --- Tracking Fields ---
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    rejection_reason = models.TextField(blank=True, null=True) # NEW
     date_requested = models.DateField(auto_now_add=True)
+    
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['-date_requested']
 
     def __str__(self):
         return f"{self.applicant_name} - {self.get_permit_type_display()}"
-    
+
+
 class AiQueryStatistic(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     prompt = models.TextField()
@@ -107,7 +131,8 @@ class AiQueryStatistic(models.Model):
 
     def __str__(self):
         return f"Query by {self.user} at {self.created_at}"
-    
+
+
 class Facility(models.Model):
     STATUS_CHOICES = [
         ('Available', 'Available'),
@@ -142,22 +167,31 @@ class Equipment(models.Model):
         return f"{self.name} - Total: {self.total_quantity}"
 
 
+# --- REFACTORED: Event Post (Separated from simple calendar blocking) ---
 class Event(models.Model):
-    EVENT_TYPES = [
-        ('ACTIVITY', 'Barangay Activity'),
-        ('ABSENCE', 'Official Absence'),
+    TAG_CHOICES = [
+        ('GENERAL', 'General'),
+        ('SK', 'Sangguniang Kabataan'),
+        ('HEALTH', 'Health & Medical'),
+        ('SENIOR', 'Senior Citizens'),
+        ('WELFARE', 'Social Welfare'),
     ]
-    """For official Barangay events that will show on the calendar."""
+    
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
-    event_type = models.CharField(max_length=20, choices=EVENT_TYPES, default='ACTIVITY') # NEW
+    event_type = models.CharField(max_length=20, choices=[('ACTIVITY', 'Barangay Activity'), ('ABSENCE', 'Official Absence')], default='ACTIVITY') 
+    
+    # NEW FIELDS
+    tags = models.CharField(max_length=20, choices=TAG_CHOICES, default='GENERAL')
+    image_banner = models.ImageField(upload_to='event_banners/', blank=True, null=True)
+    
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     organizer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"[{self.event_type}] {self.title}"
+        return f"[{self.get_tags_display()}] {self.title}"
 
 
 class Reservation(models.Model):
@@ -169,13 +203,8 @@ class Reservation(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reservations')
-    
-    # A reservation can be for a Facility OR Equipment (or both). 
-    # null=True allows one to be blank while the other is filled.
     facility = models.ForeignKey(Facility, on_delete=models.CASCADE, null=True, blank=True)
     equipment = models.ForeignKey(Equipment, on_delete=models.CASCADE, null=True, blank=True)
-    
-    # Crucial for equipment: How many chairs/tents are they borrowing?
     equipment_quantity = models.PositiveIntegerField(default=0, blank=True, null=True)
     
     purpose = models.CharField(max_length=255)
@@ -183,6 +212,7 @@ class Reservation(models.Model):
     end_time = models.DateTimeField()
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    rejection_reason = models.TextField(blank=True, null=True) # NEW
     date_requested = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -192,23 +222,90 @@ class Reservation(models.Model):
         item_name = self.facility.name if self.facility else getattr(self.equipment, 'name', 'Multiple Items')
         return f"[{self.status}] {self.user.username} - {item_name}"
 
-class Announcement(models.Model):
+
+# --- NEW: Incident Report Model ---
+class IncidentReport(models.Model):
     CATEGORY_CHOICES = [
+        ('DISTURBANCE', 'Noise / Disturbance'),
+        ('INFRASTRUCTURE', 'Broken Infrastructure (Lights, Roads)'),
+        ('CLEANLINESS', 'Garbage / Cleanliness'),
+        ('SECURITY', 'Theft / Security Issue'),
+        ('EMERGENCY', 'Health / Fire Emergency'),
+        ('OTHER', 'Other'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Review'),
+        ('INVESTIGATING', 'Investigating (Tanod Dispatched)'),
+        ('RESOLVED', 'Resolved'),
+        ('REJECTED', 'Rejected / Invalid'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incident_reports')
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    description = models.TextField()
+    location_details = models.CharField(max_length=255, help_text="Specific landmark or purok")
+    photo_attachment = models.ImageField(upload_to='incident_reports/', blank=True, null=True)
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    resolution_notes = models.TextField(blank=True, null=True, help_text="Notes from Tanod/Admin after investigation")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_category_display()} - {self.status} ({self.created_at.date()})"
+
+
+class Announcement(models.Model):
+    # These choices will be used by the frontend to generate checkboxes/multi-selects
+    CATEGORY_CHOICES = [
+        ('Announcement', 'Announcement'),
         ('Emergency', 'Emergency'),
         ('Event', 'Event'),
         ('Welfare', 'Welfare'),
         ('Services', 'Services'),
         ('SK', 'SK'),
+        ('PWD', 'PWD'), # NEW: Added PWD
     ]
     
     title = models.CharField(max_length=255)
     content = models.TextField()
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    
+    # UPDATED: Changed to JSONField to support arrays (e.g., ["Event", "PWD"])
+    # We renamed it to 'categories' (plural) to reflect that it holds multiple values.
+    categories = models.JSONField(default=list, help_text="Stores multiple categories as an array")
+    
+    # --- Rich Features ---
+    is_urgent = models.BooleanField(default=False, help_text="Will highlight the announcement in red on the feed")
+    tags = models.CharField(max_length=255, blank=True, null=True, help_text="Comma-separated tags (e.g., Water Interruption, Relief)")
+    attachment = models.FileField(upload_to='announcement_media/', blank=True, null=True)
+    
+    # YES: This links directly to your existing Event model for the Calendar!
+    linked_event = models.ForeignKey(
+        Event, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='announcements',
+        help_text="Optional: Link this announcement to a specific calendar event"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
 
     class Meta:
         ordering = ['-created_at']
+
+    def __str__(self):
+        urgent_flag = "[URGENT] " if self.is_urgent else ""
+        return f"{urgent_flag}{self.title}"
+
 
 class ReadAnnouncement(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -216,7 +313,8 @@ class ReadAnnouncement(models.Model):
     read_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('user', 'announcement') # Prevents duplicate "read" entries
+        unique_together = ('user', 'announcement')
+
 
 class Household(models.Model):
     HOUSING_CHOICES = [
@@ -232,29 +330,19 @@ class Household(models.Model):
         ('Light Materials', 'Light Materials (Wood/Nipa)'),
     ]
 
-    # --- Physical Location Info ---
     address = models.TextField()
-    
-    # --- Geo-Mapping (The GIS Upgrade) ---
     location = models.PointField(srid=4326, blank=True, null=True) 
-
-    # --- Disaster Risk & Socio-Economic ---
     housing_status = models.CharField(max_length=50, choices=HOUSING_CHOICES, blank=True, null=True)
     dwelling_type = models.CharField(max_length=50, choices=DWELLING_CHOICES, blank=True, null=True)
-
-    # --- Audit Trail ---
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    # ❌ REMOVED: head_of_household (Derived from Resident where relationship='Head')
-    # ❌ REMOVED: contact_number (Moved to Resident, usually belongs to a person, not a house)
-    # ❌ REMOVED: member_count (Calculated dynamically via obj.residents.count())
-    # ❌ REMOVED: Vulnerability Flags (4Ps, Senior, PWD, Solo Parent are now on the Resident)
+    
+    history = HistoricalRecords()
 
     def __str__(self):
-        # Updated string representation since head_of_household is gone
         return f"Household: {self.address[:30]}..."
     
+
 class Resident(models.Model):
     RELATIONSHIP_CHOICES = [
         ('Head', 'Head of Household'),
@@ -270,18 +358,7 @@ class Resident(models.Model):
         ('Female', 'Female'),
     ]
 
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name='resident_profile'
-    )
-    
-    # Core identifying fields used for matching during Approach A
-    first_name = models.CharField(max_length=100, null=True, blank=True)
-    last_name = models.CharField(max_length=100, null=True, blank=True)
-    birthdate = models.DateField(null=True, blank=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='resident_profile')
     
     # Approval / Verification Workflow
     STATUS_CHOICES = [
@@ -290,6 +367,7 @@ class Resident(models.Model):
         ('REJECTED', 'Rejected'),
     ]
     approval_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    rejection_reason = models.TextField(blank=True, null=True, help_text="Reason for declining account link or new application") # NEW
 
     # --- Basic Info ---
     first_name = models.CharField(max_length=100)
@@ -297,24 +375,13 @@ class Resident(models.Model):
     birth_date = models.DateField(null=True, blank=True)
     civil_status = models.CharField(max_length=50, default='Single')
     sex = models.CharField(max_length=10, choices=SEX_CHOICES, default='Male')
-    
-    # ⬆️ MOVED FROM HOUSEHOLD: Contact number belongs to the individual
     contact_number = models.CharField(max_length=20, blank=True, null=True)
     purok = models.CharField(max_length=50)
     
-    # --- The Database Link ---
-    household = models.ForeignKey(
-        Household, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name='residents'
-    )
-    
-    # ⬆️ REPLACES 'head_of_household' string:
+    household = models.ForeignKey(Household, on_delete=models.SET_NULL, null=True, blank=True, related_name='residents')
     relationship_to_head = models.CharField(max_length=20, choices=RELATIONSHIP_CHOICES, default='Head')
 
-    # --- ⬆️ MOVED FROM HOUSEHOLD: Vulnerability & Welfare Flags ---
+    # --- Vulnerability & Welfare Flags ---
     is_4ps_beneficiary = models.BooleanField(default=False)
     has_senior_citizen = models.BooleanField(default=False)
     has_pwd = models.BooleanField(default=False)
@@ -322,10 +389,13 @@ class Resident(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
     
+
 class OfficialDocument(models.Model):
     DOCUMENT_TYPES = [
         ('Ordinance', 'Ordinances (Mga Ordinansa)'),
@@ -341,23 +411,20 @@ class OfficialDocument(models.Model):
     title = models.CharField(max_length=255)
     file = models.FileField(upload_to='official_documents/')
     document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPES)
-    uploaded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        related_name='uploaded_documents'
-    )
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_documents')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_archived = models.BooleanField(default=False)
+    
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"{self.title} ({self.document_type})"
+
 
 class ProfileUpdateRequest(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile_updates')
     resident = models.ForeignKey(Resident, on_delete=models.CASCADE, related_name='update_requests')
     
-    # The requested changes
     requested_first_name = models.CharField(max_length=100, blank=True, null=True)
     requested_last_name = models.CharField(max_length=100, blank=True, null=True)
     requested_birth_date = models.DateField(blank=True, null=True)
@@ -372,7 +439,56 @@ class ProfileUpdateRequest(models.Model):
         ('REJECTED', 'Rejected'),
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    rejection_reason = models.TextField(blank=True, null=True) # NEW
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"Update Request for {self.resident} - {self.status}"
+
+class BarangaySettings(models.Model):
+    barangay_name = models.CharField(max_length=255, default="Barangay Magsaysay")
+    captain_name = models.CharField(max_length=255, default="Juan Dela Cruz")
+    emergency_hotline = models.CharField(max_length=50, default="911")
+    police_hotline = models.CharField(max_length=50, default="117")
+    fire_hotline = models.CharField(max_length=50, default="112")
+    ai_chatbot_enabled = models.BooleanField(default=True)
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # Forces this model to only ever have one row (ID 1)
+        super(BarangaySettings, self).save(*args, **kwargs)
+        
+    def __str__(self):
+        return f"Settings for {self.barangay_name}"
+
+class BarangaySettings(models.Model):
+    # Barangay Identity & Metadata
+    barangay_name = models.CharField(max_length=255, default="Barangay Magsaysay")
+    captain_name = models.CharField(max_length=255, default="Juan Dela Cruz")
+    barangay_hall_address = models.CharField(max_length=255, default="Barangay Hall, Main St.")
+    official_contact_email = models.EmailField(default="official@magsaysay.gov.ph")
+    official_contact_number = models.CharField(max_length=50, default="09123456789")
+    barangay_seal_url = models.CharField(max_length=500, blank=True, null=True)
+
+    # Emergency Hotlines
+    emergency_hotline = models.CharField(max_length=50, default="911")
+    police_hotline = models.CharField(max_length=50, default="117")
+    fire_hotline = models.CharField(max_length=50, default="112")
+
+    # Feature Toggles & Kill-Switches
+    ai_chatbot_enabled = models.BooleanField(default=True)
+    accept_permit_requests = models.BooleanField(default=True)
+    accept_reservations = models.BooleanField(default=True)
+    maintenance_mode = models.BooleanField(default=False)
+
+    # Workflow & Policy Limits
+    max_pending_requests_per_user = models.IntegerField(default=3)
+    reservation_lead_time_days = models.IntegerField(default=2)
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # Forces this model to only ever have a single row (ID 1)
+        super(BarangaySettings, self).save(*args, **kwargs)
+        
+    def __str__(self):
+        return f"Settings for {self.barangay_name}"

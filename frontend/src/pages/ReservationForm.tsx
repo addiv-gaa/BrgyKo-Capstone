@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/header";
 import Sidebar from "../components/sidebar";
+import { AuthContext } from "../components/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -20,6 +21,8 @@ interface Equipment {
 
 export default function ReservationForm() {
     const navigate = useNavigate();
+    const authContext = useContext(AuthContext);
+    const settings = authContext?.settings;
     
     const [reservationType, setReservationType] = useState<'facility' | 'equipment'>('facility');
     
@@ -38,6 +41,16 @@ export default function ReservationForm() {
         end_time: '',
         purpose: ''
     });
+
+    // Calculate minimum selectable datetime based on admin lead time setting (default to 2 days)
+    const leadDays = settings?.reservation_lead_time_days ?? 2;
+    const minReservationDate = new Date();
+    minReservationDate.setDate(minReservationDate.getDate() + leadDays);
+    
+    // Format for datetime-local input (YYYY-MM-DDThh:mm)
+    const minDateTimeString = new Date(minReservationDate.getTime() - minReservationDate.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -106,10 +119,9 @@ export default function ReservationForm() {
 
             if (response.ok) {
                 alert("Reservation requested successfully! Waiting for staff approval.");
-                navigate('/resident/schedule'); // Send them back to their calendar view
+                navigate('/resident/schedule'); 
             } else {
                 const errorData = await response.json();
-                // Check for the custom overlap errors we wrote in Django
                 if (errorData.error) {
                     setErrorMessage(errorData.error);
                 } else {
@@ -124,9 +136,35 @@ export default function ReservationForm() {
         }
     };
 
-    // Filter out items that are under maintenance or out of stock
     const availableFacilities = facilities.filter(f => f.status === 'AVAILABLE' || f.status === 'Available');
     const availableEquipment = equipment.filter(e => e.status === 'AVAILABLE' || e.status === 'Available');
+
+    // --- GLOBAL SETTING CHECK: Facility Reservations Kill-Switch ---
+    if (settings && !settings.accept_reservations) {
+        return (
+            <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+                <PageHeader />
+                <div className="flex flex-1 overflow-hidden">
+                    <Sidebar />
+                    <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa] flex items-center justify-center">
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-3 max-w-lg w-full shadow-sm">
+                            <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto font-bold text-lg">!</div>
+                            <h3 className="text-lg font-bold text-amber-900">Facility Reservations Suspended</h3>
+                            <p className="text-sm text-amber-700 max-w-md mx-auto leading-relaxed">
+                                Facility and equipment borrowing is temporarily suspended by the barangay administration due to scheduled maintenance or local community events.
+                            </p>
+                            <button 
+                                onClick={() => navigate('/resident/schedule')}
+                                className="mt-4 inline-block font-semibold text-amber-800 hover:text-amber-900 bg-amber-100 px-4 py-2 rounded border border-amber-200 transition-colors"
+                            >
+                                &larr; Return to Calendar
+                            </button>
+                        </div>
+                    </main>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
@@ -152,6 +190,10 @@ export default function ReservationForm() {
                                 {errorMessage}
                             </div>
                         )}
+                        
+                        <div className="bg-blue-50 border border-blue-100 text-blue-800 p-4 rounded-md mb-6 text-sm">
+                            <span className="font-bold">Note:</span> The administration requires a minimum advance notice of <span className="font-bold">{leadDays} day(s)</span> for all bookings.
+                        </div>
 
                         {/* Type Toggle */}
                         <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg mb-6 w-full">
@@ -239,7 +281,9 @@ export default function ReservationForm() {
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-1">Start Time</label>
                                     <input 
-                                        type="datetime-local" required
+                                        type="datetime-local" 
+                                        min={minDateTimeString}
+                                        required
                                         className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
                                         value={formData.start_time}
                                         onChange={(e) => setFormData({...formData, start_time: e.target.value})}
@@ -248,7 +292,9 @@ export default function ReservationForm() {
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-1">End Time</label>
                                     <input 
-                                        type="datetime-local" required
+                                        type="datetime-local" 
+                                        min={formData.start_time || minDateTimeString}
+                                        required
                                         className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
                                         value={formData.end_time}
                                         onChange={(e) => setFormData({...formData, end_time: e.target.value})}

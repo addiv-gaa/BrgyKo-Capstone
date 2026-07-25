@@ -1,49 +1,84 @@
-import { useContext } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "./AuthContext";
 
-// 1. Define menu configurations outside the component to keep the logic clean
 const MENU_CONFIG = {
-    services: [
+    // Menus available to normal residents
+    residentServices: [
         { label: "Dashboard", path: "/" },
         { label: "Request Certificate", path: "/requestcertificate" },
-        { label: "Ai Assistant", path: "/aiassistant" },
+        { label: "Report Incident", path: "/reportincident" },
+        { label: "Reserve Facility", path: "/reservations/request" },
+        { label: "AI Assistant", path: "/aiassistant" },
     ],
-    community: [
+    residentCommunity: [
         { label: "Announcements", path: "/announcements" },
         { label: "Barangay Calendar", path: "/resident/schedule" },
         { label: "Emergency Contacts", path: "/emergencycontacts" },
         { label: "Barangay Officials", path: "/barangayofficials" },
     ],
-    administration: [
-        { label: "Barangay Calendar", path: "/barangaycalendarstaff" },
-        { label: "Residents", path: "/residents" },
-        { label: "Inventory", path: "/inventory" },
-        { label: "Welfare", path: "/welfare" },
-        { label: "SMS Blast", path: "/smsblast" },
-        { label: "Reports", path: "/reports" },
+    
+    // Menus specific to Tanods / Field Staff
+    tanodAdministration: [
+        { label: "Incident Management", path: "/tanod/dashboard" },
         { label: "Geo Mapping", path: "/geomapping" },
-        { label: "Documents", path: "/documents" },
-        { label: "Cert Requests", path: "/certrequests" },
-        { label: "Profile Approvals", path: "/profileupdate" },
+        { label: "Staff Calendar", path: "/barangaycalendarstaff" },
+    ],
+
+    // Comprehensive menus for Captains, Secretaries, and Admins
+    staffAdministration: [
+        { label: "Admin Hub", path: "/adminhub" },
+        { label: "Certificate Requests", path: "/certrequests" },
+        { label: "Resident & Profile Approvals", path: "/residentapproval" },
+        { label: "Residents Directory", path: "/residents" },
+        { label: "Incident Management", path: "/tanod/dashboard" },
+        { label: "Staff Calendar", path: "/barangaycalendarstaff" },
+        { label: "Inventory & Welfare", path: "/inventory" },
+        { label: "SMS Blast & Reports", path: "/reports" },
+        { label: "Geo Mapping", path: "/geomapping" },
+        { label: "Documents & Records", path: "/documents" },
     ]
 };
 
 const Sidebar = () => {
     const auth = useContext(AuthContext);
     const navigate = useNavigate();
+    
+    const [userRole, setUserRole] = useState<string>("");
 
-    // Added optional chaining (?.) to roles to prevent crashes if the array is undefined during load
-    const canViewAdminMenu = ['admin', 'staff'].some(role => 
-        auth?.user?.roles?.includes(role)
-    );
+    useEffect(() => {
+        let extractedRole = "";
 
-    // 2. Create a helper function to render out the buttons
+        try {
+            const token = localStorage.getItem('access');
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                extractedRole = payload.role || payload.roles || "";
+            }
+        } catch (error) {
+            console.error("Token decoding failed", error);
+        }
+
+        if (!extractedRole && auth?.user) {
+            const contextUser = auth.user as any;
+            extractedRole = contextUser.role || contextUser.roles || "";
+        }
+
+        if (Array.isArray(extractedRole)) {
+            setUserRole(extractedRole[0]?.toUpperCase() || "");
+        } else if (typeof extractedRole === 'string') {
+            setUserRole(extractedRole.toUpperCase());
+        }
+    }, [auth]);
+
+    const isCaptainOrSecretary = ['SECRETARY', 'CAPTAIN', 'ADMIN', 'STAFF'].includes(userRole);
+    const isTanod = userRole === 'TANOD';
+
     const renderMenuSection = (items: { label: string, path: string }[]) => {
         return items.map((item) => (
             <div 
                 key={item.path} 
-                className="sidebar-button" 
+                className="sidebar-button cursor-pointer px-4 py-2 hover:bg-gray-400 transition-colors text-sm" 
                 onClick={() => navigate(item.path)}
             >
                 {item.label}
@@ -54,20 +89,31 @@ const Sidebar = () => {
     return (
         <div className="h-screen w-64 m-0 text-left flex flex-col bg-gray-300 text-black shadow-lg shrink-0 overflow-y-auto scrollbar-none">
             
-            <div>
-                <div className="sidebar-category">SERVICES</div>
-                {renderMenuSection(MENU_CONFIG.services)}
+            {/* SERVICES SECTION */}
+            <div className="py-4">
+                <div className="sidebar-category px-4 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">SERVICES</div>
+                {renderMenuSection(MENU_CONFIG.residentServices)}
             </div>
 
-            <div>
-                <div className="sidebar-category">COMMUNITY</div>
-                {renderMenuSection(MENU_CONFIG.community)}
+            {/* COMMUNITY SECTION */}
+            <div className="pb-4 border-t border-gray-400 pt-4">
+                <div className="sidebar-category px-4 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">COMMUNITY</div>
+                {renderMenuSection(MENU_CONFIG.residentCommunity)}
             </div>
 
-            {canViewAdminMenu && (
-                <div>
-                    <div className="sidebar-category">ADMINISTRATION</div>
-                    {renderMenuSection(MENU_CONFIG.administration)}
+            {/* TANOD-SPECIFIC ADMINISTRATION */}
+            {isTanod && (
+                <div className="pb-4 border-t border-gray-400 pt-4">
+                    <div className="sidebar-category px-4 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">FIELD OPERATIONS</div>
+                    {renderMenuSection(MENU_CONFIG.tanodAdministration)}
+                </div>
+            )}
+
+            {/* CAPTAIN & SECRETARY ADMINISTRATION */}
+            {isCaptainOrSecretary && (
+                <div className="pb-4 border-t border-gray-400 pt-4">
+                    <div className="sidebar-category px-4 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">ADMINISTRATION</div>
+                    {renderMenuSection(MENU_CONFIG.staffAdministration)}
                 </div>
             )}
             

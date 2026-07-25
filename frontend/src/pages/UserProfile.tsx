@@ -13,6 +13,7 @@ interface ResidentProfile {
     contact_number: string;
     purok: string;
     approval_status: string;
+    rejection_reason?: string; // NEW: Added rejection reason field
 }
 
 export default function Profile() {
@@ -102,11 +103,11 @@ export default function Profile() {
         }
     };
 
-    // NEW: Handle unlinking a rejected profile claim
+    // Handle unlinking a rejected profile claim
     const handleResetClaim = async () => {
         try {
-            await api.post('/api/user/reset-claim/');
-            window.location.reload(); // Reload to trigger the 404 and show the Claim button
+            await api.post('/api/user/reset-rejected-claim/');
+            window.location.reload(); // Reload to trigger the claim flow state reset
         } catch (err) {
             alert("Failed to reset claim. Please try again.");
         }
@@ -149,15 +150,24 @@ export default function Profile() {
                         ) : loading ? (
                             <p className="text-gray-500 text-center py-8">Loading profile...</p>
                         ) : profile && profile.approval_status === 'REJECTED' ? (
-                            /* CHANGED: Security Block for Rejected Profiles */
+                            /* Security Block for Rejected Profiles with Rejection Reason Display */
                             <div className="p-8 bg-red-50 border border-red-200 rounded-lg text-center">
                                 <svg className="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                 </svg>
                                 <h3 className="text-xl font-bold text-red-800 mb-2">Verification Claim Rejected</h3>
-                                <p className="text-sm text-red-700 mb-6 max-w-md mx-auto">
-                                    Your request to link this profile was declined by barangay staff. To protect resident privacy, the official records have been hidden.
+                                <p className="text-sm text-red-700 mb-4 max-w-md mx-auto">
+                                    Your request to link this profile was declined by barangay staff. To protect resident privacy, official records have been hidden.
                                 </p>
+                                
+                                {/* NEW: Explicitly show why it was rejected if available */}
+                                {profile.rejection_reason && (
+                                    <div className="mb-6 p-4 bg-white border border-red-200 rounded-md max-w-md mx-auto text-left shadow-sm">
+                                        <p className="text-xs font-bold text-red-600 uppercase tracking-wider mb-1">Reason from Barangay Staff:</p>
+                                        <p className="text-sm text-gray-800 italic">"{profile.rejection_reason}"</p>
+                                    </div>
+                                )}
+
                                 <button 
                                     onClick={handleResetClaim}
                                     className="px-6 py-2.5 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 transition-colors shadow-sm"
@@ -177,7 +187,6 @@ export default function Profile() {
                                 <div>
                                     <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 text-blue-600">Official Records (Read-Only)</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-md border border-gray-200">
-                                        
                                         <div>
                                             <label className="block text-xs font-medium text-gray-500 uppercase">First Name</label>
                                             <p className="mt-1 text-base font-semibold text-gray-900">{profile.first_name}</p>
@@ -186,7 +195,6 @@ export default function Profile() {
                                             <label className="block text-xs font-medium text-gray-500 uppercase">Last Name</label>
                                             <p className="mt-1 text-base font-semibold text-gray-900">{profile.last_name}</p>
                                         </div>
-                                        
                                         <div className="pt-2">
                                             <label className="block text-xs font-medium text-gray-500 uppercase">Date of Birth</label>
                                             <p className="mt-1 text-base font-semibold text-gray-900">{profile.birth_date}</p>
@@ -195,7 +203,6 @@ export default function Profile() {
                                             <label className="block text-xs font-medium text-gray-500 uppercase">Sex</label>
                                             <p className="mt-1 text-base font-semibold text-gray-900">{profile.sex}</p>
                                         </div>
-
                                         <div className="pt-2">
                                             <label className="block text-xs font-medium text-gray-500 uppercase">Civil Status</label>
                                             <p className="mt-1 text-base font-semibold text-gray-900">{profile.civil_status}</p>
@@ -206,7 +213,6 @@ export default function Profile() {
                                         </div>
                                     </div>
                                     
-                                    {/* Accessible online correction trigger */}
                                     <div className="mt-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                                         <p className="text-xs text-gray-400 italic">Need to correct your official records? You can request updates online.</p>
                                         <button 

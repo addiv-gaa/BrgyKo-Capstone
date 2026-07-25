@@ -17,11 +17,48 @@ const ChatIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height
 const MegaphoneIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>;
 const AlertCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 const FileTextIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+const MapIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>;
+const ShieldAlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 
 export default function Home() {
     const auth = useContext(AuthContext);
     const navigate = useNavigate();
     
+    // --- Role State Synchronization (Matches Sidebar logic) ---
+    const [userRole, setUserRole] = useState<string>("");
+
+    useEffect(() => {
+        let extractedRole = "";
+        try {
+            const token = localStorage.getItem('access');
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                extractedRole = payload.role || payload.roles || "";
+            }
+        } catch (error) {
+            console.error("Token decoding failed", error);
+        }
+
+        if (!extractedRole && auth?.user) {
+            const contextUser = auth.user as any;
+            extractedRole = contextUser.role || contextUser.roles || "";
+        }
+
+        if (Array.isArray(extractedRole)) {
+            setUserRole(extractedRole[0]?.toUpperCase() || "");
+        } else if (typeof extractedRole === 'string') {
+            setUserRole(extractedRole.toUpperCase());
+        }
+    }, [auth]);
+
+    // Derived Booleans for Tailored Views
+    const isCaptainOrSecretary = ['SECRETARY', 'CAPTAIN', 'ADMIN', 'STAFF'].includes(userRole);
+    const isTanod = userRole === 'TANOD';
+    const isResident = userRole === 'RESIDENT' || (!isCaptainOrSecretary && !isTanod);
+
+    const displayName = auth?.user?.first_name || auth?.user?.username || 'Resident';
+
+    // --- Data States ---
     const [stats, setStats] = useState({ 
         total_residents: 0, 
         certs_this_month: 0, 
@@ -32,15 +69,11 @@ export default function Home() {
         chatbot_queries: 0 
     });
     
-    // Resident States
     const [residentCerts, setResidentCerts] = useState<any[]>([]);
     const [residentPermits, setResidentPermits] = useState<any[]>([]);
     const [residentReservations, setResidentReservations] = useState<any[]>([]);
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
-
-    const canViewAdminMenu = ['admin', 'staff'].some(role => auth?.user?.roles?.includes(role));
-    const displayName = auth?.user?.first_name || auth?.user?.username || 'Resident';
 
     const fetchAnnouncements = useCallback(async (token: string) => {
         try {
@@ -49,14 +82,15 @@ export default function Home() {
                 const annData = await annRes.json();
                 setAnnouncements(annData);
                 
-                if (!canViewAdminMenu) {
+                // Unread dots for non-admin viewers
+                if (!isCaptainOrSecretary) {
                     setUnreadAnnouncements(annData.filter((a: any) => !a.is_read).length);
                 }
             }
         } catch (error) {
             console.error("Error fetching announcements:", error);
         }
-    }, [canViewAdminMenu]);
+    }, [isCaptainOrSecretary]);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -65,14 +99,16 @@ export default function Home() {
 
             await fetchAnnouncements(token);
 
-            if (canViewAdminMenu) {
+            if (isCaptainOrSecretary) {
+                // Fetch Master Stats for Captain/Secretary
                 try {
                     const response = await fetch(`${API_URL}/api/dashboard-stats/`, { headers: { 'Authorization': `Bearer ${token}` }});
                     if (response.ok) setStats(await response.json());
                 } catch (error) {
                     console.error("Error fetching stats:", error);
                 }
-            } else {
+            } else if (isResident) {
+                // Fetch Personal Requests for Residents
                 try {
                     const [certRes, permitRes, resRes] = await Promise.all([
                         fetch(`${API_URL}/api/certificates/`, { headers: { 'Authorization': `Bearer ${token}` }}),
@@ -90,7 +126,7 @@ export default function Home() {
         };
 
         if (auth?.user) fetchDashboardData();
-    }, [auth?.user, canViewAdminMenu, fetchAnnouncements]);
+    }, [auth?.user, isCaptainOrSecretary, isResident, fetchAnnouncements]);
 
     const markAsRead = async (id: number) => {
         const token = localStorage.getItem('access');
@@ -119,19 +155,24 @@ export default function Home() {
             <div className="shrink-0 w-full"><PageHeader /></div>
             <div className="flex flex-1 overflow-hidden">
                 <div className="shrink-0 h-full"><Sidebar /></div>
+                {/* CHANGED: Removed max-w-7xl mx-auto to allow full-width spanning */}
                 <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
                     
                     <div className="w-full">
+                        
+                        {/* Dynamic Header */}
                         <div className="flex flex-col mb-6">
                             <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome, {displayName}</h1>
                             <p className="text-gray-500 text-sm">
-                                {canViewAdminMenu ? "Barangay Overview — San Gabriel, Cavite" : "Resident Portal — Brgy. San Gabriel"}
+                                {isCaptainOrSecretary ? "Barangay Overview — Administration" : 
+                                 isTanod ? "Field Operations Dashboard — Barangay Security" :
+                                 "Resident Portal — Brgy. San Gabriel"}
                             </p>
                         </div>
                         
-                        {canViewAdminMenu ? (
+                        {/* --- VIEW 1: CAPTAIN & SECRETARY --- */}
+                        {isCaptainOrSecretary && (
                             <>
-                                {/* STAFF OVERVIEW CARDS */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
                                     <StatCard title="Total Residents" value={(stats.total_residents || 0).toLocaleString()} icon={<UsersIcon />} bgClass="bg-[#eef5fd]" textClass="text-[#3b82f6]" />
                                     <StatCard title="Certs This Month" value={(stats.certs_this_month || 0).toLocaleString()} icon={<FileBadgeIcon />} bgClass="bg-[#f0fdf4]" textClass="text-[#22c55e]" />
@@ -140,49 +181,94 @@ export default function Home() {
                                     <StatCard title="Chatbot Queries" value={(stats.chatbot_queries || 0).toLocaleString()} icon={<ChatIcon />} bgClass="bg-[#f8fafc]" textClass="text-[#64748b]" />
                                 </div>
 
-                                {/* STAFF ACTION REQUIRED CENTER */}
-                                {(stats.pending_documents > 0 || stats.pending_reservations > 0) && (
-                                    <div className="bg-white rounded-lg shadow-sm border border-red-200 mb-8 overflow-hidden">
-                                        <div className="bg-red-50 px-6 py-3 border-b border-red-100 flex items-center gap-2">
+                                <div className="bg-white rounded-lg shadow-sm border border-red-200 mb-8 overflow-hidden">
+                                    <div className="bg-red-50 px-6 py-3 border-b border-red-100 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
                                             <div className="text-red-600"><AlertCircleIcon /></div>
                                             <h2 className="text-red-800 font-bold">Action Required</h2>
                                         </div>
-                                        {/* CHANGED: Swapped grid layout for flex-col so items span the full width */}
-                                        <div className="p-6 flex flex-col gap-4">
-                                            {stats.pending_documents > 0 && (
-                                                <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-100 w-full">
-                                                    <div>
-                                                        <p className="font-bold text-orange-900">{stats.pending_documents} Pending Documents</p>
-                                                        <p className="text-sm text-orange-700 mt-1">Certificates waiting for approval.</p>
-                                                    </div>
-                                                    <button onClick={() => navigate('/certrequests')} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-sm font-semibold transition-colors">
-                                                        Review
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {stats.pending_reservations > 0 && (
-                                                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-100 w-full">
-                                                    <div>
-                                                        <p className="font-bold text-blue-900">{stats.pending_reservations} Pending Reservations</p>
-                                                        <p className="text-sm text-blue-700 mt-1">Facilities or equipment waiting for approval.</p>
-                                                    </div>
-                                                    <button onClick={() => navigate('/staff/schedule')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-semibold transition-colors">
-                                                        Review
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
+                                        <span className="bg-red-200 text-red-800 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                                            {(stats.pending_documents || 0) + (stats.pending_reservations || 0)} Pending
+                                        </span>
                                     </div>
-                                )}
+                                    <div className="p-6 flex flex-col gap-4">
+                                        {stats.pending_documents > 0 ? (
+                                            <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-100 w-full">
+                                                <div>
+                                                    <p className="font-bold text-orange-900">{stats.pending_documents} Pending Documents</p>
+                                                    <p className="text-sm text-orange-700 mt-1">Certificates waiting for approval.</p>
+                                                </div>
+                                                <button onClick={() => navigate('/certrequests')} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-sm font-semibold transition-colors">
+                                                    Review
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 w-full">
+                                                <div>
+                                                    <p className="font-bold text-gray-700">0 Pending Documents</p>
+                                                    <p className="text-sm text-gray-500 mt-1">All certificate requests have been cleared.</p>
+                                                </div>
+                                                <button onClick={() => navigate('/certrequests')} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-semibold transition-colors">
+                                                    View All
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {stats.pending_reservations > 0 ? (
+                                            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-100 w-full">
+                                                <div>
+                                                    <p className="font-bold text-blue-900">{stats.pending_reservations} Pending Reservations</p>
+                                                    <p className="text-sm text-blue-700 mt-1">Facilities or equipment waiting for approval.</p>
+                                                </div>
+                                                <button onClick={() => navigate('/barangaycalendarstaff')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-semibold transition-colors">
+                                                    Review
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 w-full">
+                                                <div>
+                                                    <p className="font-bold text-gray-700">0 Pending Reservations</p>
+                                                    <p className="text-sm text-gray-500 mt-1">All reservation requests have been cleared.</p>
+                                                </div>
+                                                <button onClick={() => navigate('/barangaycalendarstaff')} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-semibold transition-colors">
+                                                    View All
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </>
-                        ) : (
+                        )}
+
+                        {/* --- VIEW 2: TANOD / FIELD STAFF --- */}
+                        {isTanod && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                <button onClick={() => navigate('/tanod/dashboard')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-red-300 hover:shadow-md transition-all group">
+                                    <div className="p-3 bg-red-50 text-red-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><ShieldAlertIcon /></div>
+                                    <span className="font-bold text-gray-900">Incident Dashboard</span>
+                                    <span className="text-xs text-gray-500 mt-1">View & Update Active Incidents</span>
+                                </button>
+                                <button onClick={() => navigate('/geomapping')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group">
+                                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><MapIcon /></div>
+                                    <span className="font-bold text-gray-900">Geo Mapping</span>
+                                    <span className="text-xs text-gray-500 mt-1">View Outposts & Heatmaps</span>
+                                </button>
+                                <button onClick={() => navigate('/barangaycalendarstaff')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all group">
+                                    <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
+                                    <span className="font-bold text-gray-900">Staff Schedule</span>
+                                    <span className="text-xs text-gray-500 mt-1">View Duty Rosters & Events</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* --- VIEW 3: RESIDENT --- */}
+                        {isResident && (
                             <>
-                                {/* RESIDENT QUICK ACTIONS */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                                     <button onClick={() => navigate('/requestcertificate')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all group">
                                         <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><FileTextIcon /></div>
                                         <span className="font-bold text-gray-900">Request Document</span>
-                                        <span className="text-xs text-gray-500 mt-1">Clearance, Indigency, Permits</span>
+                                        <span className="text-xs text-gray-500 mt-1">Clearance, Indigency, Certificates</span>
                                     </button>
                                     <button onClick={() => navigate('/reservations/request')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all group">
                                         <div className="p-3 bg-green-50 text-green-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
@@ -196,7 +282,6 @@ export default function Home() {
                                     </button>
                                 </div>
 
-                                {/* RESIDENT STATUS TRACKER */}
                                 {activeRequests.length > 0 && (
                                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
                                         <h2 className="text-lg font-bold text-gray-900 mb-4">Active Requests</h2>
@@ -222,7 +307,7 @@ export default function Home() {
                             </>
                         )}
 
-                        {/* LATEST ANNOUNCEMENTS (Visible to both) */}
+                        {/* --- COMMON MODULE: LATEST ANNOUNCEMENTS (Visible to ALL roles) --- */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                             <div className="flex items-center gap-2 mb-6">
                                 <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
@@ -240,7 +325,7 @@ export default function Home() {
                                             <div className="flex justify-between items-start mb-1">
                                                 <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                                                     {ann.title}
-                                                    {!canViewAdminMenu && !ann.is_read && (
+                                                    {!isCaptainOrSecretary && !ann.is_read && (
                                                         <span className="w-2 h-2 rounded-full bg-blue-500" title="Unread"></span>
                                                     )}
                                                 </h3>
@@ -252,7 +337,7 @@ export default function Home() {
                                                 {ann.content || ann.description}
                                             </p>
                                             
-                                            {!canViewAdminMenu && !ann.is_read && (
+                                            {!isCaptainOrSecretary && !ann.is_read && (
                                                 <button 
                                                     onClick={() => markAsRead(ann.id)} 
                                                     className="text-xs text-blue-600 hover:text-blue-800 font-semibold border border-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition-colors"

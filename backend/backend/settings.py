@@ -46,6 +46,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'ai_chat': '5/min', # Limits a user to 5 messages per minute. Adjust as needed.
+        'incident_report': '3/day', # 3 reports per user per day maximum
     }
 }
 
@@ -71,6 +72,7 @@ INSTALLED_APPS = [
     'rest_framework_gis',
     'django.contrib.gis',
     'django_filters',
+    'simple_history',
 ]
 
 MIDDLEWARE = [
@@ -82,6 +84,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'simple_history.middleware.HistoryRequestMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'

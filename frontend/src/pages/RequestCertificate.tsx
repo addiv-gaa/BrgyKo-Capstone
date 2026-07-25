@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/header";
 import Sidebar from "../components/sidebar";
+import { AuthContext } from "../components/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -44,6 +45,8 @@ const PURPOSES = [
 
 export default function RequestCertificate() {
     const navigate = useNavigate();
+    const authContext = useContext(AuthContext);
+    const settings = authContext?.settings;
     
     // --- State Management ---
     const [formData, setFormData] = useState({
@@ -55,12 +58,18 @@ export default function RequestCertificate() {
         contact_number: ''
     });
 
+    const [requestType, setRequestType] = useState<'myself' | 'someone_else'>('myself');
+    const [requestedName, setRequestedName] = useState('');
+    const [requestedDob, setRequestedDob] = useState('');
+    const [requestedCivilStatus, setRequestedCivilStatus] = useState('SINGLE');
+    const [requestedContact, setRequestedContact] = useState('');
+
     const [customPurpose, setCustomPurpose] = useState('');
     const [previousRequests, setPreviousRequests] = useState<CertificateRecord[]>([]);
     
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
-    const [error, setError] = useState(""); // NEW: Error state for the conditional block
+    const [error, setError] = useState(""); 
 
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,18 +87,16 @@ export default function RequestCertificate() {
             if (response.ok) {
                 const profile = await response.json();
                 
-                // NEW: Security Check - Block access if not APPROVED
                 if (profile.approval_status === 'PENDING') {
                     setError("Your resident profile is currently pending verification. You can request certificates once barangay staff approves your account.");
                     setIsProfileLoading(false);
-                    return; // Stop execution here so the form doesn't load
+                    return; 
                 } else if (profile.approval_status === 'REJECTED') {
                     setError("Your resident profile claim was rejected. Please contact the barangay hall for assistance.");
                     setIsProfileLoading(false);
                     return; 
                 }
                 
-                // If they are APPROVED, proceed to fill the form
                 setFormData(prev => ({
                     ...prev,
                     full_name: `${profile.first_name} ${profile.last_name}`,
@@ -125,17 +132,13 @@ export default function RequestCertificate() {
 
             if (response.ok) {
                 const data = await response.json();
-                
                 if (Array.isArray(data)) {
                     setPreviousRequests(data);
                 } else if (data.results && Array.isArray(data.results)) {
                     setPreviousRequests(data.results);
                 } else {
-                    console.error("API returned an unexpected format:", data);
                     setPreviousRequests([]); 
                 }
-            } else {
-                console.error("Failed to fetch previous requests. Status:", response.status);
             }
         } catch (error) {
             console.error("Network error while fetching requests:", error);
@@ -160,6 +163,14 @@ export default function RequestCertificate() {
 
     const handleInitialSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault(); 
+        
+        if (requestType === 'someone_else') {
+            if (!requestedName.trim() || !requestedDob || !requestedContact.trim()) {
+                alert("Please fill out all required details (Name, Date of Birth, Contact) for the person you are requesting this for.");
+                return;
+            }
+        }
+        
         setIsConfirmModalOpen(true);
     };
 
@@ -175,8 +186,14 @@ export default function RequestCertificate() {
         setIsSubmitting(true);
 
         const finalPayload = {
-            ...formData,
-            purpose: formData.purpose === 'Other' ? customPurpose : formData.purpose
+            certificate_type: formData.certificate_type,
+            purpose: formData.purpose === 'Other' ? customPurpose : formData.purpose,
+            request_type: requestType,
+            
+            requested_for: requestType === 'someone_else' ? requestedName : formData.full_name,
+            date_of_birth: requestType === 'someone_else' ? requestedDob : formData.date_of_birth,
+            civil_status: requestType === 'someone_else' ? requestedCivilStatus : formData.civil_status,
+            contact_number: requestType === 'someone_else' ? requestedContact : formData.contact_number,
         };
 
         try {
@@ -197,6 +214,11 @@ export default function RequestCertificate() {
                     purpose: ''
                 }));
                 setCustomPurpose('');
+                setRequestType('myself');
+                setRequestedName('');
+                setRequestedDob('');
+                setRequestedContact('');
+                setRequestedCivilStatus('SINGLE');
                 
                 setIsConfirmModalOpen(false);
                 fetchPreviousRequests(); 
@@ -216,7 +238,6 @@ export default function RequestCertificate() {
         }
     };
 
-    // --- Helper Functions ---
     const renderStatusBadge = (status: string) => {
         switch (status) {
             case 'RELEASED':
@@ -234,6 +255,28 @@ export default function RequestCertificate() {
 
     const selectedCert = CERTIFICATE_TYPES.find(c => c.id === formData.certificate_type);
     const displayPurpose = formData.purpose === 'Other' ? customPurpose : formData.purpose;
+    const activeTargetName = requestType === 'someone_else' ? requestedName : formData.full_name;
+
+    // --- GLOBAL SETTING CHECK: If certificate requests are disabled by admin ---
+    if (settings && !settings.accept_permit_requests) {
+        return (
+            <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+                <PageHeader />
+                <div className="flex flex-1 overflow-hidden">
+                    <Sidebar />
+                    <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa] flex items-center justify-center">
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-3 max-w-lg w-full shadow-sm">
+                            <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto font-bold text-lg">!</div>
+                            <h3 className="text-lg font-bold text-amber-900">Certificate Requests Temporarily Suspended</h3>
+                            <p className="text-sm text-amber-700 max-w-md mx-auto leading-relaxed">
+                                Online certificate and clearance applications have been temporarily disabled by the barangay administration. Please visit the barangay hall for manual processing.
+                            </p>
+                        </div>
+                    </main>
+                </div>
+            </div>
+        );
+    }
 
     // --- Render ---
     return (
@@ -257,7 +300,6 @@ export default function RequestCertificate() {
                             <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                                 <h2 className="text-lg font-bold mb-6">Certificate Request Form</h2>
                                 
-                                {/* NEW: The Conditional Block */}
                                 {isProfileLoading ? (
                                     <div className="py-10 text-center text-gray-500">
                                         Fetching official records...
@@ -309,19 +351,65 @@ export default function RequestCertificate() {
                                             </div>
                                         )}
 
+                                        {/* Who is this request for? Toggle */}
+                                        <div className="pt-2">
+                                            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                                                Who is this request for?
+                                            </label>
+                                            <div className="flex gap-4">
+                                                <label className="flex items-center cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="request_type" 
+                                                        checked={requestType === 'myself'} 
+                                                        onChange={() => setRequestType('myself')}
+                                                        className="mr-2 text-blue-600 focus:ring-blue-600"
+                                                    />
+                                                    <span className="text-sm font-medium">For Myself</span>
+                                                </label>
+                                                <label className="flex items-center cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="request_type" 
+                                                        checked={requestType === 'someone_else'} 
+                                                        onChange={() => setRequestType('someone_else')}
+                                                        className="mr-2 text-blue-600 focus:ring-blue-600"
+                                                    />
+                                                    <span className="text-sm font-medium">For Someone Else</span>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        {/* Dynamic Authorization Warning */}
+                                        {requestType === 'someone_else' && (
+                                            <div className="bg-red-50 border border-red-200 p-4 rounded-md">
+                                                <div className="flex">
+                                                    <svg className="h-5 w-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                    </svg>
+                                                    <p className="text-sm text-red-700 font-medium">
+                                                        <strong>Authorization Required:</strong> You must present an <span className="underline">Authorization Letter</span> signed by the requested person and a photocopy of their Valid ID when claiming this certificate.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Dynamic Name Input */}
                                         <div>
                                             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-                                                Full Name
+                                                {requestType === 'someone_else' ? "Name of Person Requested For" : "Full Name"}
                                             </label>
                                             <input 
                                                 type="text" 
-                                                name="full_name"
-                                                value={formData.full_name}
-                                                disabled 
-                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                value={requestType === 'someone_else' ? requestedName : formData.full_name}
+                                                onChange={(e) => setRequestedName(e.target.value)}
+                                                disabled={requestType === 'myself'}
+                                                placeholder="Enter exact full name..."
+                                                className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-600 bg-white'}`}
                                             />
                                         </div>
 
+                                        {/* Dynamic DOB & Civil Status */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
@@ -329,10 +417,10 @@ export default function RequestCertificate() {
                                                 </label>
                                                 <input 
                                                     type="date" 
-                                                    name="date_of_birth"
-                                                    value={formData.date_of_birth}
-                                                    disabled 
-                                                    className="w-full border border-gray-300 rounded-md p-2.5 outline-none bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                    value={requestType === 'someone_else' ? requestedDob : formData.date_of_birth}
+                                                    onChange={(e) => setRequestedDob(e.target.value)}
+                                                    disabled={requestType === 'myself'} 
+                                                    className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-600 bg-white'}`}
                                                 />
                                             </div>
                                             <div>
@@ -340,10 +428,10 @@ export default function RequestCertificate() {
                                                     Civil Status
                                                 </label>
                                                 <select 
-                                                    name="civil_status"
-                                                    value={formData.civil_status}
-                                                    disabled 
-                                                    className="w-full border border-gray-300 rounded-md p-2.5 outline-none bg-gray-100 text-gray-500 cursor-not-allowed appearance-none"
+                                                    value={requestType === 'someone_else' ? requestedCivilStatus : formData.civil_status}
+                                                    onChange={(e) => setRequestedCivilStatus(e.target.value)}
+                                                    disabled={requestType === 'myself'} 
+                                                    className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed appearance-none' : 'focus:ring-2 focus:ring-blue-600 bg-white'}`}
                                                 >
                                                     <option value="SINGLE">Single</option>
                                                     <option value="MARRIED">Married</option>
@@ -387,16 +475,18 @@ export default function RequestCertificate() {
                                             </div>
                                         )}
 
+                                        {/* Dynamic Contact Number */}
                                         <div>
                                             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                                                 Contact Number
                                             </label>
                                             <input 
                                                 type="text" 
-                                                name="contact_number"
-                                                value={formData.contact_number}
-                                                disabled 
-                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                value={requestType === 'someone_else' ? requestedContact : formData.contact_number}
+                                                onChange={(e) => setRequestedContact(e.target.value)}
+                                                disabled={requestType === 'myself'} 
+                                                placeholder="e.g. 09123456789"
+                                                className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-600 bg-white'}`}
                                             />
                                         </div>
 
@@ -477,7 +567,7 @@ export default function RequestCertificate() {
                         
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Submission</h3>
                         <p className="text-sm text-gray-500 mb-4 leading-relaxed">
-                            Are you sure you want to request a <span className="font-semibold text-gray-800">{selectedCert?.label}</span> for <span className="font-semibold text-gray-800">{formData.full_name}</span> with purpose: <span className="font-semibold text-gray-800">{displayPurpose}</span>? 
+                            Are you sure you want to request a <span className="font-semibold text-gray-800">{selectedCert?.label}</span> for <span className="font-semibold text-gray-800">{activeTargetName}</span> with purpose: <span className="font-semibold text-gray-800">{displayPurpose}</span>? 
                         </p>
                         
                         <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-md mb-6 text-left">
