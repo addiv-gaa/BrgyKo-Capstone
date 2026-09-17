@@ -2,12 +2,14 @@ from django.conf import settings
 import random
 from itertools import chain
 from operator import attrgetter
+from django.http import HttpResponse
 from django.utils import timezone
 from django.core.mail import send_mail
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 import google.generativeai as genai
+import openpyxl
 
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
@@ -16,7 +18,7 @@ from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.exceptions import NotFound
 from datetime import datetime, timedelta
 
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.throttling import UserRateThrottle
 from .permissions import IsAdminGroup, IsStaffGroup
 from rest_framework.views import APIView
@@ -67,6 +69,7 @@ from .serializers import (
     IncidentReportSerializer,
     BarangaySettingsSerializer,
     ResidentApplicationSerializer,
+    AiQueryStatisticSerializer,
 )
 
 genai.configure(api_key=settings.GOOGLE_API_KEY)
@@ -590,6 +593,195 @@ class ResidentViewSet(viewsets.ModelViewSet):
         'is_solo_parent'
     ]
 
+    @action(detail=False, methods=['post'], url_path='import-excel')
+    def import_excel(self, request):
+        excel_file = request.FILES.get('file')
+        if not excel_file:
+            return Response({"error": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not excel_file.name.endswith(('.xlsx', '.xls')):
+            return Response({"error": "Invalid format. Please upload a .xlsx or .xls file."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # We use data_only=True to read evaluated formulas if any exist
+            wb = openpyxl.load_workbook(excel_file, data_only=True)
+            
+            # The template uses a specific sheet named 'DATA'
+            if 'DATA' not in wb.sheetnames:
+                return Response({"error": "Missing 'DATA' sheet in the uploaded template."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            sheet = wb['DATA']
+            rows = list(sheet.iter_rows(values_only=True))
+            
+            if not rows or len(rows) < 2:
+                return Response({"error": "The 'DATA' sheet is empty or missing headers."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Map the exact headers from the template (Row 1)
+            headers = [str(h).strip().upper() if h else "" for h in rows[0]]
+            
+            created_count = 0
+            updated_count = 0
+            errors = []
+
+            # Start reading from Row 2 (Index 1)
+            for i, row in enumerate(rows[1:], start=2):
+                row_data = dict(zip(headers, row))
+                
+                first_name = row_data.get('FIRST NAME')
+                last_name = row_data.get('LAST NAME')
+                
+                # Stop processing if we hit completely blank rows at the bottom
+                if not first_name and not last_name:
+                    continue
+
+                if not first_name or not last_name:
+                    errors.append(f"Row {i}: Missing required First Name or Last Name.")
+                    continue
+
+                is_auto_senior = False
+
+                # Safely parse the 'BIRTHDATE (YYYY-MM-DD)' column with typo protection
+                raw_birth_date = row_data.get('BIRTHDATE (YYYY-MM-DD)')
+                birth_date = None
+
+                if isinstance(raw_birth_date, datetime):
+                    birth_date = raw_birth_date.strftime('%Y-%m-%d')
+                elif raw_birth_date:
+                    try:
+                        # Attempt to parse the string to ensure it's a real date
+                        parsed_date = datetime.strptime(str(raw_birth_date).strip()[:10], '%Y-%m-%d')
+                        birth_date = parsed_date.strftime('%Y-%m-%d')
+                    except ValueError:
+                        # Catch fake dates like "2018-19-26" and set to None instead of crashing
+                        birth_date = None
+
+                if birth_date:
+                    b_date = datetime.strptime(birth_date, '%Y-%m-%d').date()
+                    today = datetime.today().date()
+                    # Calculate exact age accounting for leap years and birth month/day
+                    age = today.year - b_date.year - ((today.month, today.day) < (b_date.month, b_date.day))
+                    if age >= 60:
+                        is_auto_senior = True
+
+                try:
+                    # 1. Define the fields that will UPDATE if a match is found
+                    defaults = {
+                        'inhabitant_type': str(row_data.get('INHABITANT TYPE') or 'NON-MIGRANT').strip(),
+                        'middle_name': str(row_data.get('MIDDLE NAME') or '').strip(),
+                        'suffix': str(row_data.get('SUFFIX') or '').strip(),
+                        'birth_place': str(row_data.get('BIRTH PLACE') or '').strip(),
+                        'sex': str(row_data.get('SEX') or 'Male').strip().capitalize(),
+                        'civil_status': str(row_data.get('CIVIL STATUS') or 'Single').strip().capitalize(),
+                        'citizenship': str(row_data.get('CITIZENSHIP') or 'Filipino').strip(),
+                        'occupation': str(row_data.get('PROFESSION/ OCCUPATION') or '').strip(),
+                        'contact_number': str(row_data.get('CONTACT NUMBER') or '').strip(),
+                        'email_address': str(row_data.get('EMAIL ADDRESS') or '').strip(),
+                        'highest_education': str(row_data.get('HIGHEST EDUCATIONAL ATTAINMENT') or '').strip(),
+                        'mothers_first_name': str(row_data.get("MOTHER'S FIRST NAME") or '').strip(),
+                        'mothers_middle_name': str(row_data.get("MOTHER'S MIDDLE NAME") or '').strip(),
+                        'mothers_last_name': str(row_data.get("MOTHER'S LAST NAME") or '').strip(),
+                        'is_senior_citizen': is_auto_senior,
+                    }
+
+                    # 2. Update or Create logic based on First Name, Last Name, and Birthdate
+                    resident, created = Resident.objects.update_or_create(
+                        first_name=str(first_name).strip(),
+                        last_name=str(last_name).strip(),
+                        birth_date=birth_date,
+                        defaults=defaults
+                    )
+
+                    # 3. Handle fallbacks ONLY if it is a brand new record
+                    if created:
+                        resident.purok = 'Unassigned'
+                        resident.is_4ps_beneficiary = False
+                        resident.is_pwd = False
+                        resident.is_solo_parent = False
+                        resident.save()
+                        created_count += 1
+                    else:
+                        updated_count += 1
+
+                except Exception as e:
+                    errors.append(f"Row {i} Failed: {str(e)}")
+
+            # Send back detailed counts to the frontend
+            return Response({
+                "message": f"Successfully added {created_count} new residents and updated {updated_count} existing residents.",
+                "errors": errors
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": f"Failed to process file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def export_excel(self, request):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "DATA"
+
+        # Exact headers extracted from Import-Inhabitant-Template-v1.4.2-13.xlsx
+        headers = [
+            'INHABITANT TYPE', 
+            'LAST NAME', 
+            'FIRST NAME', 
+            'MIDDLE NAME', 
+            'SUFFIX', 
+            'BIRTH PLACE', 
+            'BIRTHDATE (YYYY-MM-DD)', 
+            'SEX', 
+            'CIVIL STATUS', 
+            'CITIZENSHIP', 
+            'PROFESSION/ OCCUPATION', 
+            'CONTACT NUMBER', 
+            'EMAIL ADDRESS', 
+            'HIGHEST EDUCATIONAL ATTAINMENT', 
+            "MOTHER'S FIRST NAME", 
+            "MOTHER'S MIDDLE NAME", 
+            "MOTHER'S LAST NAME"
+        ]
+        ws.append(headers)
+
+        # Style the header row to be bold
+        for cell in ws[1]:
+            cell.font = openpyxl.styles.Font(bold=True)
+
+        # Fetch all residents and map them to the 17 columns
+        residents = Resident.objects.all().order_by('last_name', 'first_name')
+        
+        for res in residents:
+            birthdate_str = res.birth_date.strftime('%Y-%m-%d') if res.birth_date else ""
+            
+            row = [
+                getattr(res, 'inhabitant_type', 'Resident'), # Default to Resident if field doesn't exist
+                res.last_name,
+                res.first_name,
+                res.middle_name,
+                getattr(res, 'suffix', ''),
+                getattr(res, 'birth_place', ''),
+                birthdate_str,
+                res.sex,
+                res.civil_status,
+                getattr(res, 'citizenship', 'Filipino'), # Default citizenship
+                getattr(res, 'occupation', ''),
+                getattr(res, 'contact_number', ''),
+                getattr(res, 'email_address', ''),
+                getattr(res, 'educational_attainment', ''),
+                getattr(res, 'mother_first_name', ''),
+                getattr(res, 'mother_middle_name', ''),
+                getattr(res, 'mother_last_name', ''),
+            ]
+            ws.append(row)
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="Resident_Registry_Export.xlsx"'
+        
+        wb.save(response)
+        
+        return response
+
 
 # ==========================================
 # 7. FACILITIES, EVENTS & RESERVATIONS
@@ -722,10 +914,15 @@ class EventViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(organizer=self.request.user)
 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+# Make sure your Event model is imported here too!
+
 @api_view(['GET'])
+@permission_classes([AllowAny])  # <--- NEW: This explicitly opens the endpoint to the public
 def calendar_feed(request):
     events = Event.objects.all()
-    reservations = Reservation.objects.filter(status='APPROVED')
     calendar_data = []
     
     for event in events:
@@ -737,16 +934,6 @@ def calendar_feed(request):
             'type': event.event_type 
         })
         
-    for res in reservations:
-        item_name = res.facility.name if res.facility else getattr(res.equipment, 'name', 'Item')
-        calendar_data.append({
-            'id': f"res_{res.id}",
-            'title': f"Reserved: {item_name}",
-            'start': res.start_time,
-            'end': res.end_time,
-            'type': 'RESERVATION'
-        })
-        
     return Response(calendar_data)
 
 
@@ -756,12 +943,11 @@ def calendar_feed(request):
 class AnnouncementViewSet(viewsets.ModelViewSet):
     queryset = Announcement.objects.all()
     serializer_class = AnnouncementSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
-        # FIX: Allow any authenticated user (residents too) to view/read announcements
-        if self.action in ['list', 'retrieve', 'mark_as_read']:
-            return [IsAuthenticated()]
+        # FIX: Allow absolutely anyone (public/unauthenticated users) to view announcements
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
         
         # Keep staff-only restriction for creating, updating, or deleting
         return [IsStaffGroup()]
@@ -781,12 +967,6 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
         serializer.save(author=user)
 
-    @action(detail=True, methods=['post'])
-    def mark_as_read(self, request, pk=None):
-        announcement = self.get_object()
-        ReadAnnouncement.objects.get_or_create(user=request.user, announcement=announcement)
-        return Response({'status': 'marked as read'}, status=status.HTTP_200_OK)
-
 class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated] 
 
@@ -804,7 +984,7 @@ class DashboardStatsView(APIView):
 
 
 class AiAssistantView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     throttle_classes = [AiChatThrottle]
 
     def post(self, request):
@@ -831,8 +1011,11 @@ class AiAssistantView(APIView):
             chat_response = model.generate_content(user_prompt)
             ai_response_text = chat_response.text
 
+            # --- THE FIX: Only attach the user if they are actually logged in ---
+            user_instance = request.user if request.user.is_authenticated else None
+
             AiQueryStatistic.objects.create(
-                user=request.user,
+                user=user_instance, # This will safely be NULL for public residents
                 prompt=user_prompt,
                 response=ai_response_text
             )
@@ -1098,3 +1281,11 @@ class SystemSettingsView(APIView):
             return Response({"message": "System settings updated successfully."}, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class AiQueryStatisticViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint that allows AI Query statistics to be viewed by admins/staff.
+    """
+    queryset = AiQueryStatistic.objects.all().order_by('-created_at')
+    serializer_class = AiQueryStatisticSerializer
+    permission_classes = [IsAuthenticated]

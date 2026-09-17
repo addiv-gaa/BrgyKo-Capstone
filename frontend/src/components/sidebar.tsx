@@ -6,9 +6,6 @@ const MENU_CONFIG = {
     // Menus available to normal residents
     residentServices: [
         { label: "Dashboard", path: "/" },
-        { label: "Request Certificate", path: "/requestcertificate" },
-        { label: "Report Incident", path: "/reportincident" },
-        { label: "Reserve Facility", path: "/reservations/request" },
         { label: "AI Assistant", path: "/aiassistant" },
     ],
     residentCommunity: [
@@ -20,7 +17,6 @@ const MENU_CONFIG = {
     
     // Menus specific to Tanods / Field Staff
     tanodAdministration: [
-        { label: "Incident Management", path: "/tanod/dashboard" },
         { label: "Geo Mapping", path: "/geomapping" },
         { label: "Staff Calendar", path: "/barangaycalendarstaff" },
     ],
@@ -28,13 +24,9 @@ const MENU_CONFIG = {
     // Comprehensive menus for Captains, Secretaries, and Admins
     staffAdministration: [
         { label: "Admin Hub", path: "/adminhub" },
-        { label: "Certificate Requests", path: "/certrequests" },
-        { label: "Resident & Profile Approvals", path: "/residentapproval" },
         { label: "Residents Directory", path: "/residents" },
-        { label: "Incident Management", path: "/tanod/dashboard" },
         { label: "Staff Calendar", path: "/barangaycalendarstaff" },
-        { label: "Inventory & Welfare", path: "/inventory" },
-        { label: "SMS Blast & Reports", path: "/reports" },
+        { label: "Reports", path: "/reports" },
         { label: "Geo Mapping", path: "/geomapping" },
         { label: "Documents & Records", path: "/documents" },
     ]

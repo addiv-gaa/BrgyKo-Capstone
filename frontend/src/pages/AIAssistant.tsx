@@ -53,14 +53,20 @@ export default function AiAssistant() {
         setIsLoading(true);
 
         const token = localStorage.getItem('access'); 
+        
+        // --- THE FIX: Build headers dynamically ---
+        const headers: HeadersInit = {
+            'Content-Type': 'application/json'
+        };
+        
+        if (token && token !== "null" && token !== "undefined") {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
 
         try {
             const response = await fetch(`${API_URL}/api/ai-assistant/`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: headers,
                 body: JSON.stringify({ prompt: text })
             });
 
@@ -133,7 +139,7 @@ export default function AiAssistant() {
                                             {msg.sender === 'bot' && (
                                                 <div className="w-8 h-8 rounded-full bg-[#1c4ed8] text-white flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2v10a2 2 0 002 2z" />
                                                     </svg>
                                                 </div>
                                             )}
@@ -154,7 +160,7 @@ export default function AiAssistant() {
                                         <div className="flex justify-start">
                                             <div className="w-8 h-8 rounded-full bg-[#1c4ed8] text-white flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2v10a2 2 0 002 2z" />
                                                 </svg>
                                             </div>
                                             <div className="px-4 py-3 bg-white border border-gray-200 rounded-lg rounded-bl-none shadow-sm flex items-center space-x-2">

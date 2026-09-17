@@ -62,7 +62,7 @@ export default function Announcements() {
         let extractedRole = "";
         try {
             const token = localStorage.getItem('access');
-            if (token) {
+            if (token && token !== "null" && token !== "undefined") {
                 const payload = JSON.parse(atob(token.split('.')[1]));
                 extractedRole = payload.role || payload.roles || "";
             }
@@ -84,13 +84,25 @@ export default function Announcements() {
     const fetchData = async () => {
         setIsLoading(true);
         const token = localStorage.getItem('access');
+        
+        // Build headers dynamically. Only add Authorization if a real token exists.
+        const headers: HeadersInit = {
+            'Content-Type': 'application/json'
+        };
+        
+        if (token && token !== "null" && token !== "undefined") {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
         try {
             const res = await fetch(`${API_URL}/api/announcements/`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: headers
             });
             if (res.ok) {
                 const data = await res.json();
                 setAnnouncements(data.results || data);
+            } else {
+                console.error("Failed to fetch announcements. Status:", res.status);
             }
         } catch (error) {
             console.error("Error fetching data:", error);

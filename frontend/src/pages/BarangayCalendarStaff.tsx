@@ -156,61 +156,6 @@ export default function StaffSchedulePage() {
                                 </form>
                             </div>
                         </div>
-
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                            <h2 className="text-xl font-bold mb-4">Pending Reservation Requests</h2>
-                            
-                            {pendingRequests.length === 0 ? (
-                                <p className="text-gray-500 text-sm">No pending requests at the moment.</p>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-50 border-b">
-                                            <tr>
-                                                <th className="px-4 py-3 font-semibold text-gray-600">ID</th>
-                                                <th className="px-4 py-3 font-semibold text-gray-600">Requested Item</th>
-                                                <th className="px-4 py-3 font-semibold text-gray-600">Purpose</th>
-                                                <th className="px-4 py-3 font-semibold text-gray-600">Start Time</th>
-                                                <th className="px-4 py-3 font-semibold text-gray-600">End Time</th>
-                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {pendingRequests.map((req) => (
-                                                <tr key={req.id} className="hover:bg-gray-50">
-                                                    <td className="px-4 py-3 text-gray-500">#{req.id}</td>
-                                                    <td className="px-4 py-3 font-bold text-blue-700">{getRequestedItem(req)}</td>
-                                                    <td className="px-4 py-3 font-medium truncate max-w-50">{req.purpose}</td>
-                                                    <td className="px-4 py-3">{new Date(req.start_time).toLocaleString()}</td>
-                                                    <td className="px-4 py-3">{new Date(req.end_time).toLocaleString()}</td>
-                                                    <td className="px-4 py-3 text-right space-x-2">
-                                                        <button 
-                                                            onClick={() => openModal(req)}
-                                                            className="px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded font-medium transition-colors"
-                                                        >
-                                                            View
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleStatusUpdate(req.id, 'APPROVED')}
-                                                            className="px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded font-medium transition-colors"
-                                                        >
-                                                            Approve
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleStatusUpdate(req.id, 'REJECTED')}
-                                                            className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded font-medium transition-colors"
-                                                        >
-                                                            Reject
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-
                     </div>
                 </main>
             </div>

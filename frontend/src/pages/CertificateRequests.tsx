@@ -21,7 +21,11 @@ const formatCertificateType = (type: string) => {
     const types: Record<string, string> = {
         'CLEARANCE': 'Barangay Clearance',
         'RESIDENCY': 'Certificate of Residency',
-        'INDIGENCY': 'Certificate of Indigency'
+        'INDIGENCY': 'Certificate of Indigency',
+        'GOOD_MORAL': 'Certificate of Good Moral Character',
+        'LOW_INCOME': 'Certificate of Low Income',
+        'SOLO_PARENT': 'Solo Parent Certification',
+        'JOB_SEEKER': 'First Time Job Seeker Certification',
     };
     return types[type] || type;
 };

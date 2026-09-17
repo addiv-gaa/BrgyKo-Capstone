@@ -1,26 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import PageHeader from "../components/header";
 import Sidebar from "../components/sidebar";
 import ResidentModal, { type ResidentProperties } from '../components/ResidentModal';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// --- Types mapping to Django Model ---
-interface ResidentData {
+export interface ResidentData {
     id: number;
+    inhabitant_type: string;
     first_name: string;
     last_name: string;
-    contact_number?: string; // NEW: Added contact number
-    sex: string;
-    purok: string;
+    middle_name?: string;
+    suffix?: string;
+    birth_place?: string;
     birth_date: string | null;
+    sex: string;
     civil_status: string;
+    citizenship: string;
+    occupation?: string;
+    contact_number?: string;
+    email_address?: string;
+    highest_education?: string;
+    mothers_first_name?: string;
+    mothers_middle_name?: string;
+    mothers_last_name?: string;
+    
+    purok: string;
     relationship_to_head: string;
     household?: number | null;
     is_4ps_beneficiary: boolean;
-    has_senior_citizen: boolean;
-    has_pwd: boolean;
-    has_solo_parent: boolean;
+    is_senior_citizen: boolean;
+    is_pwd: boolean;
+    is_solo_parent: boolean;
 }
 
 // --- UI Helper Functions ---
@@ -31,35 +42,34 @@ const calculateAge = (dob: string | null) => {
     return Math.abs(ageDate.getUTCFullYear() - 1970);
 };
 
-const getAvatarColor = (id: number) => {
-    const colors = ['bg-[#1e40af]', 'bg-[#065f46]', 'bg-[#4338ca]', 'bg-[#ea580c]', 'bg-[#d97706]', 'bg-[#dc2626]', 'bg-[#1d4ed8]', 'bg-[#0f766e]'];
-    return colors[id % colors.length];
-};
-
-const getWelfareBadge = (res: ResidentData) => {
-    if (res.is_4ps_beneficiary) return { label: '4Ps', bg: 'bg-red-50', text: 'text-red-600' };
-    if (res.has_senior_citizen) return { label: 'Senior', bg: 'bg-orange-50', text: 'text-orange-600' };
-    if (res.has_pwd) return { label: 'PWD', bg: 'bg-blue-50', text: 'text-blue-600' };
-    if (res.has_solo_parent) return { label: 'Solo Parent', bg: 'bg-green-50', text: 'text-green-700' };
-    return { label: 'None', bg: 'bg-gray-100', text: 'text-gray-500' };
-};
-
 export default function ResidentPage() {
-    // --- State ---
     const [residents, setResidents] = useState<ResidentData[]>([]);
-    
-    // Store the list of households for the dropdown
     const [householdOptions, setHouseholdOptions] = useState<{id: number, address: string}[]>([]);
     
+    // Search & Filter State
     const [searchQuery, setSearchQuery] = useState('');
+    const [showFilters, setShowFilters] = useState(false);
+    const [filters, setFilters] = useState({
+        purok: '',
+        sex: '',
+        civil_status: '',
+        age_bracket: '',
+        is_4ps: false,
+        is_senior: false,
+        is_pwd: false,
+        is_solo: false
+    });
     
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
-    // CHANGED: Added 'view' to modal modes
     const [modalMode, setModalMode] = useState<'add' | 'edit' | 'view'>('add');
     const [selectedResident, setSelectedResident] = useState<ResidentProperties | null>(null);
 
-    // --- API Integration ---
+    // Upload & Export State
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [isExporting, setIsExporting] = useState(false); // NEW EXPORT STATE
+
     const getAuthHeaders = () => {
         const token = localStorage.getItem('access'); 
         return {
@@ -68,33 +78,24 @@ export default function ResidentPage() {
         };
     };
 
-    // 1. Fetch Residents (GET)
-    const fetchResidents = async (query = '') => {
+    // We fetch ALL residents once, then filter instantly in the frontend
+    const fetchResidents = async () => {
         try {
-            const url = query 
-                ? `${API_URL}/api/residents/?search=${encodeURIComponent(query)}` 
-                : `${API_URL}/api/residents/`;
-
-            const response = await fetch(url, { headers: getAuthHeaders() });
-            
+            const response = await fetch(`${API_URL}/api/residents/`, { headers: getAuthHeaders() });
             if (response.ok) {
                 const data = await response.json();
                 setResidents(data.results || data); 
-            } else {
-                console.error("Failed to fetch residents:", response.statusText);
             }
         } catch (error) {
             console.error("Network error fetching residents:", error);
         }
     };
 
-    // 2. Fetch Households for the Dropdown Modal
     const fetchHouseholdsForDropdown = async () => {
         try {
             const response = await fetch(`${API_URL}/api/households/`, { headers: getAuthHeaders() });
             if (response.ok) {
                 const data = await response.json();
-                // We format the GeoJSON response into a simple ID and Address array
                 const formatted = (data.features || []).map((f: any) => ({
                     id: f.id,
                     address: f.properties.address
@@ -106,20 +107,92 @@ export default function ResidentPage() {
         }
     };
 
-    // Load household options exactly once when the page loads
     useEffect(() => {
         fetchHouseholdsForDropdown();
+        fetchResidents();
     }, []);
 
-    // Debounced Search Effect for Residents
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            fetchResidents(searchQuery);
-        }, 300);
-        return () => clearTimeout(timeoutId);
-    }, [searchQuery]);
+    // --- Excel Upload Handler ---
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
 
-    // 3. Save Resident (POST or PUT)
+        const formData = new FormData();
+        formData.append('file', file);
+
+        setIsUploading(true);
+        const token = localStorage.getItem('access');
+
+        try {
+            const response = await fetch(`${API_URL}/api/residents/import-excel/`, {
+                method: 'POST',
+                headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                let alertMsg = data.message;
+                if (data.errors && data.errors.length > 0) {
+                    alertMsg += `\n\nHowever, ${data.errors.length} rows failed. Check console for details.`;
+                    console.warn("Import Errors:", data.errors);
+                }
+                alert(alertMsg);
+                fetchResidents(); // Instantly refresh the table!
+            } else {
+                alert(data.error || "Failed to import file.");
+            }
+        } catch (error) {
+            console.error("Upload error:", error);
+            alert("Network error occurred during upload.");
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input so you can upload the same file again
+        }
+    };
+
+    // --- NEW: Excel Export Handler ---
+    const handleExportExcel = async () => {
+        setIsExporting(true);
+        
+        try {
+            // Using getAuthHeaders but overriding Content-Type since we expect a blob response
+            const response = await fetch(`${API_URL}/api/residents/export_excel/`, {
+                method: 'GET',
+                headers: getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to export registry");
+            }
+
+            // 1. Convert the file stream to a Blob
+            const blob = await response.blob();
+
+            // 2. Create a temporary invisible link to trigger the download
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            
+            // Adding a timestamp to the file name
+            const timestamp = new Date().toISOString().split('T')[0];
+            link.setAttribute('download', `Resident_Registry_Export_${timestamp}.xlsx`);
+            document.body.appendChild(link);
+            
+            // 3. Click the link and clean it up immediately
+            link.click();
+            link.parentNode?.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            console.error("Export Error:", error);
+            alert("An error occurred while exporting the resident registry.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const handleSaveResident = async (formData: Partial<ResidentProperties>) => {
         try {
             const method = modalMode === 'edit' ? 'PUT' : 'POST';
@@ -135,7 +208,7 @@ export default function ResidentPage() {
 
             if (response.ok) {
                 setIsModalOpen(false);
-                fetchResidents(searchQuery); // Refresh the table
+                fetchResidents();
             } else {
                 const errorData = await response.json();
                 console.error("Validation Error:", errorData);
@@ -147,196 +220,341 @@ export default function ResidentPage() {
         }
     };
 
-    // 4. Delete Resident (DELETE)
     const handleDeleteResident = async (id: number) => {
-        if (!window.confirm("Are you sure you want to delete this resident? This cannot be undone.")) return;
-
+        if (!window.confirm("Are you sure you want to delete this resident?")) return;
         try {
             const response = await fetch(`${API_URL}/api/residents/${id}/`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
-
-            if (response.ok || response.status === 204) {
-                fetchResidents(searchQuery); // Refresh the table
-            } else {
-                console.error("Failed to delete resident:", response.statusText);
-                alert("Failed to delete resident.");
-            }
+            if (response.ok || response.status === 204) fetchResidents();
         } catch (error) {
             console.error("Network error deleting resident:", error);
-            alert("Network error occurred.");
         }
     };
+
+    // --- FRONTEND FILTERING ENGINE ---
+    const uniquePuroks = Array.from(new Set(residents.map(r => r.purok))).filter(Boolean).sort();
+
+    const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
+        const { name, value, type } = e.target;
+        if (type === 'checkbox') {
+            const checked = (e.target as HTMLInputElement).checked;
+            setFilters(prev => ({ ...prev, [name]: checked }));
+        } else {
+            setFilters(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
+    const clearFilters = () => {
+        setFilters({
+            purok: '', sex: '', civil_status: '', age_bracket: '',
+            is_4ps: false, is_senior: false, is_pwd: false, is_solo: false
+        });
+        setSearchQuery('');
+    };
+
+    const activeFilterCount = Object.values(filters).filter(val => val === true || (typeof val === 'string' && val !== '')).length;
+
+    // Execute filter instantly
+    const filteredResidents = useMemo(() => {
+        return residents.filter(res => {
+            // Text Search
+            const searchStr = searchQuery.toLowerCase();
+            const matchesSearch = !searchQuery || 
+                res.first_name.toLowerCase().includes(searchStr) || 
+                res.last_name.toLowerCase().includes(searchStr) ||
+                res.purok.toLowerCase().includes(searchStr);
+
+            // Dropdowns
+            const matchesPurok = !filters.purok || res.purok === filters.purok;
+            const matchesSex = !filters.sex || res.sex === filters.sex;
+            const matchesCivil = !filters.civil_status || res.civil_status === filters.civil_status;
+
+            // Age Bracket
+            let matchesAge = true;
+            if (filters.age_bracket) {
+                const age: any = calculateAge(res.birth_date);
+                if (age === 'N/A') {
+                    matchesAge = false;
+                } else {
+                    if (filters.age_bracket === '0-14') matchesAge = age >= 0 && age <= 14;
+                    else if (filters.age_bracket === '15-30') matchesAge = age >= 15 && age <= 30;
+                    else if (filters.age_bracket === '31-59') matchesAge = age >= 31 && age <= 59;
+                    else if (filters.age_bracket === '60+') matchesAge = age >= 60;
+                }
+            }
+
+            // Checkboxes
+            const matches4ps = !filters.is_4ps || res.is_4ps_beneficiary;
+            const matchesSenior = !filters.is_senior || res.is_senior_citizen;
+            const matchesPwd = !filters.is_pwd || res.is_pwd;
+            const matchesSolo = !filters.is_solo || res.is_solo_parent;
+
+            return matchesSearch && matchesPurok && matchesSex && matchesCivil && matchesAge && matches4ps && matchesSenior && matchesPwd && matchesSolo;
+        });
+    }, [residents, searchQuery, filters]);
+
 
     return (
         <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
             <PageHeader />
-            
             <div className="flex flex-1 overflow-hidden">
                 <Sidebar />
-
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     
-                    {/* Header Section */}
+                    {/* Page Header & Actions */}
                     <div className="mb-6 flex justify-between items-end">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Resident Information</h1>
                             <p className="text-gray-500 text-sm">Barangay Census Database</p>
                         </div>
                         
-                        <button 
-                            onClick={() => {
-                                setModalMode('add');
-                                setSelectedResident(null);
-                                setIsModalOpen(true);
-                            }}
-                            className="bg-[#1e40af] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-800 shadow-sm transition-colors flex items-center gap-2"
-                        >
-                            <span>+ Add Resident</span>
-                        </button>
+                        <div className="flex gap-3">
+                            {/* Hidden File Input */}
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                onChange={handleFileUpload} 
+                                accept=".xlsx, .xls" 
+                                className="hidden" 
+                            />
+                            
+                            {/* Import Button */}
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isUploading}
+                                className="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isUploading ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Importing...
+                                    </>
+                                ) : (
+                                    <span>Import Excel</span>
+                                )}
+                            </button>
+
+                            {/* Export Button */}
+                            <button 
+                                onClick={handleExportExcel}
+                                disabled={isExporting}
+                                className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isExporting ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Exporting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        <span>Export Excel</span>
+                                    </>
+                                )}
+                            </button>
+
+                            <button 
+                                onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }}
+                                className="bg-[#1e40af] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors flex items-center gap-2 shadow-sm"
+                            >
+                                <span>+ Add Resident</span>
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Data Table Card */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="p-4 border-b border-gray-200 flex flex-wrap gap-4 justify-between items-center bg-white">
-                            <div className="relative flex-1 max-w-3xl">
-                                <svg className="w-4 h-4 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+                        
+                        {/* Search & Filter Trigger Bar */}
+                        <div className="p-4 border-b border-gray-200 flex flex-wrap gap-3 justify-between items-center bg-white">
+                            <div className="relative flex-1 max-w-2xl">
+                                <svg className="w-4 h-4 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                 <input 
                                     type="text" 
-                                    placeholder="Search residents by name or purok..." 
+                                    placeholder="Search by name or purok..." 
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
                                 />
                             </div>
+                            <button 
+                                onClick={() => setShowFilters(!showFilters)}
+                                className={`px-4 py-2 rounded-lg text-sm font-semibold border flex items-center gap-2 transition-colors ${showFilters || activeFilterCount > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                                Filters {activeFilterCount > 0 && <span className="bg-blue-600 text-white rounded-full px-2 py-0.5 text-xs">{activeFilterCount}</span>}
+                            </button>
                         </div>
 
+                        {/* Expandable Filter Panel */}
+                        {showFilters && (
+                            <div className="bg-gray-50 p-5 border-b border-gray-200">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Purok / Zone</label>
+                                        <select name="purok" value={filters.purok} onChange={handleFilterChange} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white">
+                                            <option value="">All Puroks</option>
+                                            {uniquePuroks.map(p => <option key={p} value={p}>{p}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Age Bracket</label>
+                                        <select name="age_bracket" value={filters.age_bracket} onChange={handleFilterChange} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white">
+                                            <option value="">All Ages</option>
+                                            <option value="0-14">0 - 14 (Children)</option>
+                                            <option value="15-30">15 - 30 (Youth/SK)</option>
+                                            <option value="31-59">31 - 59 (Working Age)</option>
+                                            <option value="60+">60+ (Senior Citizens)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Sex</label>
+                                        <select name="sex" value={filters.sex} onChange={handleFilterChange} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white">
+                                            <option value="">All</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Civil Status</label>
+                                        <select name="civil_status" value={filters.civil_status} onChange={handleFilterChange} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white">
+                                            <option value="">All</option>
+                                            <option value="Single">Single</option>
+                                            <option value="Married">Married</option>
+                                            <option value="Widowed">Widowed</option>
+                                            <option value="Separated">Separated</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-wrap items-center justify-between border-t border-gray-200 pt-4">
+                                    <div className="flex flex-wrap gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-red-50 hover:border-red-200 transition-colors">
+                                            <input type="checkbox" name="is_4ps" checked={filters.is_4ps} onChange={handleFilterChange} className="w-4 h-4 text-red-600 rounded" />
+                                            <span className="font-medium text-gray-700">4Ps Beneficiary</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-orange-50 hover:border-orange-200 transition-colors">
+                                            <input type="checkbox" name="is_senior" checked={filters.is_senior} onChange={handleFilterChange} className="w-4 h-4 text-orange-600 rounded" />
+                                            <span className="font-medium text-gray-700">Senior Citizen</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                                            <input type="checkbox" name="is_pwd" checked={filters.is_pwd} onChange={handleFilterChange} className="w-4 h-4 text-blue-600 rounded" />
+                                            <span className="font-medium text-gray-700">PWD</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-green-50 hover:border-green-200 transition-colors">
+                                            <input type="checkbox" name="is_solo" checked={filters.is_solo} onChange={handleFilterChange} className="w-4 h-4 text-green-600 rounded" />
+                                            <span className="font-medium text-gray-700">Solo Parent</span>
+                                        </label>
+                                    </div>
+                                    <button onClick={clearFilters} className="text-sm text-gray-500 hover:text-red-600 font-semibold transition-colors mt-2 md:mt-0">
+                                        Clear Filters
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Active Filters Display */}
+                        {activeFilterCount > 0 && (
+                            <div className="bg-blue-50 px-4 py-2 border-b border-blue-100 flex flex-wrap gap-2 items-center text-sm">
+                                <span className="text-blue-800 font-semibold mr-2 text-xs uppercase tracking-wide">Active Filters:</span>
+                                {filters.purok && <span className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">Purok: {filters.purok}</span>}
+                                {filters.age_bracket && <span className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">Age: {filters.age_bracket}</span>}
+                                {filters.sex && <span className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">Sex: {filters.sex}</span>}
+                                {filters.civil_status && <span className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">Civil Status: {filters.civil_status}</span>}
+                                {filters.is_4ps && <span className="bg-red-100 border border-red-200 text-red-700 px-2 py-1 rounded-full text-xs font-bold">4Ps Only</span>}
+                                {filters.is_senior && <span className="bg-orange-100 border border-orange-200 text-orange-700 px-2 py-1 rounded-full text-xs font-bold">Seniors Only</span>}
+                                {filters.is_pwd && <span className="bg-blue-100 border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-bold">PWD Only</span>}
+                                {filters.is_solo && <span className="bg-green-100 border border-green-200 text-green-700 px-2 py-1 rounded-full text-xs font-bold">Solo Parents Only</span>}
+                                <span className="ml-auto text-blue-600 font-bold text-xs">{filteredResidents.length} Results</span>
+                            </div>
+                        )}
+
+                        {/* Result Table */}
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse min-w-200">
+                            <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
                                 <thead>
-                                    <tr className="bg-white border-b border-gray-200 text-xs text-gray-500 font-bold uppercase tracking-wider">
-                                        <th className="px-6 py-4">#</th>
-                                        <th className="px-6 py-4 w-24">Photo</th>
-                                        <th className="px-6 py-4">Name</th>
-                                        {/* NEW COLUMN: Contact */}
-                                        <th className="px-6 py-4">Contact</th>
-                                        <th className="px-6 py-4">Household Status</th>
-                                        <th className="px-6 py-4">Purok</th>
-                                        <th className="px-6 py-4">Age</th>
+                                    <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-600 font-bold uppercase tracking-wider">
+                                        <th className="px-6 py-4">Inhabitant Type</th>
+                                        <th className="px-6 py-4">Last Name</th>
+                                        <th className="px-6 py-4">First Name</th>
+                                        <th className="px-6 py-4">Middle Name</th>
+                                        <th className="px-6 py-4">Suffix</th>
+                                        <th className="px-6 py-4">Birth Place</th>
+                                        <th className="px-6 py-4">Birthdate</th>
                                         <th className="px-6 py-4">Sex</th>
                                         <th className="px-6 py-4">Civil Status</th>
-                                        <th className="px-6 py-4">Welfare</th>
-                                        <th className="px-6 py-4 text-center">Actions</th>
+                                        <th className="px-6 py-4">Citizenship</th>
+                                        <th className="px-6 py-4">Occupation</th>
+                                        <th className="px-6 py-4">Contact Number</th>
+                                        <th className="px-6 py-4">Email Address</th>
+                                        <th className="px-6 py-4">Highest Education</th>
+                                        <th className="px-6 py-4">Mother's First Name</th>
+                                        <th className="px-6 py-4">Mother's Middle Name</th>
+                                        <th className="px-6 py-4">Mother's Last Name</th>
+                                        <th className="px-6 py-4">Welfare Status</th>
+                                        <th className="px-6 py-4 text-center sticky right-0 bg-gray-50 shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.1)]">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 bg-white">
-                                    {residents.length > 0 ? residents.map((resident) => {
-                                        const badge = getWelfareBadge(resident);
-                                        const initials = `${resident.first_name[0]}${resident.last_name[0]}`.toUpperCase();
-                                        
-                                        // Find the matching household address if they have one mapped
-                                        const mappedHouse = householdOptions.find(h => h.id === resident.household);
-                                        
-                                        return (
-                                            <tr key={resident.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.id}</td>
-                                                
-                                                <td className="px-6 py-4">
-                                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm ${getAvatarColor(resident.id)}`}>
-                                                        {initials}
-                                                    </div>
-                                                </td>
+                                    {filteredResidents.length > 0 ? filteredResidents.map((resident) => (
+                                        <tr key={resident.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4 text-sm text-gray-700">{resident.inhabitant_type || '-'}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-gray-900">{resident.last_name}</td>
+                                            <td className="px-6 py-4 text-sm font-medium text-gray-800">{resident.first_name}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.middle_name || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.suffix || '-'}</td>
+                                            
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.birth_place || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.birth_date || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.sex}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.civil_status}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.citizenship || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.occupation || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.contact_number || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.email_address || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.highest_education || '-'}</td>
+                                            
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_first_name || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_middle_name || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_last_name || '-'}</td>
+                                            
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-wrap gap-1 w-32">
+                                                    {resident.is_4ps_beneficiary && <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">4Ps</span>}
+                                                    {resident.is_senior_citizen && <span className="bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-orange-200">Senior</span>}
+                                                    {resident.is_pwd && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-200">PWD</span>}
+                                                    {resident.is_solo_parent && <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-green-200">Solo Parent</span>}
+                                                    {!resident.is_4ps_beneficiary && !resident.is_senior_citizen && !resident.is_pwd && !resident.is_solo_parent && <span className="text-gray-400 text-xs">-</span>}
+                                                </div>
+                                            </td>
 
-                                                <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                                                    {resident.first_name} {resident.last_name}
-                                                </td>
-
-                                                {/* NEW CELL: Contact Number */}
-                                                <td className="px-6 py-4 text-sm text-gray-600">
-                                                    {resident.contact_number || 'N/A'}
-                                                </td>
-
-                                                <td className="px-6 py-4 text-sm">
-                                                    {mappedHouse ? (
-                                                        <div>
-                                                            <span className="text-gray-900 block truncate max-w-50" title={mappedHouse.address}>
-                                                                {mappedHouse.address}
-                                                            </span>
-                                                            <span className="text-xs text-blue-600 font-medium">Mapped</span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-red-500 italic flex items-center gap-1">
-                                                            <span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span> Unmapped
-                                                        </span>
-                                                    )}
-                                                </td>
-
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.purok}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{calculateAge(resident.birth_date)}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.sex}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.civil_status}</td>
-                                                
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide ${badge.bg} ${badge.text}`}>
-                                                        {badge.label}
-                                                    </span>
-                                                </td>
-                                                
-                                                <td className="px-6 py-4 text-center">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        
-                                                        {/* CHANGED: View Details Button */}
-                                                        <button 
-                                                            onClick={() => {
-                                                                setModalMode('view');
-                                                                setSelectedResident(resident as any);
-                                                                setIsModalOpen(true);
-                                                            }}
-                                                            className="p-1.5 border border-gray-200 rounded text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors" 
-                                                            title="View Details"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                            </svg>
-                                                        </button>
-
-                                                        {/* CHANGED: Edit Details Button */}
-                                                        <button 
-                                                            onClick={() => {
-                                                                setModalMode('edit');
-                                                                setSelectedResident(resident as any);
-                                                                setIsModalOpen(true);
-                                                            }}
-                                                            className="p-1.5 border border-gray-200 rounded text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors" 
-                                                            title="Edit Details"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                            </svg>
-                                                        </button>
-
-                                                        {/* Delete Button */}
-                                                        <button 
-                                                            className="p-1.5 bg-[#ef4444] text-white rounded hover:bg-red-600 shadow-sm transition-colors" 
-                                                            title="Delete Resident"
-                                                            onClick={() => handleDeleteResident(resident.id)}
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    }) : (
+                                            <td className="px-6 py-4 text-center sticky right-0 bg-white shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.05)] group-hover:bg-gray-50">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button onClick={() => { setModalMode('view'); setSelectedResident(resident as any); setIsModalOpen(true); }} className="p-1.5 border border-gray-200 rounded text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors" title="View Details">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                    </button>
+                                                    <button onClick={() => { setModalMode('edit'); setSelectedResident(resident as any); setIsModalOpen(true); }} className="p-1.5 border border-gray-200 rounded text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors" title="Edit Details">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                    </button>
+                                                    <button className="p-1.5 bg-[#ef4444] text-white rounded hover:bg-red-600 shadow-sm transition-colors" title="Delete Resident" onClick={() => handleDeleteResident(resident.id)}>
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )) : (
                                         <tr>
-                                            <td colSpan={10} className="px-6 py-8 text-center text-gray-500 italic">
-                                                No residents found. Add a resident or adjust your search.
+                                            <td colSpan={19} className="px-6 py-8 text-center text-gray-500 italic">
+                                                No residents match the selected filters.
                                             </td>
                                         </tr>
                                     )}
@@ -347,12 +565,11 @@ export default function ResidentPage() {
                 </main>
             </div>
 
-            {/* Modal */}
             {isModalOpen && (
                 <ResidentModal 
                     mode={modalMode}
                     resident={selectedResident}
-                    households={householdOptions} // PASS THE FETCHED DATA TO THE MODAL
+                    households={householdOptions}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSaveResident}
                 />

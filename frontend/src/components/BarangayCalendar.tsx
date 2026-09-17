@@ -20,16 +20,18 @@ export default function BarangayCalendar() {
     const fetchCalendar = async () => {
       const token = localStorage.getItem('access');
       
-      if (!token) {
-          console.error("No token found. Please log in.");
-          return;
+      // Build headers dynamically. Only add Authorization if a real token exists.
+      const headers: HeadersInit = {
+          'Content-Type': 'application/json'
+      };
+      
+      if (token && token !== "null" && token !== "undefined") {
+          headers['Authorization'] = `Bearer ${token}`;
       }
 
       try {
           const response = await fetch(`${API_URL}/api/calendar-feed/`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
+            headers: headers
           });
 
           const data = await response.json();

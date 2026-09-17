@@ -31,7 +31,31 @@ const CERTIFICATE_TYPES = [
         label: 'Certificate of Indigency', 
         time: '1 business day',
         requirements: ['Valid ID']
-    }
+    },
+    { 
+        id: 'GOOD_MORAL', 
+        label: 'Certificate of Good Moral Character', 
+        time: '1 business day',
+        requirements: ['Valid ID', 'Recent Cedula (Community Tax Certificate)']
+    },
+    { 
+        id: 'LOW_INCOME', 
+        label: 'Certificate of Low Income', 
+        time: '1 business day',
+        requirements: ['Valid ID']
+    },
+    { 
+        id: 'SOLO_PARENT', 
+        label: 'Solo Parent Certification', 
+        time: '1 business day',
+        requirements: ['Valid ID', 'Birth Certificate of the child', 'Proof of Solo Parent status (if applicable)']
+    },
+    { 
+        id: 'JOB_SEEKER', 
+        label: 'First Time Job Seeker Certification', 
+        time: '1 business day',
+        requirements: ['Valid ID']
+    },
 ];
 
 const PURPOSES = [
@@ -80,7 +104,7 @@ export default function RequestCertificate() {
         if (!token) return;
 
         try {
-            const response = await fetch(`${API_URL}/api/profile/`, {
+            const response = await fetch(`${API_URL}/api/user/profile/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -180,36 +204,39 @@ export default function RequestCertificate() {
     };
 
     const handleFinalConfirm = async () => {
-        const token = localStorage.getItem('access');
+    const token = localStorage.getItem('access');
 
-        if (!token) {
-            alert("You must be logged in to submit a request.");
-            setIsConfirmModalOpen(false);
-            return;
-        }
+    if (!token) {
+        alert("You must be logged in to submit a request.");
+        setIsConfirmModalOpen(false);
+        return;
+    }
 
-        setIsSubmitting(true);
+    setIsSubmitting(true);
 
-        const finalPayload = {
-            certificate_type: formData.certificate_type,
-            purpose: formData.purpose === 'Other' ? customPurpose : formData.purpose,
-            request_type: requestType,
-            
-            requested_for: requestType === 'someone_else' ? requestedName : formData.full_name,
-            date_of_birth: requestType === 'someone_else' ? requestedDob : formData.date_of_birth,
-            civil_status: requestType === 'someone_else' ? requestedCivilStatus : formData.civil_status,
-            contact_number: requestType === 'someone_else' ? requestedContact : formData.contact_number,
-        };
+    // --- FIXED: Mapped perfectly to Django model ---
+    const finalPayload = {
+        certificate_type: formData.certificate_type,
+        purpose: formData.purpose === 'Other' ? customPurpose : formData.purpose,
+        
+        // Use exact field names from Django: 'request_for' and 'full_name'
+        request_for: requestType === 'myself' ? 'SELF' : 'OTHER',
+        full_name: requestType === 'someone_else' ? requestedName : formData.full_name,
+        
+        date_of_birth: requestType === 'someone_else' ? requestedDob : formData.date_of_birth,
+        civil_status: requestType === 'someone_else' ? requestedCivilStatus : formData.civil_status,
+        contact_number: requestType === 'someone_else' ? requestedContact : formData.contact_number,
+    };
 
-        try {
-            const response = await fetch(`${API_URL}/api/certificates/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
-                },
-                body: JSON.stringify(finalPayload) 
-            });
+    try {
+        const response = await fetch(`${API_URL}/api/certificates/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify(finalPayload) 
+        });
 
             if (response.ok) {
                 alert("Request submitted successfully!");

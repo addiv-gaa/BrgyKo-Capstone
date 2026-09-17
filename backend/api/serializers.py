@@ -19,6 +19,7 @@ from .models import (
     IncidentReport,
     BarangaySettings,
     ResidentApplication,
+    AiQueryStatistic,
 )
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -266,3 +267,9 @@ class BarangaySettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = BarangaySettings
         fields = '__all__'
+
+class AiQueryStatisticSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AiQueryStatistic
+        # We include 'created_at' as it's required for the chart's monthly buckets
+        fields = ['id', 'user', 'prompt', 'response', 'created_at']

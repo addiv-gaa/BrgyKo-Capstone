@@ -102,12 +102,30 @@ function App() {
           <Routes>
             
             {/* =========================================
+                PUBLIC ROUTES (No login required)
+                ========================================= */}
+            <Route path="/" element={<Home />} />
+            <Route path="/logout" element={<Logout />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<RegisterAndLogout />} />
+            <Route path="/testpage" element={<Testpage />} />
+            
+            {/* NEWLY MOVED PUBLIC PAGES */}
+            <Route path="/aiassistant" element={<AIAssistant />} />
+            <Route path="/emergencycontacts" element={<EmergencyContacts />} />
+            <Route path="/announcements" element={<Announcements />} />
+            <Route path="/barangayofficials" element={<BarangayOfficials />} />
+            <Route path="/resident/schedule" element={<ResidentSchedulePage />} /> {/* Barangay Calendar */}
+
+            {/* Catch-all for 404 Not Found / Unauthorized */}
+            <Route path="/unauthorized" element={<div className="h-screen flex items-center justify-center text-red-500 font-bold text-2xl">403 - Unauthorized Access</div>} />
+            <Route path="*" element={<NotFound />} />
+
+
+            {/* =========================================
                 SHARED ROUTES (Accessible by any logged-in user) 
                 ========================================= */}
-            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/aiassistant" element={<ProtectedRoute><AIAssistant /></ProtectedRoute>} />
-            <Route path="/emergencycontacts" element={<ProtectedRoute><EmergencyContacts /></ProtectedRoute>} />
 
             {/* =========================================
                 RESIDENT-ONLY ROUTES 
@@ -121,10 +139,6 @@ function App() {
               element={<ProtectedRoute allowedRoles={['RESIDENT']}><RequestPermit /></ProtectedRoute>} 
             />
             <Route 
-              path="/resident/schedule" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT']}><ResidentSchedulePage /></ProtectedRoute>} 
-            />
-            <Route 
               path="/reservations/request" 
               element={<ProtectedRoute allowedRoles={['RESIDENT']}><ReservationForm /></ProtectedRoute>} 
             />
@@ -136,11 +150,6 @@ function App() {
               path="/reportincident" 
               element={<ProtectedRoute allowedRoles={['RESIDENT', 'TANOD', 'SECRETARY', 'CAPTAIN']}><ReportIncident /></ProtectedRoute>} 
             />
-            <Route 
-              path="/announcements" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT', 'TANOD', 'SECRETARY', 'CAPTAIN']}><Announcements /></ProtectedRoute>} 
-            />
-            
 
             {/* =========================================
                 STAFF & ADMIN ROUTES (Secretary & Captain)
@@ -164,10 +173,6 @@ function App() {
             <Route 
               path="/permitrequests" 
               element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><PermitRequests /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/barangayofficials" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><BarangayOfficials /></ProtectedRoute>} 
             />
             <Route 
               path="/inventory" 
@@ -214,18 +219,6 @@ function App() {
               element={<ProtectedRoute allowedRoles={['TANOD', 'SECRETARY', 'CAPTAIN']}><TanodDashboard /></ProtectedRoute>} 
             />
 
-            {/* =========================================
-                PUBLIC / AUTH ROUTES
-                ========================================= */}
-            <Route path="/logout" element={<Logout />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<RegisterAndLogout />} />
-            <Route path="/testpage" element={<Testpage />} />
-            
-            {/* Catch-all for 404 Not Found / Unauthorized */}
-            <Route path="/unauthorized" element={<div className="h-screen flex items-center justify-center text-red-500 font-bold text-2xl">403 - Unauthorized Access</div>} />
-            <Route path="*" element={<NotFound />} />
-            
           </Routes>
         </AppLayout>
       </BrowserRouter>

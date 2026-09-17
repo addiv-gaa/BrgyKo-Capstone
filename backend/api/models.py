@@ -2,6 +2,7 @@ from django.contrib.gis.db import models
 from django.contrib.auth.models import User
 from django.conf import settings
 from simple_history.models import HistoricalRecords
+from datetime import date
 
 class UserProfile(models.Model):
     # --- NEW: User Roles for RBAC ---
@@ -25,6 +26,19 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.get_role_display()}"
+
+    def save(self, *args, **kwargs):
+        # Automatically tag as Senior Citizen if age >= 60
+        if self.birth_date:
+            today = date.today()
+            age = today.year - self.birth_date.year - ((today.month, today.day) < (self.birth_date.month, self.birth_date.day))
+            
+            # If they are 60+, force the tag to True
+            if age >= 60:
+                self.is_senior_citizen = True
+                
+        # Call the original save method to commit to the database
+        super().save(*args, **kwargs)
 
 
 class CertificateRequest(models.Model):
@@ -362,17 +376,26 @@ class Resident(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='resident_profile')
     
     # --- Basic Info ---
+    inhabitant_type = models.CharField(max_length=50, default='NON-MIGRANT', help_text="e.g., NON-MIGRANT, MIGRANT, TRANSIENT")
     first_name = models.CharField(max_length=100)
     middle_name = models.CharField(max_length=100, blank=True, null=True)
     last_name = models.CharField(max_length=100)
     suffix = models.CharField(max_length=10, blank=True, null=True, help_text="e.g., Jr., Sr., III")
     
     birth_date = models.DateField(null=True, blank=True)
+    birth_place = models.CharField(max_length=255, blank=True, null=True)
     civil_status = models.CharField(max_length=50, default='Single')
+    citizenship = models.CharField(max_length=100, default='Filipino')
     sex = models.CharField(max_length=10, choices=SEX_CHOICES, default='Male')
     contact_number = models.CharField(max_length=20, blank=True, null=True)
     purok = models.CharField(max_length=50)
     occupation = models.CharField(max_length=100, blank=True, null=True)
+
+    email_address= models.EmailField(blank=True, null=True)
+    highest_education = models.CharField(max_length=100, blank=True, null=True)
+    mothers_first_name = models.CharField(max_length=100, blank=True, null=True)
+    mothers_middle_name = models.CharField(max_length=100, blank=True, null=True)
+    mothers_last_name = models.CharField(max_length=100, blank=True, null=True)
     
     household = models.ForeignKey(Household, on_delete=models.SET_NULL, null=True, blank=True, related_name='residents')
     relationship_to_head = models.CharField(max_length=20, choices=RELATIONSHIP_CHOICES, default='Head')
