@@ -85,7 +85,7 @@ function DemographicsAiAssistant() {
                     AI
                 </div>
                 <div>
-                    <h3 className="text-base font-bold text-gray-900">Demographic Intelligence Assistant</h3>
+                    <h3 className="text-base font-bold text-gray-900">Demographic Intelligence</h3>
                     <p className="text-xs text-gray-500">Ask strategic questions about Purok counts, age demographics, or welfare needs.</p>
                 </div>
             </div>
