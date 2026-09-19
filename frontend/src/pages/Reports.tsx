@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import PageHeader from "../components/header";
 import Sidebar from "../components/sidebar";
 import { 
@@ -40,6 +41,95 @@ const calculateAge = (dobString: string) => {
     return age;
 };
 
+// --- STAFF AI ASSISTANT COMPONENT ---
+function DemographicsAiAssistant() {
+    const [query, setQuery] = useState('');
+    const [response, setResponse] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    const handleAskAi = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!query.trim()) return;
+
+        setIsAnalyzing(true);
+        const token = localStorage.getItem('access');
+
+        try {
+            const res = await fetch(`${API_URL}/api/reports/demographics-ai/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ prompt: query })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                setResponse(data.reply);
+            } else {
+                alert(data.error || "Failed to analyze data.");
+            }
+        } catch (error) {
+            console.error("Analysis request failed:", error);
+            alert("Network error connecting to staff AI.");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-xl border border-indigo-100 shadow-sm p-6 mb-8">
+            <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm">
+                    AI
+                </div>
+                <div>
+                    <h3 className="text-base font-bold text-gray-900">Demographic Intelligence Assistant</h3>
+                    <p className="text-xs text-gray-500">Ask strategic questions about Purok counts, age demographics, or welfare needs.</p>
+                </div>
+            </div>
+
+            <form onSubmit={handleAskAi} className="flex gap-2 mb-4">
+                <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="e.g., Which Purok has the highest concentration of senior citizens?"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    disabled={isAnalyzing}
+                />
+                <button
+                    type="submit"
+                    disabled={isAnalyzing || !query.trim()}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                >
+                    {isAnalyzing ? "Analyzing..." : "Ask AI"}
+                </button>
+            </form>
+
+            {response && (
+                <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-lg text-sm text-gray-800 leading-relaxed overflow-hidden">
+                    <ReactMarkdown 
+                        components={{
+                            p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
+                            ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-3 space-y-1" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-3 space-y-1" {...props} />,
+                            li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+                            strong: ({node, ...props}) => <strong className="font-bold text-indigo-950" {...props} />,
+                            h1: ({node, ...props}) => <h1 className="text-lg font-bold mb-2 text-indigo-900" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-base font-bold mb-2 text-indigo-900 mt-4" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-sm font-bold mb-1 text-indigo-800 mt-3" {...props} />,
+                        }}
+                    >
+                        {response}
+                    </ReactMarkdown>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function DemographicsPage() {
     // State for base metrics
     const [stats, setStats] = useState({
@@ -47,7 +137,7 @@ export default function DemographicsPage() {
         senior: 0, pwd: 0, soloParent: 0, fourPs: 0
     });
 
-    // NEW: State for Age Brackets
+    // State for Age Brackets
     const [ageData, setAgeData] = useState([
         { name: '0-14 (Children)', count: 0 },
         { name: '15-30 (Youth/SK)', count: 0 },
@@ -210,6 +300,9 @@ export default function DemographicsPage() {
                         <p className="text-gray-500 text-sm">Barangay population and service analytics</p>
                     </div>
 
+                    {/* NEW: Staff AI Assistant Module */}
+                    <DemographicsAiAssistant />
+
                     {/* Row 1: Gender Doughnut & Welfare Bar Chart */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                         
@@ -288,7 +381,7 @@ export default function DemographicsPage() {
                         {/* AI Assistant Queries (Area Chart) */}
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                             <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-sm font-bold text-gray-800">AI Assistant Activity ({currentYear})</h2>
+                                <h2 className="text-sm font-bold text-gray-800">Resident AI Activity ({currentYear})</h2>
                                 <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">
                                     Total Queries: {totalAiQueries.toLocaleString()}
                                 </span>
@@ -299,7 +392,7 @@ export default function DemographicsPage() {
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} allowDecimals={false} domain={['dataMin', 'dataMax + 2']} />
-                                        <Tooltip formatter={(value: any) => [`${value} Queries`, 'AI Assistant']} />
+                                        <Tooltip formatter={(value: any) => [`${value} Queries`, 'Resident AI']} />
                                         <Area type="monotone" dataKey="ai" stroke="#a855f7" fill="#f3e8ff" strokeWidth={3} activeDot={{ r: 6, fill: '#a855f7', strokeWidth: 0 }} />
                                     </AreaChart>
                                 </ResponsiveContainer>

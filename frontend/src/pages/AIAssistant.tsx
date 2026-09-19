@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useContext } from "react";
 import PageHeader from "../components/header";
 import Sidebar from "../components/sidebar";
 import { AuthContext } from "../components/AuthContext";
+import ReactMarkdown from 'react-markdown';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -54,7 +55,7 @@ export default function AiAssistant() {
 
         const token = localStorage.getItem('access'); 
         
-        // --- THE FIX: Build headers dynamically ---
+        // --- Build headers dynamically ---
         const headers: HeadersInit = {
             'Content-Type': 'application/json'
         };
@@ -145,12 +146,29 @@ export default function AiAssistant() {
                                             )}
 
                                             {/* Text Bubble */}
-                                            <div className={`max-w-[75%] px-4 py-3 rounded-lg text-sm shadow-sm ${
+                                            <div className={`max-w-[85%] px-4 py-3 rounded-lg text-sm shadow-sm ${
                                                 msg.sender === 'user' 
                                                 ? 'bg-[#1c4ed8] text-white rounded-br-none' 
                                                 : 'bg-white border border-gray-200 text-gray-700 rounded-bl-none'
                                             }`}>
-                                                {msg.text}
+                                                {msg.sender === 'bot' ? (
+                                                    <ReactMarkdown 
+                                                        components={{
+                                                            p: ({node, ...props}) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+                                                            ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-2 space-y-1" {...props} />,
+                                                            ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-2 space-y-1" {...props} />,
+                                                            li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+                                                            strong: ({node, ...props}) => <strong className="font-bold text-gray-900" {...props} />,
+                                                            h1: ({node, ...props}) => <h1 className="text-lg font-bold mb-2 text-gray-900 mt-3" {...props} />,
+                                                            h2: ({node, ...props}) => <h2 className="text-base font-bold mb-2 text-gray-900 mt-3" {...props} />,
+                                                            h3: ({node, ...props}) => <h3 className="text-sm font-bold mb-1 text-gray-900 mt-2" {...props} />,
+                                                        }}
+                                                    >
+                                                        {msg.text}
+                                                    </ReactMarkdown>
+                                                ) : (
+                                                    msg.text
+                                                )}
                                             </div>
                                         </div>
                                     ))}

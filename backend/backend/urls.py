@@ -45,6 +45,7 @@ from api.views import (
     EventViewSet,
     OfficialDocumentViewSet,
     IncidentReportViewSet, # NEW
+    StaffDemographicsAiView,
 
     # Admin Hub & Audit Logs
     AdminAuditLogAPIView,
@@ -99,6 +100,7 @@ urlpatterns = [
     path('api/dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('api/calendar-feed/', calendar_feed, name='calendar-feed'),
     path('api/system/settings/', SystemSettingsView.as_view(), name='system-settings'),
+    path('api/reports/demographics-ai/', StaffDemographicsAiView.as_view(), name='demographics-ai'),
 
     # --- Admin Hub & Audit Logs ---
     path('api/admin/audit-logs/', AdminAuditLogAPIView.as_view(), name='audit-logs'),

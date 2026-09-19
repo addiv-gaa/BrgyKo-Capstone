@@ -10,7 +10,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 import google.generativeai as genai
 import openpyxl
-
+from datetime import date
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import OrderingFilter
@@ -28,7 +28,7 @@ from rest_framework import permissions
 
 from django.shortcuts import render
 from django.contrib.auth.models import User
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics
 
@@ -781,6 +781,69 @@ class ResidentViewSet(viewsets.ModelViewSet):
         wb.save(response)
         
         return response
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def bulk_delete(self, request):
+        try:
+            # Expecting a payload like: {"ids": [1, 2, 3, 4]}
+            ids_to_delete = request.data.get('ids', [])
+            
+            if not ids_to_delete or not isinstance(ids_to_delete, list):
+                return Response(
+                    {"error": "Please provide a valid list of resident IDs to delete."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Filter the residents and delete them
+            residents = Resident.objects.filter(id__in=ids_to_delete)
+            deleted_count, _ = residents.delete()
+
+            return Response(
+                {"message": f"Successfully deleted {deleted_count} residents."}, 
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return Response(
+                {"error": f"An error occurred during bulk deletion: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def bulk_update_welfare(self, request):
+        try:
+            ids_to_update = request.data.get('ids', [])
+            flags = request.data.get('flags', {})
+            
+            if not ids_to_update or not isinstance(ids_to_update, list):
+                return Response(
+                    {"error": "Please provide a valid list of resident IDs to update."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Securely filter the incoming flags to ensure only welfare booleans are updated
+            allowed_fields = ['is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent']
+            update_data = {key: bool(value) for key, value in flags.items() if key in allowed_fields}
+
+            if not update_data:
+                return Response(
+                    {"error": "No valid welfare flags provided to update."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Perform the mass update (this executes as a single SQL query)
+            updated_count = Resident.objects.filter(id__in=ids_to_update).update(**update_data)
+
+            return Response(
+                {"message": f"Successfully updated welfare statuses for {updated_count} residents."}, 
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return Response(
+                {"error": f"An error occurred during bulk update: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # ==========================================
@@ -982,6 +1045,105 @@ class DashboardStatsView(APIView):
         }
         return Response(stats)
 
+def get_demographics_snapshot():
+    total_residents = Resident.objects.count()
+    if total_residents == 0:
+        return "No residents currently registered in the database."
+
+    # Sex distribution
+    sex_counts = dict(Resident.objects.values_list('sex').annotate(count=Count('id')))
+
+    # Purok distribution
+    purok_counts = dict(Resident.objects.values_list('purok').annotate(count=Count('id')))
+
+    # Welfare statistics
+    welfare_stats = Resident.objects.aggregate(
+        four_ps=Count('id', filter=Q(is_4ps_beneficiary=True)),
+        seniors=Count('id', filter=Q(is_senior_citizen=True)),
+        pwd=Count('id', filter=Q(is_pwd=True)),
+        solo_parents=Count('id', filter=Q(is_solo_parent=True)),
+    )
+
+    # Age brackets
+    today = date.today()
+    # Age calculation approximations based on birth_date
+    children = Resident.objects.filter(birth_date__gt=today.replace(year=today.year - 15)).count()
+    youth = Resident.objects.filter(
+        birth_date__lte=today.replace(year=today.year - 15),
+        birth_date__gt=today.replace(year=today.year - 31)
+    ).count()
+    seniors_age = Resident.objects.filter(birth_date__lte=today.replace(year=today.year - 60)).count()
+    adults = total_residents - (children + youth + seniors_age)
+
+    return f"""
+    BARANGAY DEMOGRAPHIC SNAPSHOT (LIVE DATA):
+    - Total Registered Residents: {total_residents}
+    - Gender Breakdown: {sex_counts}
+    - Distribution by Purok / Zone: {purok_counts}
+    - Age Group Distribution:
+        * Children (0-14): {children}
+        * Youth / SK Age (15-30): {youth}
+        * Working-age Adults (31-59): {max(adults, 0)}
+        * Senior Citizens (60+): {seniors_age}
+    - Social Welfare Programs & Vulnerabilities:
+        * 4Ps Beneficiaries: {welfare_stats['four_ps']}
+        * PWD (Persons with Disabilities): {welfare_stats['pwd']}
+        * Solo Parents: {welfare_stats['solo_parents']}
+        * Tagged Senior Citizens: {welfare_stats['seniors']}
+    """
+
+class StaffDemographicsAiView(APIView):
+    # Only authenticated users with staff tokens can access this endpoint
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        
+        # Verify staff role
+        try:
+            role = user.otp_profile.role.upper()
+        except Exception:
+            role = 'RESIDENT'
+
+        authorized_roles = ['ADMIN', 'STAFF', 'SECRETARY', 'CAPTAIN']
+        if role not in authorized_roles:
+            raise PermissionDenied("Access denied. Demographics intelligence is restricted to administrative staff.")
+
+        user_prompt = request.data.get('prompt')
+        if not user_prompt:
+            return Response({"error": "Prompt is required."}, status=400)
+
+        try:
+            # Generate the live context
+            demographics_data = get_demographics_snapshot()
+
+            system_instruction = f"""
+            You are the Barangay Executive Data Analyst for Barangay officials (Captains and Secretaries).
+            Your purpose is to answer analytical, statistical, and operational questions based strictly on the barangay census data provided.
+
+            {demographics_data}
+
+            Guidelines:
+            1. Calculate ratios, percentages, and comparisons accurately based on the snapshot.
+            2. Offer actionable community planning insights when requested (e.g., resource allocation per Purok, healthcare drives for seniors).
+            3. Maintain a formal, executive, objective tone.
+            4. If asked about specific personal details of individuals, state that individual PII is strictly protected and cannot be retrieved.
+            """
+
+            model = genai.GenerativeModel(
+                model_name="gemini-3.1-flash-lite",
+                system_instruction=system_instruction
+            )
+            chat_response = model.generate_content(user_prompt)
+
+            return Response({"reply": chat_response.text})
+
+        except Exception as e:
+            print(f"Staff AI Analytics Error: {e}")
+            return Response(
+                {"error": "Failed to analyze demographic data. Please try again later."},
+                status=500
+            )
 
 class AiAssistantView(APIView):
     permission_classes = [AllowAny]
@@ -1027,6 +1189,8 @@ class AiAssistantView(APIView):
                 {"error": "The AI is currently unavailable. Please try again later."}, 
                 status=503
             )
+
+
 
 class DocumentPagination(PageNumberPagination):
     page_size = 10

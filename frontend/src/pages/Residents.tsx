@@ -68,7 +68,20 @@ export default function ResidentPage() {
     // Upload & Export State
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [isExporting, setIsExporting] = useState(false); // NEW EXPORT STATE
+    const [isExporting, setIsExporting] = useState(false);
+
+    // NEW: Bulk Selection & Bulk Update State
+    const [selectedRows, setSelectedRows] = useState<number[]>([]);
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+    
+    const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
+    const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+    const [bulkUpdateFlags, setBulkUpdateFlags] = useState({
+        is_4ps_beneficiary: false,
+        is_senior_citizen: false,
+        is_pwd: false,
+        is_solo_parent: false
+    });
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('access'); 
@@ -78,13 +91,13 @@ export default function ResidentPage() {
         };
     };
 
-    // We fetch ALL residents once, then filter instantly in the frontend
     const fetchResidents = async () => {
         try {
             const response = await fetch(`${API_URL}/api/residents/`, { headers: getAuthHeaders() });
             if (response.ok) {
                 const data = await response.json();
                 setResidents(data.results || data); 
+                setSelectedRows([]); // Clear selections on fetch
             }
         } catch (error) {
             console.error("Network error fetching residents:", error);
@@ -111,6 +124,83 @@ export default function ResidentPage() {
         fetchHouseholdsForDropdown();
         fetchResidents();
     }, []);
+
+    // --- BULK SELECTION HANDLERS ---
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            setSelectedRows(filteredResidents.map(res => res.id));
+        } else {
+            setSelectedRows([]);
+        }
+    };
+
+    const handleSelectRow = (id: number) => {
+        setSelectedRows(prev => 
+            prev.includes(id) ? prev.filter(rowId => rowId !== id) : [...prev, id]
+        );
+    };
+
+    // Bulk Delete
+    const handleBulkDelete = async () => {
+        if (selectedRows.length === 0) return;
+        
+        if (!window.confirm(`Are you sure you want to completely delete these ${selectedRows.length} residents? This action cannot be undone.`)) {
+            return;
+        }
+
+        setIsBulkDeleting(true);
+        try {
+            const response = await fetch(`${API_URL}/api/residents/bulk_delete/`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ ids: selectedRows })
+            });
+
+            if (response.ok) {
+                fetchResidents();
+            } else {
+                const errorData = await response.json();
+                alert(errorData.error || "Failed to bulk delete residents.");
+            }
+        } catch (error) {
+            console.error("Network error during bulk delete:", error);
+            alert("A network error occurred.");
+        } finally {
+            setIsBulkDeleting(false);
+        }
+    };
+
+    // Bulk Update Welfare
+    const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedRows.length === 0) return;
+
+        setIsBulkUpdating(true);
+        try {
+            const response = await fetch(`${API_URL}/api/residents/bulk_update_welfare/`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ ids: selectedRows, flags: bulkUpdateFlags })
+            });
+
+            if (response.ok) {
+                setShowBulkUpdateModal(false);
+                setSelectedRows([]); // Reset selection
+                // Reset flags for next time
+                setBulkUpdateFlags({ is_4ps_beneficiary: false, is_senior_citizen: false, is_pwd: false, is_solo_parent: false });
+                fetchResidents();
+            } else {
+                const errorData = await response.json();
+                alert(errorData.error || "Failed to update welfare statuses.");
+            }
+        } catch (error) {
+            console.error("Network error during bulk update:", error);
+            alert("A network error occurred.");
+        } finally {
+            setIsBulkUpdating(false);
+        }
+    };
+
 
     // --- Excel Upload Handler ---
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,7 +229,7 @@ export default function ResidentPage() {
                     console.warn("Import Errors:", data.errors);
                 }
                 alert(alertMsg);
-                fetchResidents(); // Instantly refresh the table!
+                fetchResidents();
             } else {
                 alert(data.error || "Failed to import file.");
             }
@@ -148,39 +238,30 @@ export default function ResidentPage() {
             alert("Network error occurred during upload.");
         } finally {
             setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input so you can upload the same file again
+            if (fileInputRef.current) fileInputRef.current.value = ''; 
         }
     };
 
-    // --- NEW: Excel Export Handler ---
+    // --- Excel Export Handler ---
     const handleExportExcel = async () => {
         setIsExporting(true);
-        
         try {
-            // Using getAuthHeaders but overriding Content-Type since we expect a blob response
             const response = await fetch(`${API_URL}/api/residents/export_excel/`, {
                 method: 'GET',
                 headers: getAuthHeaders()
             });
 
-            if (!response.ok) {
-                throw new Error("Failed to export registry");
-            }
+            if (!response.ok) throw new Error("Failed to export registry");
 
-            // 1. Convert the file stream to a Blob
             const blob = await response.blob();
-
-            // 2. Create a temporary invisible link to trigger the download
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             
-            // Adding a timestamp to the file name
             const timestamp = new Date().toISOString().split('T')[0];
             link.setAttribute('download', `Resident_Registry_Export_${timestamp}.xlsx`);
             document.body.appendChild(link);
             
-            // 3. Click the link and clean it up immediately
             link.click();
             link.parentNode?.removeChild(link);
             window.URL.revokeObjectURL(url);
@@ -259,19 +340,16 @@ export default function ResidentPage() {
     // Execute filter instantly
     const filteredResidents = useMemo(() => {
         return residents.filter(res => {
-            // Text Search
             const searchStr = searchQuery.toLowerCase();
             const matchesSearch = !searchQuery || 
                 res.first_name.toLowerCase().includes(searchStr) || 
                 res.last_name.toLowerCase().includes(searchStr) ||
                 res.purok.toLowerCase().includes(searchStr);
 
-            // Dropdowns
             const matchesPurok = !filters.purok || res.purok === filters.purok;
             const matchesSex = !filters.sex || res.sex === filters.sex;
             const matchesCivil = !filters.civil_status || res.civil_status === filters.civil_status;
 
-            // Age Bracket
             let matchesAge = true;
             if (filters.age_bracket) {
                 const age: any = calculateAge(res.birth_date);
@@ -285,7 +363,6 @@ export default function ResidentPage() {
                 }
             }
 
-            // Checkboxes
             const matches4ps = !filters.is_4ps || res.is_4ps_beneficiary;
             const matchesSenior = !filters.is_senior || res.is_senior_citizen;
             const matchesPwd = !filters.is_pwd || res.is_pwd;
@@ -303,7 +380,6 @@ export default function ResidentPage() {
                 <Sidebar />
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     
-                    {/* Page Header & Actions */}
                     <div className="mb-6 flex justify-between items-end">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Resident Information</h1>
@@ -311,85 +387,74 @@ export default function ResidentPage() {
                         </div>
                         
                         <div className="flex gap-3">
-                            {/* Hidden File Input */}
-                            <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                onChange={handleFileUpload} 
-                                accept=".xlsx, .xls" 
-                                className="hidden" 
-                            />
+                            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls" className="hidden" />
                             
-                            {/* Import Button */}
-                            <button 
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploading}
-                                className="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
-                            >
+                            <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50">
                                 {isUploading ? (
                                     <>
-                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
+                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                         Importing...
                                     </>
-                                ) : (
-                                    <span>Import Excel</span>
-                                )}
+                                ) : <span>Import Excel</span>}
                             </button>
 
-                            {/* Export Button */}
-                            <button 
-                                onClick={handleExportExcel}
-                                disabled={isExporting}
-                                className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
-                            >
+                            <button onClick={handleExportExcel} disabled={isExporting} className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50">
                                 {isExporting ? (
                                     <>
-                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
+                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                         Exporting...
                                     </>
                                 ) : (
-                                    <>
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                        </svg>
-                                        <span>Export Excel</span>
-                                    </>
+                                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg><span>Export Excel</span></>
                                 )}
                             </button>
 
-                            <button 
-                                onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }}
-                                className="bg-[#1e40af] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors flex items-center gap-2 shadow-sm"
-                            >
+                            <button onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }} className="bg-[#1e40af] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors flex items-center gap-2 shadow-sm">
                                 <span>+ Add Resident</span>
                             </button>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6 relative">
                         
+                        {/* FLOATING BULK ACTION BAR */}
+                        {selectedRows.length > 0 && (
+                            <div className="absolute top-0 left-0 w-full bg-blue-600 text-white px-6 py-3 flex justify-between items-center z-10 animate-fade-in-down shadow-md">
+                                <div className="font-semibold flex items-center gap-2">
+                                    <span className="bg-white text-blue-700 px-2 py-0.5 rounded-md text-xs">{selectedRows.length}</span> 
+                                    Residents Selected
+                                </div>
+                                <div className="flex gap-3 items-center">
+                                    <button 
+                                        onClick={() => setShowBulkUpdateModal(true)}
+                                        className="bg-white text-blue-700 hover:bg-blue-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                        Update Welfare
+                                    </button>
+                                    <button 
+                                        onClick={handleBulkDelete}
+                                        disabled={isBulkDeleting}
+                                        className="bg-white text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        {isBulkDeleting ? 'Deleting...' : 'Delete Selected'}
+                                    </button>
+                                    <div className="w-px h-6 bg-blue-400 mx-1"></div>
+                                    <button onClick={() => setSelectedRows([])} className="text-white hover:text-blue-200 text-sm font-medium transition-colors">
+                                        Clear Selection
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Search & Filter Trigger Bar */}
                         <div className="p-4 border-b border-gray-200 flex flex-wrap gap-3 justify-between items-center bg-white">
                             <div className="relative flex-1 max-w-2xl">
                                 <svg className="w-4 h-4 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                <input 
-                                    type="text" 
-                                    placeholder="Search by name or purok..." 
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
-                                />
+                                <input type="text" placeholder="Search by name or purok..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors" />
                             </div>
-                            <button 
-                                onClick={() => setShowFilters(!showFilters)}
-                                className={`px-4 py-2 rounded-lg text-sm font-semibold border flex items-center gap-2 transition-colors ${showFilters || activeFilterCount > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                            >
+                            <button onClick={() => setShowFilters(!showFilters)} className={`px-4 py-2 rounded-lg text-sm font-semibold border flex items-center gap-2 transition-colors ${showFilters || activeFilterCount > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                                 Filters {activeFilterCount > 0 && <span className="bg-blue-600 text-white rounded-full px-2 py-0.5 text-xs">{activeFilterCount}</span>}
                             </button>
@@ -483,6 +548,14 @@ export default function ResidentPage() {
                             <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-600 font-bold uppercase tracking-wider">
+                                        <th className="px-6 py-4 w-10 sticky left-0 bg-gray-50 z-10">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded text-blue-600 cursor-pointer"
+                                                checked={filteredResidents.length > 0 && selectedRows.length === filteredResidents.length}
+                                                onChange={handleSelectAll}
+                                            />
+                                        </th>
                                         <th className="px-6 py-4">Inhabitant Type</th>
                                         <th className="px-6 py-4">Last Name</th>
                                         <th className="px-6 py-4">First Name</th>
@@ -505,55 +578,66 @@ export default function ResidentPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 bg-white">
-                                    {filteredResidents.length > 0 ? filteredResidents.map((resident) => (
-                                        <tr key={resident.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4 text-sm text-gray-700">{resident.inhabitant_type || '-'}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-gray-900">{resident.last_name}</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-800">{resident.first_name}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.middle_name || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.suffix || '-'}</td>
-                                            
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.birth_place || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.birth_date || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.sex}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.civil_status}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.citizenship || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.occupation || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.contact_number || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.email_address || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.highest_education || '-'}</td>
-                                            
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_first_name || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_middle_name || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_last_name || '-'}</td>
-                                            
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-wrap gap-1 w-32">
-                                                    {resident.is_4ps_beneficiary && <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">4Ps</span>}
-                                                    {resident.is_senior_citizen && <span className="bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-orange-200">Senior</span>}
-                                                    {resident.is_pwd && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-200">PWD</span>}
-                                                    {resident.is_solo_parent && <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-green-200">Solo Parent</span>}
-                                                    {!resident.is_4ps_beneficiary && !resident.is_senior_citizen && !resident.is_pwd && !resident.is_solo_parent && <span className="text-gray-400 text-xs">-</span>}
-                                                </div>
-                                            </td>
+                                    {filteredResidents.length > 0 ? filteredResidents.map((resident) => {
+                                        const isSelected = selectedRows.includes(resident.id);
+                                        return (
+                                            <tr key={resident.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}>
+                                                <td className="px-6 py-4 sticky left-0 bg-inherit z-10">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="w-4 h-4 rounded text-blue-600 cursor-pointer"
+                                                        checked={isSelected}
+                                                        onChange={() => handleSelectRow(resident.id)}
+                                                    />
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-700">{resident.inhabitant_type || '-'}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-gray-900">{resident.last_name}</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-gray-800">{resident.first_name}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.middle_name || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.suffix || '-'}</td>
+                                                
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.birth_place || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.birth_date || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.sex}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.civil_status}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.citizenship || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.occupation || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.contact_number || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.email_address || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.highest_education || '-'}</td>
+                                                
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_first_name || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_middle_name || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_last_name || '-'}</td>
+                                                
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-wrap gap-1 w-32">
+                                                        {resident.is_4ps_beneficiary && <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">4Ps</span>}
+                                                        {resident.is_senior_citizen && <span className="bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-orange-200">Senior</span>}
+                                                        {resident.is_pwd && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-200">PWD</span>}
+                                                        {resident.is_solo_parent && <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-green-200">Solo Parent</span>}
+                                                        {!resident.is_4ps_beneficiary && !resident.is_senior_citizen && !resident.is_pwd && !resident.is_solo_parent && <span className="text-gray-400 text-xs">-</span>}
+                                                    </div>
+                                                </td>
 
-                                            <td className="px-6 py-4 text-center sticky right-0 bg-white shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.05)] group-hover:bg-gray-50">
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button onClick={() => { setModalMode('view'); setSelectedResident(resident as any); setIsModalOpen(true); }} className="p-1.5 border border-gray-200 rounded text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors" title="View Details">
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                    </button>
-                                                    <button onClick={() => { setModalMode('edit'); setSelectedResident(resident as any); setIsModalOpen(true); }} className="p-1.5 border border-gray-200 rounded text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors" title="Edit Details">
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                                    </button>
-                                                    <button className="p-1.5 bg-[#ef4444] text-white rounded hover:bg-red-600 shadow-sm transition-colors" title="Delete Resident" onClick={() => handleDeleteResident(resident.id)}>
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )) : (
+                                                <td className="px-6 py-4 text-center sticky right-0 bg-inherit shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.05)]">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <button onClick={() => { setModalMode('view'); setSelectedResident(resident as any); setIsModalOpen(true); }} className="p-1.5 border border-gray-200 rounded text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors bg-white" title="View Details">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                        </button>
+                                                        <button onClick={() => { setModalMode('edit'); setSelectedResident(resident as any); setIsModalOpen(true); }} className="p-1.5 border border-gray-200 rounded text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors bg-white" title="Edit Details">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                        </button>
+                                                        <button className="p-1.5 bg-[#ef4444] text-white rounded hover:bg-red-600 shadow-sm transition-colors" title="Delete Resident" onClick={() => handleDeleteResident(resident.id)}>
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    }) : (
                                         <tr>
-                                            <td colSpan={19} className="px-6 py-8 text-center text-gray-500 italic">
+                                            <td colSpan={20} className="px-6 py-8 text-center text-gray-500 italic">
                                                 No residents match the selected filters.
                                             </td>
                                         </tr>
@@ -564,6 +648,57 @@ export default function ResidentPage() {
                     </div>
                 </main>
             </div>
+
+            {/* --- NEW: BULK UPDATE MODAL --- */}
+            {showBulkUpdateModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white">
+                            <h3 className="text-lg font-bold text-gray-900">Bulk Update Welfare</h3>
+                            <button onClick={() => setShowBulkUpdateModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleBulkUpdateSubmit}>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+                                    Set the welfare statuses for the <strong className="text-blue-600">{selectedRows.length} selected residents</strong>. This will overwrite their current flags.
+                                </p>
+                                
+                                <label className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                                    <input type="checkbox" checked={bulkUpdateFlags.is_4ps_beneficiary} onChange={e => setBulkUpdateFlags({...bulkUpdateFlags, is_4ps_beneficiary: e.target.checked})} className="w-4 h-4 text-red-600 rounded cursor-pointer" />
+                                    <span className="font-semibold text-gray-800">4Ps Beneficiary</span>
+                                </label>
+                                <label className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                                    <input type="checkbox" checked={bulkUpdateFlags.is_senior_citizen} onChange={e => setBulkUpdateFlags({...bulkUpdateFlags, is_senior_citizen: e.target.checked})} className="w-4 h-4 text-orange-600 rounded cursor-pointer" />
+                                    <span className="font-semibold text-gray-800">Senior Citizen</span>
+                                </label>
+                                <label className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                                    <input type="checkbox" checked={bulkUpdateFlags.is_pwd} onChange={e => setBulkUpdateFlags({...bulkUpdateFlags, is_pwd: e.target.checked})} className="w-4 h-4 text-blue-600 rounded cursor-pointer" />
+                                    <span className="font-semibold text-gray-800">PWD</span>
+                                </label>
+                                <label className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                                    <input type="checkbox" checked={bulkUpdateFlags.is_solo_parent} onChange={e => setBulkUpdateFlags({...bulkUpdateFlags, is_solo_parent: e.target.checked})} className="w-4 h-4 text-green-600 rounded cursor-pointer" />
+                                    <span className="font-semibold text-gray-800">Solo Parent</span>
+                                </label>
+                            </div>
+                            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowBulkUpdateModal(false)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-50 transition-colors">
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={isBulkUpdating} className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2">
+                                    {isBulkUpdating ? (
+                                        <>
+                                            <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                            Updating...
+                                        </>
+                                    ) : "Apply Update"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {isModalOpen && (
                 <ResidentModal 
