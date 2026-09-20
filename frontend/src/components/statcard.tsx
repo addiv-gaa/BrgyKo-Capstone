@@ -5,8 +5,8 @@ const StatCard = ({ title, value, icon, bgClass, textClass }: { title: string, v
         {icon}
       </div>
       <div>
-        <p className="text-[13px] text-gray-500 font-medium mb-0.5">{title}</p>
-        <h3 className="text-2xl font-bold text-gray-800 leading-none">{value}</h3>
+        <h3 className="text-[22px] font-bold text-gray-800 leading-none mb-1">{value}</h3>
+        <p className="text-[12px] text-gray-500 font-medium">{title}</p>
       </div>
     </div>
   );

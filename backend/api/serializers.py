@@ -20,6 +20,7 @@ from .models import (
     BarangaySettings,
     ResidentApplication,
     AiQueryStatistic,
+    EmergencyContact,
 )
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -266,6 +267,11 @@ class IncidentReportSerializer(serializers.ModelSerializer):
 class BarangaySettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = BarangaySettings
+        fields = '__all__'
+
+class EmergencyContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmergencyContact
         fields = '__all__'
 
 class AiQueryStatisticSerializer(serializers.ModelSerializer):

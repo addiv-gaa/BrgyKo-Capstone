@@ -1,5 +1,6 @@
 import { useContext } from "react"
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom"
+import DashboardLayout from "./components/DashboardLayout"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
 import NotFound from "./pages/NotFound"
@@ -76,8 +77,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const staffRoles = ['CAPTAIN', 'SECRETARY', 'TREASURER', 'COUNCIL', 'SK', 'TANOD'];
   const isStaff = normalizedRoles.some(role => staffRoles.includes(role));
 
+  const location = useLocation();
+  const noLayoutRoutes = ['/login', '/register', '/logout'];
+  const hideLayout = noLayoutRoutes.includes(location.pathname);
+
   // If maintenance mode is active AND the user is NOT staff, lock them out with the matching style card
-  if (settings?.maintenance_mode && !isStaff) {
+  // BUT allow access to login/logout pages so staff can actually login to disable it
+  if (settings?.maintenance_mode && !isStaff && !hideLayout) {
       return (
           <div className="h-screen w-full flex items-center justify-center bg-gray-100 p-8 z-50 fixed inset-0 font-sans">
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-3 max-w-lg w-full shadow-sm">
@@ -91,7 +97,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       );
   }
 
-  return <>{children}</>;
+  if (hideLayout) {
+      return <>{children}</>;
+  }
+
+  return <DashboardLayout>{children}</DashboardLayout>;
 }
 
 function App() {

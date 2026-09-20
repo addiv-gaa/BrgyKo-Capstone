@@ -1,5 +1,6 @@
 from django.conf import settings
 import random
+import math
 from itertools import chain
 from operator import attrgetter
 from django.http import HttpResponse
@@ -50,6 +51,7 @@ from .models import (
     IncidentReport,
     BarangaySettings,
     ResidentApplication,
+    EmergencyContact,
 )
 
 from .serializers import (
@@ -70,6 +72,7 @@ from .serializers import (
     BarangaySettingsSerializer,
     ResidentApplicationSerializer,
     AiQueryStatisticSerializer,
+    EmergencyContactSerializer,
 )
 
 genai.configure(api_key=settings.GOOGLE_API_KEY)
@@ -578,10 +581,20 @@ class HouseholdViewSet(viewsets.ModelViewSet):
     search_fields = ['address', 'residents__first_name', 'residents__last_name']
     filterset_fields = ['housing_status', 'dwelling_type']
 
+class ResidentPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+
+    def paginate_queryset(self, queryset, request, view=None):
+        if request.query_params.get('paginate', '').lower() in ['false', '0', 'no']:
+            return None
+        return super().paginate_queryset(queryset, request, view)
+
 class ResidentViewSet(viewsets.ModelViewSet):
     queryset = Resident.objects.select_related('household').all()
     serializer_class = ResidentSerializer
-    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
+    pagination_class = ResidentPagination
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend, OrderingFilter]
     search_fields = ['first_name', 'last_name', 'purok']
     filterset_fields = [
         'purok', 
@@ -590,8 +603,13 @@ class ResidentViewSet(viewsets.ModelViewSet):
         'is_4ps_beneficiary', 
         'is_senior_citizen', 
         'is_pwd', 
-        'is_solo_parent'
+        'is_solo_parent',
+        'sex',
+        'civil_status',
+        'inhabitant_type'
     ]
+    ordering_fields = ['first_name', 'last_name', 'purok', 'birth_date', 'id']
+    ordering = ['-id']
 
     @action(detail=False, methods=['post'], url_path='import-excel')
     def import_excel(self, request):
@@ -782,34 +800,21 @@ class ResidentViewSet(viewsets.ModelViewSet):
         
         return response
     
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], url_path='bulk_delete')
     def bulk_delete(self, request):
         try:
-            # Expecting a payload like: {"ids": [1, 2, 3, 4]}
             ids_to_delete = request.data.get('ids', [])
-            
             if not ids_to_delete or not isinstance(ids_to_delete, list):
-                return Response(
-                    {"error": "Please provide a valid list of resident IDs to delete."}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Filter the residents and delete them
-            residents = Resident.objects.filter(id__in=ids_to_delete)
-            deleted_count, _ = residents.delete()
-
-            return Response(
-                {"message": f"Successfully deleted {deleted_count} residents."}, 
-                status=status.HTTP_200_OK
-            )
+                return Response({"error": "Please provide a valid list of resident IDs to delete."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            # Perform deletion
+            deleted_count, _ = Resident.objects.filter(id__in=ids_to_delete).delete()
+            return Response({"message": f"Successfully deleted {deleted_count} residents."}, status=status.HTTP_204_NO_CONTENT)
             
         except Exception as e:
-            return Response(
-                {"error": f"An error occurred during bulk deletion: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"error": f"An error occurred during bulk deletion: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], url_path='bulk_update_welfare')
     def bulk_update_welfare(self, request):
         try:
             ids_to_update = request.data.get('ids', [])
@@ -823,7 +828,10 @@ class ResidentViewSet(viewsets.ModelViewSet):
 
             # Securely filter the incoming flags to ensure only welfare booleans are updated
             allowed_fields = ['is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent']
-            update_data = {key: bool(value) for key, value in flags.items() if key in allowed_fields}
+            update_data = {}
+            for key, value in flags.items():
+                if key in allowed_fields and value is not None:
+                    update_data[key] = bool(value)
 
             if not update_data:
                 return Response(
@@ -1034,12 +1042,19 @@ class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated] 
 
     def get(self, request):
+        welfare_count = Resident.objects.filter(
+            Q(is_4ps_beneficiary=True) | 
+            Q(is_senior_citizen=True) | 
+            Q(is_pwd=True) | 
+            Q(is_solo_parent=True)
+        ).count()
+
         stats = {
             "total_residents": Resident.objects.count(),
             "certs_this_month": CertificateRequest.objects.count(),
             "pending_reservations": Reservation.objects.filter(status='PENDING').count(), 
             "pending_documents": CertificateRequest.objects.filter(status='PENDING').count(),
-            "welfare_beneficiaries": 430, 
+            "welfare_beneficiaries": welfare_count, 
             "sk_programs": 6,            
             "chatbot_queries": AiQueryStatistic.objects.count(),
         }
@@ -1238,23 +1253,69 @@ class AdminAuditLogAPIView(APIView):
         if role not in ['CAPTAIN', 'SECRETARY']:
             raise PermissionDenied("Only Captains and Secretaries can view audit logs.")
 
-        # 1. Fetch the logs from all tracked models
-        resident_logs = Resident.history.all()[:30]
-        cert_logs = CertificateRequest.history.all()[:30]
-        incident_logs = IncidentReport.history.all()[:30]
+        # Query Parameters
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 50))
+        export = request.GET.get('export', 'false').lower() == 'true'
         
-        # --- NEW: Fetch Staff/User Profile Logs ---
-        profile_logs = UserProfile.history.all()[:30]
+        # Filters
+        action_filter = request.GET.get('action', '')
+        user_filter = request.GET.get('user', '')
+        model_filter = request.GET.get('model', '')
+        start_date = request.GET.get('start_date', '')
+        end_date = request.GET.get('end_date', '')
 
-        # 2. Add profile_logs to the chain
+        # Action mapping to simple-history types
+        action_map_reverse = {'Created': '+', 'Updated': '~', 'Deleted': '-'}
+
+        def apply_filters(queryset):
+            if start_date:
+                queryset = queryset.filter(history_date__gte=start_date)
+            if end_date:
+                # Add 1 day to include the entire end_date
+                try:
+                    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                    queryset = queryset.filter(history_date__lt=end_date_obj)
+                except ValueError:
+                    pass
+            if action_filter and action_filter in action_map_reverse:
+                queryset = queryset.filter(history_type=action_map_reverse[action_filter])
+            if user_filter:
+                queryset = queryset.filter(history_user__username__icontains=user_filter)
+            return queryset
+
+        # 1. Fetch the logs from all tracked models based on model_filter
+        querysets = []
+        if not model_filter or model_filter == 'Resident':
+            querysets.append(apply_filters(Resident.history.all()))
+        if not model_filter or model_filter == 'CertificateRequest':
+            querysets.append(apply_filters(CertificateRequest.history.all()))
+        if not model_filter or model_filter == 'IncidentReport':
+            querysets.append(apply_filters(IncidentReport.history.all()))
+        if not model_filter or model_filter == 'UserProfile':
+            querysets.append(apply_filters(UserProfile.history.all()))
+
+        # 2. Combine and sort
         combined_logs = sorted(
-            chain(resident_logs, cert_logs, incident_logs, profile_logs),
+            chain(*querysets),
             key=attrgetter('history_date'),
             reverse=True
-        )[:50]
+        )
+
+        total_logs = len(combined_logs)
+
+        # Apply Pagination if not exporting
+        if not export:
+            start_index = (page - 1) * page_size
+            end_index = start_index + page_size
+            paginated_logs = combined_logs[start_index:end_index]
+            total_pages = math.ceil(total_logs / page_size) if total_logs > 0 else 1
+        else:
+            paginated_logs = combined_logs
+            total_pages = 1
 
         log_data = []
-        for record in combined_logs:
+        for record in paginated_logs:
             action_map = {'+': 'Created', '~': 'Updated', '-': 'Deleted'}
             model_name = record.__class__.__name__.replace('Historical', '')
             
@@ -1266,7 +1327,7 @@ class AdminAuditLogAPIView(APIView):
                     delta = record.diff_against(prev_record)
                     changes = []
                     for change in delta.changes:
-                        changes.append(f"{change.field}: {change.old} ➔ {change.new}")
+                        changes.append(f"{change.field}: {change.old} -> {change.new}")
                     details = " | ".join(changes)
                 else:
                     details = "Updated (No previous record found)"
@@ -1275,7 +1336,6 @@ class AdminAuditLogAPIView(APIView):
             elif record.history_type == '-':
                 details = "Record deleted permanently"
 
-            # Check if this is a UserProfile log so we can display the username being modified
             target_info = f"({record.history_id})"
             if model_name == "UserProfile" and hasattr(record, 'user'):
                 target_info = f"({record.user.username})"
@@ -1285,11 +1345,26 @@ class AdminAuditLogAPIView(APIView):
                 "model": model_name,
                 "action": action_map.get(record.history_type, 'Unknown'),
                 "user": record.history_user.username if record.history_user else "System",
-                "date": record.history_date,
+                "date": record.history_date.isoformat(),
                 "details": details,
             })
 
-        return Response(log_data, status=status.HTTP_200_OK)
+        if export:
+            import csv
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="audit_logs.csv"'
+            writer = csv.writer(response)
+            writer.writerow(['ID', 'Timestamp', 'User', 'Action', 'Model', 'Details'])
+            for log in log_data:
+                writer.writerow([log['id'], log['date'], log['user'], log['action'], log['model'], log['details']])
+            return response
+
+        return Response({
+            'count': total_logs,
+            'num_pages': total_pages,
+            'current_page': page,
+            'results': log_data
+        }, status=status.HTTP_200_OK)
 
 
 class StaffManagementAPIView(APIView):
@@ -1453,3 +1528,12 @@ class AiQueryStatisticViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AiQueryStatistic.objects.all().order_by('-created_at')
     serializer_class = AiQueryStatisticSerializer
     permission_classes = [IsAuthenticated]
+class EmergencyContactViewSet(viewsets.ModelViewSet):
+    queryset = EmergencyContact.objects.all().order_by('category', 'order', 'id')
+    serializer_class = EmergencyContactSerializer
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [permissions.AllowAny()]
+        return [IsStaffGroup()]
+

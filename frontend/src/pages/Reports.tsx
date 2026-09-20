@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import { 
     PieChart, Pie, Cell, 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    LineChart, Line, AreaChart, Area
+    AreaChart, Area
 } from 'recharts';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -160,10 +158,10 @@ export default function DemographicsPage() {
         // 1. Fetch and aggregate resident demographics & ages
         const fetchResidentStats = async () => {
             try {
-                const response = await fetch(`${API_URL}/api/residents/`, { headers: getAuthHeaders() });
+                const response = await fetch(`${API_URL}/api/residents/?paginate=false`, { headers: getAuthHeaders() });
                 if (response.ok) {
                     const data = await response.json();
-                    const residents = data.results || data; 
+                    const residents = Array.isArray(data) ? data : (data.results || []); 
 
                     let maleCount = 0, femaleCount = 0;
                     let seniorCount = 0, pwdCount = 0, soloCount = 0, fourPsCount = 0;
@@ -209,32 +207,13 @@ export default function DemographicsPage() {
             }
         };
 
-        // 2. Fetch Time-Series Data (Certificates & AI Queries)
+        // 2. Fetch Time-Series Data (AI Queries)
         const fetchTimeSeriesData = async () => {
             try {
-                // Fetch endpoints in parallel (Catch AI errors so it doesn't break certs if endpoint differs)
-                const [certResponse, aiResponse] = await Promise.all([
-                    fetch(`${API_URL}/api/manager/certificates/`, { headers: getAuthHeaders() }).catch(() => null),
-                    fetch(`${API_URL}/api/ai-queries/`, { headers: getAuthHeaders() }).catch(() => null)
-                ]);
+                const aiResponse = await fetch(`${API_URL}/api/ai-queries/`, { headers: getAuthHeaders() }).catch(() => null);
 
                 const yearData = getEmptyYearData();
                 const targetYear = new Date().getFullYear(); 
-
-                // Process Certificates & Revenue
-                if (certResponse && certResponse.ok) {
-                    const certData = await certResponse.json();
-                    const certificates = certData.results || certData;
-
-                    certificates.forEach((cert: any) => {
-                        const date = new Date(cert.date_requested);
-                        if (date.getFullYear() === targetYear && cert.status === 'RELEASED') {
-                            const monthIndex = date.getMonth(); 
-                            yearData[monthIndex].certs++;
-                            yearData[monthIndex].revenue += 50; 
-                        }
-                    });
-                }
 
                 // Process AI Queries
                 if (aiResponse && aiResponse.ok) {
@@ -282,16 +261,14 @@ export default function DemographicsPage() {
     const currentYear = new Date().getFullYear();
     
     // Header Totals
-    const totalCertificates = monthlyData.reduce((sum, month) => sum + month.certs, 0);
-    const totalRevenue = monthlyData.reduce((sum, month) => sum + month.revenue, 0);
     const totalAiQueries = monthlyData.reduce((sum, month) => sum + month.ai, 0);
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
             
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
 
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     
@@ -401,50 +378,7 @@ export default function DemographicsPage() {
 
                     </div>
 
-                    {/* Row 3: Certificate Issuances & Revenue */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-sm font-bold text-gray-800">Monthly Certificate Issuances ({currentYear})</h2>
-                                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">
-                                    Total Issued: {totalCertificates.toLocaleString()}
-                                </span>
-                            </div>
-                            <div className="h-48">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} allowDecimals={false} domain={['dataMin', 'dataMax + 5']} />
-                                        <Tooltip formatter={(value: any) => [`${value} Issued`, 'Certificates']} />
-                                        <Line type="monotone" dataKey="certs" stroke="#1d4ed8" strokeWidth={3} dot={{ r: 4, fill: '#1d4ed8', strokeWidth: 0 }} activeDot={{ r: 6 }} />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
 
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-sm font-bold text-gray-800">Certificate Revenue ({currentYear})</h2>
-                                <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">
-                                    Total Revenue: ₱{totalRevenue.toLocaleString()}
-                                </span>
-                            </div>
-                            <div className="h-48">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} tickFormatter={(value) => `₱${value}`} />
-                                        <Tooltip formatter={(value: any) => [`₱${Number(value || 0).toLocaleString()}`, 'Revenue']} cursor={{ fill: '#f9fafb' }} />
-                                        <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                    </div>
                 </main>
             </div>
         </div>

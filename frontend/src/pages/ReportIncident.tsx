@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
-
 const API_URL = import.meta.env.VITE_API_URL;
 
 // UPDATED INTERFACE: Matched fields to Django model
@@ -162,7 +159,7 @@ export default function ReportIncident() {
             case 'RESOLVED':
                 return <span className="px-2 py-1 bg-green-100 text-green-800 text-[10px] font-bold uppercase rounded-md border border-green-200">Resolved</span>;
             case 'INVESTIGATING':
-                return <span className="px-2 py-1 bg-blue-100 text-blue-800 text-[10px] font-bold uppercase rounded-md border border-blue-200">Investigating</span>;
+                return <span className="px-2 py-1 bg-green-100 text-green-800 text-[10px] font-bold uppercase rounded-md border border-green-200">Investigating</span>;
             case 'PENDING':
                 return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-[10px] font-bold uppercase rounded-md border border-yellow-200">Pending</span>;
             case 'REJECTED':
@@ -173,11 +170,11 @@ export default function ReportIncident() {
     };
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
 
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
 
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     <div className="max-w-7xl mx-auto space-y-6">
@@ -212,7 +209,7 @@ export default function ReportIncident() {
                                             name="category"
                                             value={formData.category}
                                             onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 bg-white"
                                         >
                                             {INCIDENT_CATEGORIES.map(cat => (
                                                 <option key={cat.id} value={cat.id}>{cat.label}</option>
@@ -231,7 +228,7 @@ export default function ReportIncident() {
                                             onChange={handleChange}
                                             placeholder="e.g., Corner of Rizal St. and Mabini St. near the bakery"
                                             required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm"
+                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 bg-white text-sm"
                                         />
                                     </div>
 
@@ -246,7 +243,7 @@ export default function ReportIncident() {
                                             rows={4}
                                             placeholder="Please describe what happened, who is involved, and any immediate hazards..."
                                             required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm"
+                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 bg-white text-sm"
                                         />
                                     </div>
 
@@ -259,7 +256,7 @@ export default function ReportIncident() {
                                             type="file" 
                                             accept="image/*"
                                             onChange={handlePhotoChange}
-                                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md p-1 bg-white"
+                                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 border border-gray-300 rounded-md p-1 bg-white"
                                         />
                                         <p className="text-[11px] text-gray-400 mt-1">Maximum file size is 5MB. Adding a photo helps tanods quickly assess the situation.</p>
                                     </div>

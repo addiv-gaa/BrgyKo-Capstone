@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import api from "../api";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -87,7 +85,7 @@ export default function TanodDashboard() {
             case 'RESOLVED':
                 return <span className="px-2.5 py-1 bg-green-100 text-green-800 text-xs font-bold uppercase rounded-md border border-green-200">Resolved</span>;
             case 'INVESTIGATING':
-                return <span className="px-2.5 py-1 bg-blue-100 text-blue-800 text-xs font-bold uppercase rounded-md border border-blue-200">Investigating</span>;
+                return <span className="px-2.5 py-1 bg-green-100 text-green-800 text-xs font-bold uppercase rounded-md border border-green-200">Investigating</span>;
             case 'PENDING':
                 return <span className="px-2.5 py-1 bg-yellow-100 text-yellow-800 text-xs font-bold uppercase rounded-md border border-yellow-200 animate-pulse">Pending</span>;
             case 'REJECTED':
@@ -102,11 +100,11 @@ export default function TanodDashboard() {
         : incidents.filter(inc => inc.status === filter);
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
 
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
 
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     <div className="max-w-7xl mx-auto space-y-6">
@@ -128,9 +126,9 @@ export default function TanodDashboard() {
                                 <span className="text-sm font-semibold text-yellow-700 uppercase tracking-wider">Pending</span>
                                 <span className="text-2xl font-bold text-yellow-800 mt-1">{incidents.filter(i => i.status === 'PENDING').length}</span>
                             </div>
-                            <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200 flex flex-col">
-                                <span className="text-sm font-semibold text-blue-700 uppercase tracking-wider">Investigating</span>
-                                <span className="text-2xl font-bold text-blue-800 mt-1">{incidents.filter(i => i.status === 'INVESTIGATING').length}</span>
+                            <div className="bg-green-50 p-4 rounded-lg shadow-sm border border-green-200 flex flex-col">
+                                <span className="text-sm font-semibold text-green-700 uppercase tracking-wider">Investigating</span>
+                                <span className="text-2xl font-bold text-green-800 mt-1">{incidents.filter(i => i.status === 'INVESTIGATING').length}</span>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg shadow-sm border border-green-200 flex flex-col">
                                 <span className="text-sm font-semibold text-green-700 uppercase tracking-wider">Resolved</span>
@@ -148,7 +146,7 @@ export default function TanodDashboard() {
                                         onClick={() => setFilter(status)}
                                         className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                                             filter === status 
-                                            ? 'border-blue-600 text-blue-600 bg-white' 
+                                            ? 'border-green-600 text-green-600 bg-white' 
                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                                         }`}
                                     >
@@ -212,7 +210,7 @@ export default function TanodDashboard() {
                                                     <td className="px-6 py-4 text-right">
                                                         <button 
                                                             onClick={() => setSelectedIncident(incident)}
-                                                            className="text-blue-600 hover:text-blue-900 font-semibold text-xs border border-blue-200 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition-colors"
+                                                            className="text-green-600 hover:text-green-900 font-semibold text-xs border border-green-200 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded transition-colors"
                                                         >
                                                             Review
                                                         </button>
@@ -318,7 +316,7 @@ export default function TanodDashboard() {
                             <button 
                                 onClick={() => handleStatusUpdate('INVESTIGATING')}
                                 disabled={isUpdating || selectedIncident.status === 'INVESTIGATING'}
-                                className="px-4 py-2 bg-blue-100 text-blue-800 text-sm font-semibold rounded-md border border-blue-200 hover:bg-blue-200 disabled:opacity-50 transition-colors"
+                                className="px-4 py-2 bg-green-100 text-green-800 text-sm font-semibold rounded-md border border-green-200 hover:bg-green-200 disabled:opacity-50 transition-colors"
                             >
                                 Mark Investigating
                             </button>

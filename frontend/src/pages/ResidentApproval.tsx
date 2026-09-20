@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
-
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ResidentApprovals() {
@@ -61,11 +58,11 @@ export default function ResidentApprovals() {
     };
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <div className="shrink-0 w-full"><PageHeader /></div>
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
             
             <div className="flex flex-1 overflow-hidden">
-                <div className="shrink-0 h-full"><Sidebar /></div>
+                
                 
                 <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
                     <div className="w-full">
@@ -103,7 +100,7 @@ export default function ResidentApprovals() {
                                                     {resident.id_picture ? (
                                                         <button 
                                                             onClick={() => setSelectedIdImage(resident.id_picture)}
-                                                            className="text-blue-600 hover:underline text-xs font-medium bg-blue-50 px-2.5 py-1 rounded-md"
+                                                            className="text-green-600 hover:underline text-xs font-medium bg-green-50 px-2.5 py-1 rounded-md"
                                                         >
                                                             View ID
                                                         </button>
@@ -266,7 +263,7 @@ export default function ResidentApprovals() {
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
                             placeholder="e.g., ID picture is blurry or name does not match records..."
-                            className="w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none mb-4"
+                            className="w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 outline-none mb-4"
                         />
 
                         <div className="flex justify-end gap-2">

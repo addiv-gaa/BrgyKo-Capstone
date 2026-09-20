@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import os
+
+file_content = """import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import * as L from 'leaflet';
@@ -64,30 +66,6 @@ const createCustomIcon = (props: HouseholdProperties) => {
         html: `<div class="w-4 h-4 rounded-full border-2 border-white shadow-md ${colorClasses}"></div>`,
         iconSize: [16, 16],
         iconAnchor: [8, 8]
-    });
-};
-
-
-const createClusterCustomIcon = function (cluster: any) {
-    const count = cluster.getChildCount();
-    let size = 'h-10 w-10';
-    let border = 'border-4 border-emerald-200/50';
-    let text = 'text-sm';
-    
-    if (count > 50) {
-        size = 'h-14 w-14';
-        border = 'border-[6px] border-emerald-200/50';
-        text = 'text-lg';
-    } else if (count > 20) {
-        size = 'h-12 w-12';
-        border = 'border-[5px] border-emerald-200/50';
-        text = 'text-base';
-    }
-    
-    return L.divIcon({
-        html: `<div class="bg-emerald-600 text-white font-bold ${text} rounded-full ${size} flex items-center justify-center ${border} shadow-lg ring-2 ring-emerald-600 ring-offset-1">${count}</div>`,
-        className: 'custom-marker-cluster',
-        iconSize: L.point(count > 50 ? 56 : (count > 20 ? 48 : 40), count > 50 ? 56 : (count > 20 ? 48 : 40), true),
     });
 };
 
@@ -324,7 +302,7 @@ export default function MappingPage() {
                                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                                 <MapClickHandler />
                                 
-                                <MarkerClusterGroup chunkedLoading maxClusterRadius={60} iconCreateFunction={createClusterCustomIcon}>
+                                <MarkerClusterGroup chunkedLoading maxClusterRadius={60}>
                                     {filteredHouseholds.map((feature) => {
                                         const keyId = feature.id || feature.properties?.id || Math.random();
                                         return (
@@ -504,3 +482,9 @@ export default function MappingPage() {
         </div>
     );
 }
+"""
+
+with open(r'c:\VSCode Projects\Capstone Project\frontend\src\pages\GeoMapping.tsx', 'w', encoding='utf-8') as f:
+    f.write(file_content)
+    
+print("Saved clean file!")

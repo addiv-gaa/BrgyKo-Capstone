@@ -7,6 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 interface User {
     token: string;
     roles: string[];
+    role?: string;
     first_name?: string;
     username?: string;
 }
@@ -41,6 +42,7 @@ interface AuthContextType {
 interface CustomJwtPayload {
     exp?: number;
     roles?: string[];
+    role?: string;
     first_name?: string;
     username?: string;
 }
@@ -71,6 +73,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const decoded = jwtDecode<CustomJwtPayload>(token);
                 setUser({ 
                     roles: decoded.roles || [], 
+                    role: decoded.role,
                     token,
                     first_name: decoded.first_name,
                     username: decoded.username
@@ -102,6 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const decoded = jwtDecode<CustomJwtPayload>(token);
         setUser({ 
             roles: decoded.roles || [], 
+            role: decoded.role,
             token,
             first_name: decoded.first_name,
             username: decoded.username

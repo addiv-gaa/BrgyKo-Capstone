@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
-
 const API_URL = import.meta.env.VITE_API_URL;
 
 // --- Icons ---
@@ -181,18 +178,18 @@ export default function Documents() {
             case 'Ordinance': return 'bg-purple-100 text-purple-700 border-purple-200';
             case 'Resolution': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
             case 'Financial': return 'bg-green-100 text-green-700 border-green-200';
-            case 'Memo': return 'bg-blue-100 text-blue-700 border-blue-200';
+            case 'Memo': return 'bg-green-100 text-green-700 border-green-200';
             case 'EO': return 'bg-red-100 text-red-700 border-red-200';
             default: return 'bg-gray-100 text-gray-700 border-gray-200';
         }
     };
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <div className="shrink-0 w-full"><PageHeader /></div>
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
             
             <div className="flex flex-1 overflow-hidden">
-                <div className="shrink-0 h-full"><Sidebar /></div>
+                
                 
                 <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
                     <div className="w-full">
@@ -212,7 +209,7 @@ export default function Documents() {
                                 </button>
                                 <button 
                                     onClick={() => { setFormMode('upload'); setFormState({title: "", type: "Memo", file: null}); setIsFormModalOpen(true); }}
-                                    className="bg-[#1c4ed8] hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold shadow-sm transition-colors"
+                                    className="bg-[#16a34a] hover:bg-green-800 text-white px-4 py-2 rounded-lg font-semibold shadow-sm transition-colors"
                                 >
                                     + Upload Document
                                 </button>
@@ -229,14 +226,14 @@ export default function Documents() {
                                         placeholder="Search documents by title..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 sm:text-sm"
+                                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-600 sm:text-sm"
                                     />
                                 </div>
                                 <div className="w-full sm:w-48">
                                     <select 
                                         value={filterType} 
                                         onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
-                                        className="block w-full pl-3 pr-10 py-2 border border-gray-300 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-600 sm:text-sm rounded-md"
+                                        className="block w-full pl-3 pr-10 py-2 border border-gray-300 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-600 sm:text-sm rounded-md"
                                     >
                                         <option value="">All Categories</option>
                                         {DOCUMENT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
@@ -246,8 +243,8 @@ export default function Documents() {
                             
                             {/* Bulk Actions Menu (Visible when items selected) */}
                             {selectedIds.length > 0 && (
-                                <div className="flex gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
-                                    <span className="text-sm font-bold text-blue-800 mr-2 self-center">{selectedIds.length} Selected</span>
+                                <div className="flex gap-2 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
+                                    <span className="text-sm font-bold text-green-800 mr-2 self-center">{selectedIds.length} Selected</span>
                                     <button onClick={() => handleBulkAction('archive')} className="text-xs font-semibold px-2 py-1 bg-white text-gray-700 border border-gray-300 rounded hover:bg-gray-100">Archive</button>
                                     <button onClick={() => handleBulkAction('delete')} className="text-xs font-semibold px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">Delete</button>
                                 </div>
@@ -261,7 +258,7 @@ export default function Documents() {
                                     <thead className="bg-gray-50 select-none">
                                         <tr>
                                             <th className="px-6 py-3 text-left w-10">
-                                                <input type="checkbox" onChange={handleSelectAll} checked={documents.length > 0 && selectedIds.length === documents.length} className="rounded text-blue-600" />
+                                                <input type="checkbox" onChange={handleSelectAll} checked={documents.length > 0 && selectedIds.length === documents.length} className="rounded text-green-600" />
                                             </th>
                                             <th onClick={() => handleSort('title')} className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:text-gray-700">
                                                 Document Name {sortField === 'title' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -283,9 +280,9 @@ export default function Documents() {
                                             <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No documents found matching your criteria.</td></tr>
                                         ) : (
                                             documents.map((doc) => (
-                                                <tr key={doc.id} className={`transition-colors ${doc.is_archived ? 'bg-gray-50 opacity-75' : 'hover:bg-blue-50/30'}`}>
+                                                <tr key={doc.id} className={`transition-colors ${doc.is_archived ? 'bg-gray-50 opacity-75' : 'hover:bg-green-50/30'}`}>
                                                     <td className="px-6 py-4">
-                                                        <input type="checkbox" checked={selectedIds.includes(doc.id)} onChange={() => handleSelectOne(doc.id)} className="rounded text-blue-600" />
+                                                        <input type="checkbox" checked={selectedIds.includes(doc.id)} onChange={() => handleSelectOne(doc.id)} className="rounded text-green-600" />
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center">
@@ -308,7 +305,7 @@ export default function Documents() {
                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                         <div className="flex justify-end gap-2">
                                                             {/* CHANGED: Open preview securely in a new tab */}
-                                                            <button onClick={() => window.open(doc.file, '_blank', 'noopener,noreferrer')} className="text-blue-600 bg-blue-50 p-2 rounded hover:bg-blue-100" title="Preview">
+                                                            <button onClick={() => window.open(doc.file, '_blank', 'noopener,noreferrer')} className="text-green-600 bg-green-50 p-2 rounded hover:bg-green-100" title="Preview">
                                                                 <EyeIcon />
                                                             </button>
                                                             <a href={doc.file} download className="text-green-600 bg-green-50 p-2 rounded hover:bg-green-100" title="Download">
@@ -360,7 +357,7 @@ export default function Documents() {
                                 <input 
                                     type="text" required value={formState.title}
                                     onChange={(e) => setFormState({...formState, title: e.target.value})}
-                                    className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-blue-600 outline-none"
+                                    className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-green-600 outline-none"
                                 />
                             </div>
                             
@@ -368,7 +365,7 @@ export default function Documents() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                                 <select 
                                     value={formState.type} onChange={(e) => setFormState({...formState, type: e.target.value})}
-                                    className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-blue-600 outline-none"
+                                    className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-green-600 outline-none"
                                 >
                                     {DOCUMENT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                                 </select>
@@ -382,14 +379,14 @@ export default function Documents() {
                                     type="file" 
                                     accept={ALLOWED_EXTENSIONS}
                                     onChange={handleFileChange}
-                                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md p-1"
+                                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 border border-gray-300 rounded-md p-1"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Max size: 10MB. Allowed: PDF, Word, Excel.</p>
                             </div>
 
                             <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
                                 <button type="button" onClick={() => setIsFormModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md">Cancel</button>
-                                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm font-medium text-white bg-[#1c4ed8] rounded-md disabled:opacity-50">
+                                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm font-medium text-white bg-[#16a34a] rounded-md disabled:opacity-50">
                                     {isSaving ? "Saving..." : "Save Document"}
                                 </button>
                             </div>

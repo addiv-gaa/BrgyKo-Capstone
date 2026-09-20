@@ -1,7 +1,4 @@
 import { useState, useEffect } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
-
 const API_URL = import.meta.env.VITE_API_URL;
 
 interface Equipment {
@@ -181,10 +178,10 @@ export default function EquipmentFacilitiesPage() {
     };
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
                 
                 <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f8fafc]">
                     <div className="w-full h-full space-y-6">
@@ -196,7 +193,7 @@ export default function EquipmentFacilitiesPage() {
                             </div>
                             <button 
                                 onClick={handleOpenAddModal}
-                                className="bg-[#1c4ed8] hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
+                                className="bg-[#16a34a] hover:bg-green-800 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
                                 Add {activeTab === 'equipment' ? 'Equipment' : 'Facility'}
@@ -208,7 +205,7 @@ export default function EquipmentFacilitiesPage() {
                             <button
                                 onClick={() => setActiveTab('equipment')}
                                 className={`px-6 py-2 rounded-md text-sm font-semibold transition-all ${
-                                    activeTab === 'equipment' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-600 hover:text-gray-900'
+                                    activeTab === 'equipment' ? 'bg-white shadow-sm text-green-700' : 'text-gray-600 hover:text-gray-900'
                                 }`}
                             >
                                 Equipment
@@ -216,7 +213,7 @@ export default function EquipmentFacilitiesPage() {
                             <button
                                 onClick={() => setActiveTab('facilities')}
                                 className={`px-6 py-2 rounded-md text-sm font-semibold transition-all ${
-                                    activeTab === 'facilities' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-600 hover:text-gray-900'
+                                    activeTab === 'facilities' ? 'bg-white shadow-sm text-green-700' : 'text-gray-600 hover:text-gray-900'
                                 }`}
                             >
                                 Facilities
@@ -226,7 +223,7 @@ export default function EquipmentFacilitiesPage() {
                         {/* Summary Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                                <div className="w-12 h-12 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
                                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                                 </div>
                                 <div>
@@ -264,7 +261,7 @@ export default function EquipmentFacilitiesPage() {
                                     <input 
                                         type="text" 
                                         placeholder={`Search ${activeTab}...`}
-                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                     />
@@ -303,7 +300,7 @@ export default function EquipmentFacilitiesPage() {
                                                         <button 
                                                             onClick={() => handleEditClick(item)}
                                                             title="Edit"
-                                                            className="p-1.5 border border-gray-200 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                            className="p-1.5 border border-gray-200 rounded-md text-gray-500 hover:text-green-600 hover:bg-green-50 transition-colors"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                                                         </button>
@@ -347,7 +344,7 @@ export default function EquipmentFacilitiesPage() {
                                     <input 
                                         type="text" required
                                         placeholder={activeTab === 'equipment' ? "e.g. Monobloc Chair" : "e.g. Barangay Covered Court"}
-                                        className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                                         value={formData.name}
                                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                                     />
@@ -358,7 +355,7 @@ export default function EquipmentFacilitiesPage() {
                                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Total Quantity Owned</label>
                                         <input 
                                             type="number" min="1" required
-                                            className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                                             value={formData.total_quantity} // CHANGED to bind to total_quantity
                                             onChange={(e) => setFormData({...formData, total_quantity: parseInt(e.target.value) || 1})} // CHANGED
                                         />
@@ -369,7 +366,7 @@ export default function EquipmentFacilitiesPage() {
                                         <textarea 
                                             rows={3}
                                             placeholder="Location details or capacity..."
-                                            className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                            className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
                                             value={formData.description}
                                             onChange={(e) => setFormData({...formData, description: e.target.value})}
                                         />
@@ -379,7 +376,7 @@ export default function EquipmentFacilitiesPage() {
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status</label>
                                     <select 
-                                        className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                        className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                                         value={formData.status}
                                         onChange={(e) => setFormData({...formData, status: e.target.value})}
                                     >
@@ -394,7 +391,7 @@ export default function EquipmentFacilitiesPage() {
                                 <button type="button" onClick={resetForm} className="px-4 py-2 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 transition-colors">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-[#1c4ed8] hover:bg-blue-800 text-white rounded-md text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50">
+                                <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-[#16a34a] hover:bg-green-800 text-white rounded-md text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50">
                                     {isSubmitting ? 'Saving...' : 'Save Data'}
                                 </button>
                             </div>

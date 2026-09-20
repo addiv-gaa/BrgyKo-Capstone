@@ -1,7 +1,4 @@
 import { useState, useEffect } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
-
 const API_URL = import.meta.env.VITE_API_URL;
 
 // 1. Define the shape of data coming from Django
@@ -30,7 +27,7 @@ const getStatusBadgeClasses = (status: string) => {
         case 'PENDING':
             return 'bg-orange-100 text-orange-800 border-orange-200';
         case 'PROCESSING':
-            return 'bg-blue-100 text-blue-800 border-blue-200';
+            return 'bg-green-100 text-green-800 border-green-200';
         case 'RELEASED':
             return 'bg-green-100 text-green-800 border-green-200';
         case 'REJECTED':
@@ -117,11 +114,11 @@ function PermitRequests() {
     };
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
 
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
                 <main className="flex-1 w-full overflow-y-auto p-8 bg-[#f4f7fa] text-gray-800">
 
                     <div className="mb-6">
@@ -181,7 +178,7 @@ function PermitRequests() {
                                                         value={request.status.toUpperCase()}
                                                         onChange={(e) => handleStatusChange(request.id, e.target.value)}
                                                         disabled={updatingId === request.id}
-                                                        className={`bg-white border border-gray-300 text-gray-700 py-1.5 px-2 rounded-md text-xs font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${updatingId === request.id ? 'opacity-50' : ''}`}
+                                                        className={`bg-white border border-gray-300 text-gray-700 py-1.5 px-2 rounded-md text-xs font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer ${updatingId === request.id ? 'opacity-50' : ''}`}
                                                     >
                                                         <option value="PENDING">Pending</option>
                                                         <option value="PROCESSING">Processing</option>

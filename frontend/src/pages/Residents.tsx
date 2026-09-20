@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import ResidentModal, { type ResidentProperties } from '../components/ResidentModal';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -53,12 +51,17 @@ export default function ResidentPage() {
         purok: '',
         sex: '',
         civil_status: '',
-        age_bracket: '',
-        is_4ps: false,
-        is_senior: false,
+        is_4ps_beneficiary: false,
+        is_senior_citizen: false,
         is_pwd: false,
-        is_solo: false
+        is_solo_parent: false
     });
+
+    // Pagination & Sorting State
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const [ordering, setOrdering] = useState('-id');
     
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,6 +72,7 @@ export default function ResidentPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [importResults, setImportResults] = useState<{message: string, errors: string[]} | null>(null);
 
     // NEW: Bulk Selection & Bulk Update State
     const [selectedRows, setSelectedRows] = useState<number[]>([]);
@@ -76,11 +80,16 @@ export default function ResidentPage() {
     
     const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
     const [isBulkUpdating, setIsBulkUpdating] = useState(false);
-    const [bulkUpdateFlags, setBulkUpdateFlags] = useState({
-        is_4ps_beneficiary: false,
-        is_senior_citizen: false,
-        is_pwd: false,
-        is_solo_parent: false
+    const [bulkUpdateFlags, setBulkUpdateFlags] = useState<{
+        is_4ps_beneficiary: boolean | null,
+        is_senior_citizen: boolean | null,
+        is_pwd: boolean | null,
+        is_solo_parent: boolean | null
+    }>({
+        is_4ps_beneficiary: null,
+        is_senior_citizen: null,
+        is_pwd: null,
+        is_solo_parent: null
     });
 
     const getAuthHeaders = () => {
@@ -93,10 +102,33 @@ export default function ResidentPage() {
 
     const fetchResidents = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/residents/`, { headers: getAuthHeaders() });
+            const queryParams = new URLSearchParams({
+                page: page.toString(),
+                page_size: '50',
+                ordering: ordering,
+            });
+
+            if (searchQuery) queryParams.append('search', searchQuery);
+            if (filters.purok) queryParams.append('purok', filters.purok);
+            if (filters.sex) queryParams.append('sex', filters.sex);
+            if (filters.civil_status) queryParams.append('civil_status', filters.civil_status);
+            if (filters.is_4ps_beneficiary) queryParams.append('is_4ps_beneficiary', 'True');
+            if (filters.is_senior_citizen) queryParams.append('is_senior_citizen', 'True');
+            if (filters.is_pwd) queryParams.append('is_pwd', 'True');
+            if (filters.is_solo_parent) queryParams.append('is_solo_parent', 'True');
+
+            const response = await fetch(`${API_URL}/api/residents/?${queryParams.toString()}`, { headers: getAuthHeaders() });
             if (response.ok) {
                 const data = await response.json();
-                setResidents(data.results || data); 
+                if (data.results) {
+                    setResidents(data.results);
+                    setTotalPages(Math.ceil(data.count / 50));
+                    setTotalCount(data.count);
+                } else {
+                    setResidents(data);
+                    setTotalPages(1);
+                    setTotalCount(data.length);
+                }
                 setSelectedRows([]); // Clear selections on fetch
             }
         } catch (error) {
@@ -122,8 +154,15 @@ export default function ResidentPage() {
 
     useEffect(() => {
         fetchHouseholdsForDropdown();
-        fetchResidents();
     }, []);
+
+    useEffect(() => {
+        // Debounce search query effect if needed, but for now just trigger
+        const delayDebounceFn = setTimeout(() => {
+            fetchResidents();
+        }, 300);
+        return () => clearTimeout(delayDebounceFn);
+    }, [page, filters, searchQuery, ordering]);
 
     // --- BULK SELECTION HANDLERS ---
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,7 +226,7 @@ export default function ResidentPage() {
                 setShowBulkUpdateModal(false);
                 setSelectedRows([]); // Reset selection
                 // Reset flags for next time
-                setBulkUpdateFlags({ is_4ps_beneficiary: false, is_senior_citizen: false, is_pwd: false, is_solo_parent: false });
+                setBulkUpdateFlags({ is_4ps_beneficiary: null, is_senior_citizen: null, is_pwd: null, is_solo_parent: null });
                 fetchResidents();
             } else {
                 const errorData = await response.json();
@@ -223,19 +262,14 @@ export default function ResidentPage() {
             const data = await response.json();
 
             if (response.ok) {
-                let alertMsg = data.message;
-                if (data.errors && data.errors.length > 0) {
-                    alertMsg += `\n\nHowever, ${data.errors.length} rows failed. Check console for details.`;
-                    console.warn("Import Errors:", data.errors);
-                }
-                alert(alertMsg);
+                setImportResults({ message: data.message, errors: data.errors || [] });
                 fetchResidents();
             } else {
-                alert(data.error || "Failed to import file.");
+                setImportResults({ message: "Import Failed", errors: [data.error || "An unknown error occurred."] });
             }
         } catch (error) {
             console.error("Upload error:", error);
-            alert("Network error occurred during upload.");
+            setImportResults({ message: "Upload Error", errors: ["A network error occurred during upload."] });
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = ''; 
@@ -329,55 +363,24 @@ export default function ResidentPage() {
 
     const clearFilters = () => {
         setFilters({
-            purok: '', sex: '', civil_status: '', age_bracket: '',
-            is_4ps: false, is_senior: false, is_pwd: false, is_solo: false
+            purok: '', sex: '', civil_status: '',
+            is_4ps_beneficiary: false, is_senior_citizen: false, is_pwd: false, is_solo_parent: false
         });
         setSearchQuery('');
+        setPage(1);
     };
 
     const activeFilterCount = Object.values(filters).filter(val => val === true || (typeof val === 'string' && val !== '')).length;
 
-    // Execute filter instantly
-    const filteredResidents = useMemo(() => {
-        return residents.filter(res => {
-            const searchStr = searchQuery.toLowerCase();
-            const matchesSearch = !searchQuery || 
-                res.first_name.toLowerCase().includes(searchStr) || 
-                res.last_name.toLowerCase().includes(searchStr) ||
-                res.purok.toLowerCase().includes(searchStr);
-
-            const matchesPurok = !filters.purok || res.purok === filters.purok;
-            const matchesSex = !filters.sex || res.sex === filters.sex;
-            const matchesCivil = !filters.civil_status || res.civil_status === filters.civil_status;
-
-            let matchesAge = true;
-            if (filters.age_bracket) {
-                const age: any = calculateAge(res.birth_date);
-                if (age === 'N/A') {
-                    matchesAge = false;
-                } else {
-                    if (filters.age_bracket === '0-14') matchesAge = age >= 0 && age <= 14;
-                    else if (filters.age_bracket === '15-30') matchesAge = age >= 15 && age <= 30;
-                    else if (filters.age_bracket === '31-59') matchesAge = age >= 31 && age <= 59;
-                    else if (filters.age_bracket === '60+') matchesAge = age >= 60;
-                }
-            }
-
-            const matches4ps = !filters.is_4ps || res.is_4ps_beneficiary;
-            const matchesSenior = !filters.is_senior || res.is_senior_citizen;
-            const matchesPwd = !filters.is_pwd || res.is_pwd;
-            const matchesSolo = !filters.is_solo || res.is_solo_parent;
-
-            return matchesSearch && matchesPurok && matchesSex && matchesCivil && matchesAge && matches4ps && matchesSenior && matchesPwd && matchesSolo;
-        });
-    }, [residents, searchQuery, filters]);
+    // Use residents directly since filtering is server-side
+    const filteredResidents = residents;
 
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     
                     <div className="mb-6 flex justify-between items-end">
@@ -409,7 +412,7 @@ export default function ResidentPage() {
                                 )}
                             </button>
 
-                            <button onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }} className="bg-[#1e40af] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors flex items-center gap-2 shadow-sm">
+                            <button onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }} className="bg-[#15803d] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-green-800 transition-colors flex items-center gap-2 shadow-sm">
                                 <span>+ Add Resident</span>
                             </button>
                         </div>
@@ -419,15 +422,15 @@ export default function ResidentPage() {
                         
                         {/* FLOATING BULK ACTION BAR */}
                         {selectedRows.length > 0 && (
-                            <div className="absolute top-0 left-0 w-full bg-blue-600 text-white px-6 py-3 flex justify-between items-center z-10 animate-fade-in-down shadow-md">
+                            <div className="absolute top-0 left-0 w-full bg-green-600 text-white px-6 py-3 flex justify-between items-center z-10 animate-fade-in-down shadow-md">
                                 <div className="font-semibold flex items-center gap-2">
-                                    <span className="bg-white text-blue-700 px-2 py-0.5 rounded-md text-xs">{selectedRows.length}</span> 
+                                    <span className="bg-white text-green-700 px-2 py-0.5 rounded-md text-xs">{selectedRows.length}</span> 
                                     Residents Selected
                                 </div>
                                 <div className="flex gap-3 items-center">
                                     <button 
                                         onClick={() => setShowBulkUpdateModal(true)}
-                                        className="bg-white text-blue-700 hover:bg-blue-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                                        className="bg-white text-green-700 hover:bg-green-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                         Update Welfare
@@ -440,8 +443,8 @@ export default function ResidentPage() {
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         {isBulkDeleting ? 'Deleting...' : 'Delete Selected'}
                                     </button>
-                                    <div className="w-px h-6 bg-blue-400 mx-1"></div>
-                                    <button onClick={() => setSelectedRows([])} className="text-white hover:text-blue-200 text-sm font-medium transition-colors">
+                                    <div className="w-px h-6 bg-green-400 mx-1"></div>
+                                    <button onClick={() => setSelectedRows([])} className="text-white hover:text-green-200 text-sm font-medium transition-colors">
                                         Clear Selection
                                     </button>
                                 </div>
@@ -452,33 +455,23 @@ export default function ResidentPage() {
                         <div className="p-4 border-b border-gray-200 flex flex-wrap gap-3 justify-between items-center bg-white">
                             <div className="relative flex-1 max-w-2xl">
                                 <svg className="w-4 h-4 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                <input type="text" placeholder="Search by name or purok..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors" />
+                                <input type="text" placeholder="Search by name or purok..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-green-500 transition-colors" />
                             </div>
-                            <button onClick={() => setShowFilters(!showFilters)} className={`px-4 py-2 rounded-lg text-sm font-semibold border flex items-center gap-2 transition-colors ${showFilters || activeFilterCount > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                            <button onClick={() => setShowFilters(!showFilters)} className={`px-4 py-2 rounded-lg text-sm font-semibold border flex items-center gap-2 transition-colors ${showFilters || activeFilterCount > 0 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                                Filters {activeFilterCount > 0 && <span className="bg-blue-600 text-white rounded-full px-2 py-0.5 text-xs">{activeFilterCount}</span>}
+                                Filters {activeFilterCount > 0 && <span className="bg-green-600 text-white rounded-full px-2 py-0.5 text-xs">{activeFilterCount}</span>}
                             </button>
                         </div>
 
                         {/* Expandable Filter Panel */}
                         {showFilters && (
                             <div className="bg-gray-50 p-5 border-b border-gray-200">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Purok / Zone</label>
                                         <select name="purok" value={filters.purok} onChange={handleFilterChange} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white">
                                             <option value="">All Puroks</option>
                                             {uniquePuroks.map(p => <option key={p} value={p}>{p}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Age Bracket</label>
-                                        <select name="age_bracket" value={filters.age_bracket} onChange={handleFilterChange} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white">
-                                            <option value="">All Ages</option>
-                                            <option value="0-14">0 - 14 (Children)</option>
-                                            <option value="15-30">15 - 30 (Youth/SK)</option>
-                                            <option value="31-59">31 - 59 (Working Age)</option>
-                                            <option value="60+">60+ (Senior Citizens)</option>
                                         </select>
                                     </div>
                                     <div>
@@ -503,20 +496,20 @@ export default function ResidentPage() {
                                 
                                 <div className="flex flex-wrap items-center justify-between border-t border-gray-200 pt-4">
                                     <div className="flex flex-wrap gap-4">
-                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-red-50 hover:border-red-200 transition-colors">
-                                            <input type="checkbox" name="is_4ps" checked={filters.is_4ps} onChange={handleFilterChange} className="w-4 h-4 text-red-600 rounded" />
+                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-purple-50 hover:border-purple-200 transition-colors">
+                                            <input type="checkbox" name="is_4ps_beneficiary" checked={filters.is_4ps_beneficiary} onChange={handleFilterChange} className="w-4 h-4 text-purple-600 rounded" />
                                             <span className="font-medium text-gray-700">4Ps Beneficiary</span>
                                         </label>
                                         <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-orange-50 hover:border-orange-200 transition-colors">
-                                            <input type="checkbox" name="is_senior" checked={filters.is_senior} onChange={handleFilterChange} className="w-4 h-4 text-orange-600 rounded" />
+                                            <input type="checkbox" name="is_senior_citizen" checked={filters.is_senior_citizen} onChange={handleFilterChange} className="w-4 h-4 text-orange-600 rounded" />
                                             <span className="font-medium text-gray-700">Senior Citizen</span>
                                         </label>
                                         <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-blue-50 hover:border-blue-200 transition-colors">
                                             <input type="checkbox" name="is_pwd" checked={filters.is_pwd} onChange={handleFilterChange} className="w-4 h-4 text-blue-600 rounded" />
                                             <span className="font-medium text-gray-700">PWD</span>
                                         </label>
-                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-green-50 hover:border-green-200 transition-colors">
-                                            <input type="checkbox" name="is_solo" checked={filters.is_solo} onChange={handleFilterChange} className="w-4 h-4 text-green-600 rounded" />
+                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-pink-50 hover:border-pink-200 transition-colors">
+                                            <input type="checkbox" name="is_solo_parent" checked={filters.is_solo_parent} onChange={handleFilterChange} className="w-4 h-4 text-pink-600 rounded" />
                                             <span className="font-medium text-gray-700">Solo Parent</span>
                                         </label>
                                     </div>
@@ -529,17 +522,16 @@ export default function ResidentPage() {
 
                         {/* Active Filters Display */}
                         {activeFilterCount > 0 && (
-                            <div className="bg-blue-50 px-4 py-2 border-b border-blue-100 flex flex-wrap gap-2 items-center text-sm">
-                                <span className="text-blue-800 font-semibold mr-2 text-xs uppercase tracking-wide">Active Filters:</span>
-                                {filters.purok && <span className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">Purok: {filters.purok}</span>}
-                                {filters.age_bracket && <span className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">Age: {filters.age_bracket}</span>}
-                                {filters.sex && <span className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">Sex: {filters.sex}</span>}
-                                {filters.civil_status && <span className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">Civil Status: {filters.civil_status}</span>}
-                                {filters.is_4ps && <span className="bg-red-100 border border-red-200 text-red-700 px-2 py-1 rounded-full text-xs font-bold">4Ps Only</span>}
-                                {filters.is_senior && <span className="bg-orange-100 border border-orange-200 text-orange-700 px-2 py-1 rounded-full text-xs font-bold">Seniors Only</span>}
+                            <div className="bg-green-50 px-5 py-3 border-b border-gray-200 flex flex-wrap gap-2 items-center">
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-2">Active Filters:</span>
+                                {filters.purok && <span className="bg-white border border-green-200 text-green-700 px-2 py-1 rounded-full text-xs font-medium">Purok: {filters.purok}</span>}
+                                {filters.sex && <span className="bg-white border border-green-200 text-green-700 px-2 py-1 rounded-full text-xs font-medium">Sex: {filters.sex}</span>}
+                                {filters.civil_status && <span className="bg-white border border-green-200 text-green-700 px-2 py-1 rounded-full text-xs font-medium">Civil Status: {filters.civil_status}</span>}
+                                {filters.is_4ps_beneficiary && <span className="bg-purple-100 border border-purple-200 text-purple-700 px-2 py-1 rounded-full text-xs font-bold">4Ps Only</span>}
+                                {filters.is_senior_citizen && <span className="bg-orange-100 border border-orange-200 text-orange-700 px-2 py-1 rounded-full text-xs font-bold">Seniors Only</span>}
                                 {filters.is_pwd && <span className="bg-blue-100 border border-blue-200 text-blue-700 px-2 py-1 rounded-full text-xs font-bold">PWD Only</span>}
-                                {filters.is_solo && <span className="bg-green-100 border border-green-200 text-green-700 px-2 py-1 rounded-full text-xs font-bold">Solo Parents Only</span>}
-                                <span className="ml-auto text-blue-600 font-bold text-xs">{filteredResidents.length} Results</span>
+                                {filters.is_solo_parent && <span className="bg-pink-100 border border-pink-200 text-pink-700 px-2 py-1 rounded-full text-xs font-bold">Solo Parents Only</span>}
+                                <span className="ml-auto text-green-600 font-bold text-xs">{totalCount} Results</span>
                             </div>
                         )}
 
@@ -551,18 +543,24 @@ export default function ResidentPage() {
                                         <th className="px-6 py-4 w-10 sticky left-0 bg-gray-50 z-10">
                                             <input 
                                                 type="checkbox" 
-                                                className="w-4 h-4 rounded text-blue-600 cursor-pointer"
+                                                className="w-4 h-4 rounded text-green-600 cursor-pointer"
                                                 checked={filteredResidents.length > 0 && selectedRows.length === filteredResidents.length}
                                                 onChange={handleSelectAll}
                                             />
                                         </th>
                                         <th className="px-6 py-4">Inhabitant Type</th>
-                                        <th className="px-6 py-4">Last Name</th>
-                                        <th className="px-6 py-4">First Name</th>
+                                        <th className="px-6 py-4 cursor-pointer hover:bg-gray-200" onClick={() => {setOrdering(ordering === 'last_name' ? '-last_name' : 'last_name'); setPage(1);}}>
+                                            <div className="flex items-center gap-1">Last Name {ordering === 'last_name' ? '↑' : ordering === '-last_name' ? '↓' : ''}</div>
+                                        </th>
+                                        <th className="px-6 py-4 cursor-pointer hover:bg-gray-200" onClick={() => {setOrdering(ordering === 'first_name' ? '-first_name' : 'first_name'); setPage(1);}}>
+                                            <div className="flex items-center gap-1">First Name {ordering === 'first_name' ? '↑' : ordering === '-first_name' ? '↓' : ''}</div>
+                                        </th>
                                         <th className="px-6 py-4">Middle Name</th>
                                         <th className="px-6 py-4">Suffix</th>
                                         <th className="px-6 py-4">Birth Place</th>
-                                        <th className="px-6 py-4">Birthdate</th>
+                                        <th className="px-6 py-4 cursor-pointer hover:bg-gray-200" onClick={() => {setOrdering(ordering === 'birth_date' ? '-birth_date' : 'birth_date'); setPage(1);}}>
+                                            <div className="flex items-center gap-1">Birthdate {ordering === 'birth_date' ? '↑' : ordering === '-birth_date' ? '↓' : ''}</div>
+                                        </th>
                                         <th className="px-6 py-4">Sex</th>
                                         <th className="px-6 py-4">Civil Status</th>
                                         <th className="px-6 py-4">Citizenship</th>
@@ -573,6 +571,9 @@ export default function ResidentPage() {
                                         <th className="px-6 py-4">Mother's First Name</th>
                                         <th className="px-6 py-4">Mother's Middle Name</th>
                                         <th className="px-6 py-4">Mother's Last Name</th>
+                                        <th className="px-6 py-4 cursor-pointer hover:bg-gray-200" onClick={() => {setOrdering(ordering === 'purok' ? '-purok' : 'purok'); setPage(1);}}>
+                                            <div className="flex items-center gap-1">Purok {ordering === 'purok' ? '↑' : ordering === '-purok' ? '↓' : ''}</div>
+                                        </th>
                                         <th className="px-6 py-4">Welfare Status</th>
                                         <th className="px-6 py-4 text-center sticky right-0 bg-gray-50 shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.1)]">Actions</th>
                                     </tr>
@@ -581,55 +582,55 @@ export default function ResidentPage() {
                                     {filteredResidents.length > 0 ? filteredResidents.map((resident) => {
                                         const isSelected = selectedRows.includes(resident.id);
                                         return (
-                                            <tr key={resident.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}>
+                                            <tr key={resident.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-green-50' : ''}`}>
                                                 <td className="px-6 py-4 sticky left-0 bg-inherit z-10">
                                                     <input 
                                                         type="checkbox" 
-                                                        className="w-4 h-4 rounded text-blue-600 cursor-pointer"
+                                                        className="w-4 h-4 rounded text-green-600 cursor-pointer"
                                                         checked={isSelected}
                                                         onChange={() => handleSelectRow(resident.id)}
                                                     />
                                                 </td>
-                                                <td className="px-6 py-4 text-sm text-gray-700">{resident.inhabitant_type || '-'}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-gray-900">{resident.last_name}</td>
-                                                <td className="px-6 py-4 text-sm font-medium text-gray-800">{resident.first_name}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.middle_name || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.suffix || '-'}</td>
-                                                
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.birth_place || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.birth_date || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.sex}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.civil_status}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.citizenship || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.occupation || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.contact_number || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.email_address || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.highest_education || '-'}</td>
-                                                
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_first_name || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_middle_name || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{resident.mothers_last_name || '-'}</td>
-                                                
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-wrap gap-1 w-32">
-                                                        {resident.is_4ps_beneficiary && <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">4Ps</span>}
-                                                        {resident.is_senior_citizen && <span className="bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-orange-200">Senior</span>}
-                                                        {resident.is_pwd && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-200">PWD</span>}
-                                                        {resident.is_solo_parent && <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-green-200">Solo Parent</span>}
-                                                        {!resident.is_4ps_beneficiary && !resident.is_senior_citizen && !resident.is_pwd && !resident.is_solo_parent && <span className="text-gray-400 text-xs">-</span>}
-                                                    </div>
+                                                <td className="px-6 py-4 font-medium text-gray-900">{resident.inhabitant_type}</td>
+                                                <td className="px-6 py-4 font-bold text-gray-900">{resident.last_name}</td>
+                                                <td className="px-6 py-4 font-medium text-gray-900">{resident.first_name}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.middle_name || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.suffix || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.birth_place || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">
+                                                    {resident.birth_date ? new Date(resident.birth_date).toLocaleDateString() : '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.sex}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.civil_status}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.citizenship}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.occupation || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.contact_number || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.email_address || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.highest_education || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.mothers_first_name || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.mothers_middle_name || '-'}</td>
+                                                <td className="px-6 py-4 text-gray-600">{resident.mothers_last_name || '-'}</td>
+                                                <td className="px-6 py-4 font-medium text-gray-900">{resident.purok}</td>
+                                                <td className="px-6 py-4 flex gap-1.5 flex-wrap w-48">
+                                                    {resident.is_4ps_beneficiary && <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold border border-purple-200">4Ps</span>}
+                                                    {resident.is_senior_citizen && <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200">Senior</span>}
+                                                    {resident.is_pwd && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">PWD</span>}
+                                                    {resident.is_solo_parent && <span className="bg-pink-100 text-pink-700 px-2 py-0.5 rounded text-[10px] font-bold border border-pink-200">Solo Parent</span>}
+                                                    {!resident.is_4ps_beneficiary && !resident.is_senior_citizen && !resident.is_pwd && !resident.is_solo_parent && (
+                                                        <span className="text-gray-400 text-xs italic">None</span>
+                                                    )}
                                                 </td>
 
-                                                <td className="px-6 py-4 text-center sticky right-0 bg-inherit shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.05)]">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <button onClick={() => { setModalMode('view'); setSelectedResident(resident as any); setIsModalOpen(true); }} className="p-1.5 border border-gray-200 rounded text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors bg-white" title="View Details">
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                <td className="px-6 py-4 text-center sticky right-0 bg-inherit shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.1)]">
+                                                    <div className="flex gap-2 justify-center">
+                                                        <button onClick={() => { setModalMode('view'); setSelectedResident(resident as ResidentProperties); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 bg-blue-50 p-2 rounded-lg transition-colors" title="View Details">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                         </button>
-                                                        <button onClick={() => { setModalMode('edit'); setSelectedResident(resident as any); setIsModalOpen(true); }} className="p-1.5 border border-gray-200 rounded text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors bg-white" title="Edit Details">
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                        <button onClick={() => { setModalMode('edit'); setSelectedResident(resident as ResidentProperties); setIsModalOpen(true); }} className="text-emerald-600 hover:text-emerald-800 bg-emerald-50 p-2 rounded-lg transition-colors" title="Edit Resident">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                                         </button>
-                                                        <button className="p-1.5 bg-[#ef4444] text-white rounded hover:bg-red-600 shadow-sm transition-colors" title="Delete Resident" onClick={() => handleDeleteResident(resident.id)}>
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        <button onClick={() => handleDeleteResident(resident.id)} className="text-red-600 hover:text-red-800 bg-red-50 p-2 rounded-lg transition-colors" title="Delete Resident">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                         </button>
                                                     </div>
                                                 </td>
@@ -637,13 +638,37 @@ export default function ResidentPage() {
                                         );
                                     }) : (
                                         <tr>
-                                            <td colSpan={20} className="px-6 py-8 text-center text-gray-500 italic">
-                                                No residents match the selected filters.
+                                            <td colSpan={21} className="px-6 py-12 text-center text-gray-500 font-medium">
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <svg className="w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                                    No residents found matching your criteria.
+                                                </div>
                                             </td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+                        
+                        {/* Pagination Controls */}
+                        <div className="px-6 py-4 bg-white border-t border-gray-200 flex justify-between items-center rounded-b-xl">
+                            <button 
+                                onClick={() => setPage(p => Math.max(1, p - 1))} 
+                                disabled={page === 1}
+                                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+                            >
+                                Previous
+                            </button>
+                            <span className="text-sm font-medium text-gray-600">
+                                Page <strong className="text-gray-900">{page}</strong> of <strong className="text-gray-900">{totalPages}</strong>
+                            </span>
+                            <button 
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                                disabled={page === totalPages || totalPages === 0}
+                                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+                            >
+                                Next
+                            </button>
                         </div>
                     </div>
                 </main>
@@ -662,31 +687,37 @@ export default function ResidentPage() {
                         <form onSubmit={handleBulkUpdateSubmit}>
                             <div className="p-6 space-y-4">
                                 <p className="text-sm text-gray-500 mb-4 leading-relaxed">
-                                    Set the welfare statuses for the <strong className="text-blue-600">{selectedRows.length} selected residents</strong>. This will overwrite their current flags.
+                                    Update welfare statuses for <strong className="text-green-600">{selectedRows.length} selected residents</strong>. Flags set to "Unchanged" will not be modified.
                                 </p>
                                 
-                                <label className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                                    <input type="checkbox" checked={bulkUpdateFlags.is_4ps_beneficiary} onChange={e => setBulkUpdateFlags({...bulkUpdateFlags, is_4ps_beneficiary: e.target.checked})} className="w-4 h-4 text-red-600 rounded cursor-pointer" />
-                                    <span className="font-semibold text-gray-800">4Ps Beneficiary</span>
-                                </label>
-                                <label className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                                    <input type="checkbox" checked={bulkUpdateFlags.is_senior_citizen} onChange={e => setBulkUpdateFlags({...bulkUpdateFlags, is_senior_citizen: e.target.checked})} className="w-4 h-4 text-orange-600 rounded cursor-pointer" />
-                                    <span className="font-semibold text-gray-800">Senior Citizen</span>
-                                </label>
-                                <label className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                                    <input type="checkbox" checked={bulkUpdateFlags.is_pwd} onChange={e => setBulkUpdateFlags({...bulkUpdateFlags, is_pwd: e.target.checked})} className="w-4 h-4 text-blue-600 rounded cursor-pointer" />
-                                    <span className="font-semibold text-gray-800">PWD</span>
-                                </label>
-                                <label className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                                    <input type="checkbox" checked={bulkUpdateFlags.is_solo_parent} onChange={e => setBulkUpdateFlags({...bulkUpdateFlags, is_solo_parent: e.target.checked})} className="w-4 h-4 text-green-600 rounded cursor-pointer" />
-                                    <span className="font-semibold text-gray-800">Solo Parent</span>
-                                </label>
+                                {Object.entries({
+                                    'is_4ps_beneficiary': '4Ps Beneficiary',
+                                    'is_senior_citizen': 'Senior Citizen',
+                                    'is_pwd': 'PWD',
+                                    'is_solo_parent': 'Solo Parent'
+                                }).map(([key, label]) => (
+                                    <div key={key} className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-bold text-gray-700">{label}</label>
+                                        <select 
+                                            value={bulkUpdateFlags[key as keyof typeof bulkUpdateFlags] === null ? 'null' : bulkUpdateFlags[key as keyof typeof bulkUpdateFlags]?.toString()} 
+                                            onChange={(e) => {
+                                                const val = e.target.value === 'null' ? null : e.target.value === 'true';
+                                                setBulkUpdateFlags(prev => ({ ...prev, [key]: val }));
+                                            }}
+                                            className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-green-500 focus:border-green-500 bg-gray-50"
+                                        >
+                                            <option value="null">Unchanged</option>
+                                            <option value="true">Set to True (Add)</option>
+                                            <option value="false">Set to False (Remove)</option>
+                                        </select>
+                                    </div>
+                                ))}
                             </div>
                             <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
                                 <button type="button" onClick={() => setShowBulkUpdateModal(false)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-50 transition-colors">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={isBulkUpdating} className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2">
+                                <button type="submit" disabled={isBulkUpdating} className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2">
                                     {isBulkUpdating ? (
                                         <>
                                             <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -696,6 +727,42 @@ export default function ResidentPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {importResults && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 flex flex-col max-h-[80vh]">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
+                            <h3 className="text-lg font-bold text-gray-900">Import Results</h3>
+                            <button onClick={() => setImportResults(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto flex-1">
+                            <div className="mb-4 text-green-700 font-semibold bg-green-50 p-3 rounded-lg border border-green-200">
+                                {importResults.message}
+                            </div>
+                            {importResults.errors && importResults.errors.length > 0 && (
+                                <div>
+                                    <h4 className="font-bold text-red-600 mb-2 flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                        {importResults.errors.length} Errors Found
+                                    </h4>
+                                    <ul className="text-xs text-red-600 space-y-1 font-mono bg-red-50 p-3 rounded-lg border border-red-100">
+                                        {importResults.errors.map((err, i) => (
+                                            <li key={i}>{err}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end shrink-0">
+                            <button onClick={() => setImportResults(null)} className="px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-lg hover:bg-gray-800 transition-colors">
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

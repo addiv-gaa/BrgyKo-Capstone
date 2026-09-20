@@ -10,10 +10,20 @@ class IsAdminGroup(BasePermission):
         )
 
 class IsStaffGroup(BasePermission):
-    """Allows access to users in the 'staff' group (and admins, so you don't lock yourself out)."""
+    """Allows access to users in the 'staff' group, admins, or users with a non-RESIDENT role in their profile."""
     def has_permission(self, request, view):
-        return bool(
-            request.user and 
-            request.user.is_authenticated and 
-            request.user.groups.filter(name__in=['staff', 'admin']).exists()
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+            
+        # Check standard Django groups
+        if request.user.groups.filter(name__in=['staff', 'admin']).exists():
+            return True
+            
+        # Check new RBAC role system
+        try:
+            if hasattr(request.user, 'otp_profile') and request.user.otp_profile.role.upper() != 'RESIDENT':
+                return True
+        except Exception:
+            pass
+            
+        return False

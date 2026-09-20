@@ -1,8 +1,6 @@
 import { useState, useEffect, useContext, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../components/AuthContext";
-import Sidebar from "../components/sidebar";
-import PageHeader from "../components/header";
 import StatCard from "../components/statcard";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -20,13 +18,14 @@ const AlertCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20"
 const FileTextIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
 const MapIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>;
 const ShieldAlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
-
+const ClockIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" className={className || "w-4 h-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
 export default function Home() {
     const auth = useContext(AuthContext);
     const navigate = useNavigate();
     
     const [userRole, setUserRole] = useState<string>("");
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null); // Modal state for clicking an announcement
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     useEffect(() => {
         let extractedRole = "";
@@ -70,36 +69,64 @@ export default function Home() {
     const [residentPermits, setResidentPermits] = useState<any[]>([]);
     const [residentReservations, setResidentReservations] = useState<any[]>([]);
     const [announcements, setAnnouncements] = useState<any[]>([]);
+    const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
 
-    const fetchAnnouncements = useCallback(async (token: string) => {
+    const fetchAnnouncements = useCallback(async (token: string | null) => {
         try {
-            const annRes = await fetch(`${API_URL}/api/announcements/`, { headers: { 'Authorization': `Bearer ${token}` }});
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            const annRes = await fetch(`${API_URL}/api/announcements/`, { headers });
             if (annRes.ok) {
                 const annData = await annRes.json();
-                setAnnouncements(annData);
+                setAnnouncements(annData.results || annData);
             }
         } catch (error) {
             console.error("Error fetching announcements:", error);
         }
     }, []);
 
+    const fetchEmergencyContacts = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/emergency-contacts/`);
+            if (res.ok) {
+                const data = await res.json();
+                setEmergencyContacts(data.results || data);
+            }
+        } catch (error) {
+            console.error("Error fetching emergency contacts:", error);
+        }
+    }, []);
+
     useEffect(() => {
         const fetchDashboardData = async () => {
             const token = localStorage.getItem('access');
-            if (!token) return;
-
+            
+            // Fetch public data regardless of login status
             await fetchAnnouncements(token);
+            await fetchEmergencyContacts();
+
+            // If not logged in, we skip fetching private user stats
+            if (!token) return;
 
             if (isCaptainOrSecretary) {
                 try {
                     const response = await fetch(`${API_URL}/api/dashboard-stats/`, { headers: { 'Authorization': `Bearer ${token}` }});
-                    if (response.ok) setStats(await response.json());
+                    if (response.ok) {
+                        const data = await response.json();
+                        setStats(data);
+                        if (typeof data.welfare_beneficiaries === 'number') {
+                            setWelfareBeneficiariesCount(data.welfare_beneficiaries);
+                        }
+                    }
 
-                    // Fetch actual resident registry to accurately count the welfare statuses
-                    const resResponse = await fetch(`${API_URL}/api/residents/`, { headers: { 'Authorization': `Bearer ${token}` }});
+                    // Fetch actual resident registry to accurately count the welfare statuses if not provided
+                    const resResponse = await fetch(`${API_URL}/api/residents/?paginate=false`, { headers: { 'Authorization': `Bearer ${token}` }});
                     if (resResponse.ok) {
                         const resData = await resResponse.json();
-                        const residentsList = resData.results || resData; 
+                        const residentsList = Array.isArray(resData) ? resData : (resData.results || []); 
                         
                         // Count residents who have ANY of the welfare flags true
                         const welfareCount = residentsList.filter((r: any) => 
@@ -122,33 +149,26 @@ export default function Home() {
                         fetch(`${API_URL}/api/reservations/`, { headers: { 'Authorization': `Bearer ${token}` }})
                     ]);
                     
-                    if (certRes.ok) setResidentCerts(await certRes.json());
-                    if (permitRes.ok) setResidentPermits(await permitRes.json());
-                    if (resRes.ok) setResidentReservations(await resRes.json());
+                    if (certRes.ok) {
+                        const data = await certRes.json();
+                        setResidentCerts(data.results || data);
+                    }
+                    if (permitRes.ok) {
+                        const data = await permitRes.json();
+                        setResidentPermits(data.results || data);
+                    }
+                    if (resRes.ok) {
+                        const data = await resRes.json();
+                        setResidentReservations(data.results || data);
+                    }
                 } catch (error) {
                     console.error("Error fetching resident data:", error);
                 }
             }
         };
 
-        if (auth?.user) fetchDashboardData();
-    }, [auth?.user, isCaptainOrSecretary, isResident, fetchAnnouncements]);
-
-    const markAsRead = async (id: number, e?: React.MouseEvent) => {
-        if (e) e.stopPropagation(); // Prevent opening modal when clicking mark as read
-        const token = localStorage.getItem('access');
-        if (!token) return;
-        
-        try {
-            await fetch(`${API_URL}/api/announcements/${id}/mark_as_read/`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            fetchAnnouncements(token);
-        } catch (error) {
-            console.error("Error marking as read:", error);
-        }
-    };
+        fetchDashboardData();
+    }, [auth?.user, isCaptainOrSecretary, isResident, fetchAnnouncements, fetchEmergencyContacts]);
 
     const activeRequests = [
         ...residentCerts.map(c => ({ ...c, type: 'Certificate', display: c.certificate_type })),
@@ -158,31 +178,41 @@ export default function Home() {
      .sort((a, b) => new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime());
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <div className="shrink-0 w-full"><PageHeader /></div>
-            <div className="flex flex-1 overflow-hidden">
-                <div className="shrink-0 h-full"><Sidebar /></div>
+        <div className="h-full w-full flex bg-gray-100 overflow-hidden text-gray-800">
+            <div className="flex flex-1 flex-col overflow-hidden">
                 <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
                     
                     <div className="w-full">
                         
-                        {/* Dynamic Header */}
-                        <div className="flex flex-col mb-6">
-                            <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome, {displayName}</h1>
-                            <p className="text-gray-500 text-sm">
-                                {isCaptainOrSecretary ? "Barangay Overview — Administration" : 
-                                 isTanod ? "Field Operations Dashboard — Barangay Security" :
-                                 isSK ? "Youth Council Dashboard — SK Administration" :
-                                 "Resident Portal — Brgy. San Gabriel"}
-                            </p>
+                        {/* Green Banner */}
+                        <div className="bg-[#1e7b2b] text-white rounded-xl mb-6 p-8 flex items-center justify-between relative overflow-hidden shadow-sm">
+                            <div className="flex items-center gap-6 z-10">
+                                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center p-1 shadow-md">
+                                    <img src="/b4-logo.jpg" alt="Logo" className="w-full h-full rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <p className="text-xs text-green-100 mb-1">Republic of the Philippines · Gen. Trias, Cavite</p>
+                                    <h1 className="text-3xl font-bold mb-1">Barangay San Gabriel</h1>
+                                    <p className="text-sm text-green-50 mb-4">Management Information System</p>
+                                    <div className="inline-flex items-center gap-2 bg-[#176623] border border-[#2e8f3b] text-xs px-3 py-1.5 rounded-full w-fit">
+                                        <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                                        <span>System Online — {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Background watermark */}
+                            <div className="absolute right-[-40px] top-[-40px] opacity-10 pointer-events-none transform scale-150 z-0">
+                                <img src="/b4-logo.jpg" alt="" className="w-96 h-96 rounded-full grayscale opacity-20" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                            </div>
                         </div>
                         
                         {/* --- VIEW 1: CAPTAIN & SECRETARY --- */}
                         {isCaptainOrSecretary && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                                <StatCard title="Total Residents" value={(stats.total_residents || 0).toLocaleString()} icon={<UsersIcon />} bgClass="bg-[#eef5fd]" textClass="text-[#3b82f6]" />
-                                <StatCard title="Welfare Beneficiaries" value={welfareBeneficiariesCount.toLocaleString()} icon={<HeartHandIcon />} bgClass="bg-[#fef2f2]" textClass="text-[#ef4444]" />
-                                <StatCard title="Chatbot Queries" value={(stats.chatbot_queries || 0).toLocaleString()} icon={<ChatIcon />} bgClass="bg-[#f8fafc]" textClass="text-[#64748b]" />
+                                <StatCard title="Total Residents" value={(stats.total_residents || 0).toLocaleString()} icon={<UsersIcon />} bgClass="bg-[#1e7b2b]" textClass="text-white" />
+                                <StatCard title="Welfare Beneficiaries" value={welfareBeneficiariesCount.toLocaleString()} icon={<HeartHandIcon />} bgClass="bg-[#14b8a6]" textClass="text-white" />
+                                <StatCard title="Chatbot Queries" value={(stats.chatbot_queries || 0).toLocaleString()} icon={<ChatIcon />} bgClass="bg-[#ef4444]" textClass="text-white" />
                             </div>
                         )}
 
@@ -199,8 +229,8 @@ export default function Home() {
                                     <span className="font-bold text-gray-900">Geo Mapping</span>
                                     <span className="text-xs text-gray-500 mt-1">View Outposts & Heatmaps</span>
                                 </button>
-                                <button onClick={() => navigate('/barangaycalendarstaff')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all group">
-                                    <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
+                                <button onClick={() => navigate('/barangaycalendarstaff')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all group">
+                                    <div className="p-3 bg-green-50 text-green-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
                                     <span className="font-bold text-gray-900">Staff Schedule</span>
                                     <span className="text-xs text-gray-500 mt-1">View Duty Rosters & Events</span>
                                 </button>
@@ -215,8 +245,8 @@ export default function Home() {
                                     <span className="font-bold text-gray-900">Inventory</span>
                                     <span className="text-xs text-gray-500 mt-1">Manage SK & Welfare Items</span>
                                 </button>
-                                <button onClick={() => navigate('/barangaycalendarstaff')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all group">
-                                    <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
+                                <button onClick={() => navigate('/barangaycalendarstaff')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all group">
+                                    <div className="p-3 bg-green-50 text-green-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
                                     <span className="font-bold text-gray-900">Staff Calendar</span>
                                     <span className="text-xs text-gray-500 mt-1">View Duty Rosters & Events</span>
                                 </button>
@@ -232,15 +262,15 @@ export default function Home() {
                         {isResident && (
                             <>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                                    <button onClick={() => navigate('/requestcertificate')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all group">
-                                        <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><FileTextIcon /></div>
-                                        <span className="font-bold text-gray-900">Request Document</span>
-                                        <span className="text-xs text-gray-500 mt-1">Clearance, Indigency, Certificates</span>
+                                    <button onClick={() => navigate('/announcements')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group">
+                                        <div className="p-3 bg-orange-50 text-orange-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><MegaphoneIcon /></div>
+                                        <span className="font-bold text-gray-900">Announcements</span>
+                                        <span className="text-xs text-gray-500 mt-1">View latest updates</span>
                                     </button>
-                                    <button onClick={() => navigate('/reservations/request')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all group">
+                                    <button onClick={() => navigate('/resident/schedule')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all group">
                                         <div className="p-3 bg-green-50 text-green-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
-                                        <span className="font-bold text-gray-900">Book Facility/Equipment</span>
-                                        <span className="text-xs text-gray-500 mt-1">Covered Court, Chairs, Tents</span>
+                                        <span className="font-bold text-gray-900">Barangay Calendar</span>
+                                        <span className="text-xs text-gray-500 mt-1">View events and schedules</span>
                                     </button>
                                     <button onClick={() => navigate('/aiassistant')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-purple-300 hover:shadow-md transition-all group">
                                         <div className="p-3 bg-purple-50 text-purple-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><ChatIcon /></div>
@@ -262,7 +292,7 @@ export default function Home() {
                                                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                                                         req.status === 'PENDING' ? 'bg-orange-100 text-orange-700' :
                                                         req.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
-                                                        'bg-blue-100 text-blue-700'
+                                                        'bg-green-100 text-green-700'
                                                     }`}>
                                                         {req.status}
                                                     </span>
@@ -279,10 +309,8 @@ export default function Home() {
                             
                             {/* Left: Latest Announcements */}
                             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col h-full">
-                                <div className="flex items-center gap-2 mb-6">
-                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                                        <MegaphoneIcon />
-                                    </div>
+                                <div className="flex items-center gap-2 mb-6 text-[#1e7b2b]">
+                                    <MegaphoneIcon />
                                     <h2 className="text-lg font-bold text-gray-900">Latest Announcements</h2>
                                 </div>
                                 
@@ -296,17 +324,49 @@ export default function Home() {
                                                 onClick={() => setSelectedAnnouncement(ann)}
                                                 className="border-b border-gray-100 pb-4 last:border-0 last:pb-0 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
                                             >
-                                                <div className="flex justify-between items-start mb-1">
-                                                    <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-                                                        {ann.title}
-                                                        {!isCaptainOrSecretary && !ann.is_read && (
-                                                            <span className="w-2 h-2 rounded-full bg-blue-500" title="Unread"></span>
-                                                        )}
-                                                    </h3>
-                                                    <span className="text-xs font-medium text-gray-400 whitespace-nowrap ml-4">
-                                                        {new Date(ann.created_at || ann.date_posted || Date.now()).toLocaleDateString()}
-                                                    </span>
-                                                </div>
+                                                {/* Categories / Tags */}
+                                                {ann.categories && ann.categories.length > 0 && (
+                                                    <div className="flex gap-2 mb-2">
+                                                        {ann.categories.map((cat: string, idx: number) => (
+                                                            <span key={idx} className="bg-[#e6f4ea] text-[#1e8e3e] px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border border-[#a8dfb5]">
+                                                                {cat}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                <h3 className="font-semibold text-gray-800 text-base mb-0.5 flex items-center gap-2">
+                                                    {ann.title}
+                                                    {!isCaptainOrSecretary && !ann.is_read && (
+                                                        <span className="w-2 h-2 rounded-full bg-green-500" title="Unread"></span>
+                                                    )}
+                                                </h3>
+                                                
+                                                <p className="text-xs text-gray-500 mb-2">
+                                                    {(() => {
+                                                        const d = new Date(ann.created_at || ann.date_posted || Date.now());
+                                                        return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+                                                    })()} · {ann.author_name || 'Admin'}
+                                                </p>
+
+                                                {ann.linked_event_details && (() => {
+                                                    const formatTime = (iso: string) => {
+                                                        const d = new Date(iso);
+                                                        return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                                                    };
+                                                    return (
+                                                        <div className="flex items-center gap-3 text-[#0f766e] text-xs font-medium mb-3">
+                                                            <div className="flex items-center gap-1">
+                                                                <ClockIcon className="w-3.5 h-3.5" />
+                                                                <span>Start: {formatTime(ann.linked_event_details.start_time)}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1">
+                                                                <ClockIcon className="w-3.5 h-3.5" />
+                                                                <span>End: {formatTime(ann.linked_event_details.end_time)}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 mb-2">
                                                     {ann.content || ann.description}
@@ -322,15 +382,6 @@ export default function Home() {
                                                         />
                                                     </div>
                                                 )}
-                                                
-                                                {!isCaptainOrSecretary && !ann.is_read && (
-                                                    <button 
-                                                        onClick={(e) => markAsRead(ann.id, e)} 
-                                                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold border border-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition-colors"
-                                                    >
-                                                        Mark as Read
-                                                    </button>
-                                                )}
                                             </div>
                                         ))
                                     )}
@@ -339,45 +390,25 @@ export default function Home() {
 
                             {/* Right: Quick Emergency Contacts */}
                             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col h-full">
-                                <div className="flex items-center gap-2 mb-6">
-                                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-                                        <PhoneCallIcon />
-                                    </div>
+                                <div className="flex items-center gap-2 mb-6 text-[#1e7b2b]">
+                                    <PhoneCallIcon />
                                     <h2 className="text-lg font-bold text-gray-900">Quick Emergency Contacts</h2>
                                 </div>
 
-                                <div className="divide-y divide-gray-100 flex-1 flex flex-col justify-between">
-                                    <div className="py-3.5 first:pt-0 flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-gray-800 text-sm">BRGY. SAN GABRIEL EMERGENCY RESONDERS</p>
-                                            <p className="text-xs text-gray-500">Emergency Responders</p>
-                                        </div>
-                                        <span className="font-semibold text-emerald-600 text-sm">09277900245</span>
-                                    </div>
-
-                                    <div className="py-3.5 flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-gray-800 text-sm">AMBULANCE (PTV)</p>
-                                            <p className="text-xs text-gray-500">For Medical Emergencies</p>
-                                        </div>
-                                        <span className="font-semibold text-emerald-600 text-sm">09625385617</span>
-                                    </div>
-
-                                    <div className="py-3.5 flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-gray-800 text-sm">BFP Fire Station</p>
-                                            <p className="text-xs text-gray-500">Firefighters</p>
-                                        </div>
-                                        <span className="font-semibold text-emerald-600 text-sm">09674290363</span>
-                                    </div>
-
-                                    <div className="py-3.5 last:pb-0 flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-gray-800 text-sm">Emergency / 911</p>
-                                            <p className="text-xs text-gray-500">National emergency hotline</p>
-                                        </div>
-                                        <span className="font-bold text-red-600 text-base">911</span>
-                                    </div>
+                                <div className="flex-1 overflow-y-auto pr-2 max-h-[420px]">
+                                    {emergencyContacts.length === 0 ? (
+                                        <p className="text-gray-500 text-sm">No emergency contacts available.</p>
+                                    ) : (
+                                        emergencyContacts.map((contact: any) => (
+                                            <div key={contact.id} className="py-3.5 border-b border-gray-100 last:border-0 last:pb-0 flex items-center justify-between">
+                                                <div>
+                                                    <p className="font-bold text-gray-800 text-sm uppercase">{contact.name}</p>
+                                                    <p className="text-xs text-gray-500">{contact.description}</p>
+                                                </div>
+                                                <span className="font-semibold text-emerald-600 text-sm ml-4 whitespace-nowrap">{contact.phone}</span>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
 

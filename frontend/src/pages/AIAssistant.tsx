@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect, useContext } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import { AuthContext } from "../components/AuthContext";
 import ReactMarkdown from 'react-markdown';
 
@@ -96,17 +94,13 @@ export default function AiAssistant() {
     };
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
             
-            <div className="shrink-0 w-full">
-                <PageHeader />
-            </div>
+            
 
             <div className="flex flex-1 overflow-hidden">
                 
-                <div className="shrink-0 h-full">
-                    <Sidebar />
-                </div>
+                
                 
                 <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
                     
@@ -138,7 +132,7 @@ export default function AiAssistant() {
                                             
                                             {/* Bot Icon */}
                                             {msg.sender === 'bot' && (
-                                                <div className="w-8 h-8 rounded-full bg-[#1c4ed8] text-white flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm">
+                                                <div className="w-8 h-8 rounded-full bg-[#16a34a] text-white flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2v10a2 2 0 002 2z" />
                                                     </svg>
@@ -148,7 +142,7 @@ export default function AiAssistant() {
                                             {/* Text Bubble */}
                                             <div className={`max-w-[85%] px-4 py-3 rounded-lg text-sm shadow-sm ${
                                                 msg.sender === 'user' 
-                                                ? 'bg-[#1c4ed8] text-white rounded-br-none' 
+                                                ? 'bg-[#16a34a] text-white rounded-br-none' 
                                                 : 'bg-white border border-gray-200 text-gray-700 rounded-bl-none'
                                             }`}>
                                                 {msg.sender === 'bot' ? (
@@ -176,7 +170,7 @@ export default function AiAssistant() {
                                     {/* Loading Indicator */}
                                     {isLoading && (
                                         <div className="flex justify-start">
-                                            <div className="w-8 h-8 rounded-full bg-[#1c4ed8] text-white flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm">
+                                            <div className="w-8 h-8 rounded-full bg-[#16a34a] text-white flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2v10a2 2 0 002 2z" />
                                                 </svg>
@@ -202,7 +196,7 @@ export default function AiAssistant() {
                                                 key={suggestion}
                                                 onClick={() => handleSendMessage(suggestion)}
                                                 disabled={isLoading}
-                                                className="px-3 py-1.5 bg-white border border-blue-200 text-blue-700 text-xs font-semibold rounded-full shadow-sm hover:bg-blue-50 transition-colors disabled:opacity-50"
+                                                className="px-3 py-1.5 bg-white border border-green-200 text-green-700 text-xs font-semibold rounded-full shadow-sm hover:bg-green-50 transition-colors disabled:opacity-50"
                                             >
                                                 {suggestion}
                                             </button>
@@ -216,12 +210,12 @@ export default function AiAssistant() {
                                             onChange={(e) => setInputValue(e.target.value)}
                                             disabled={isLoading}
                                             placeholder="Ask about barangay services..." 
-                                            className="flex-1 border border-gray-300 rounded-md p-3 text-sm outline-none focus:ring-2 focus:ring-blue-600 transition-shadow disabled:bg-gray-100 disabled:text-gray-400"
+                                            className="flex-1 border border-gray-300 rounded-md p-3 text-sm outline-none focus:ring-2 focus:ring-green-600 transition-shadow disabled:bg-gray-100 disabled:text-gray-400"
                                         />
                                         <button 
                                             type="submit" 
                                             disabled={isLoading || !inputValue.trim()}
-                                            className="bg-[#1c4ed8] hover:bg-blue-800 text-white px-5 rounded-md flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                            className="bg-[#16a34a] hover:bg-green-800 text-white px-5 rounded-md flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                                         >
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

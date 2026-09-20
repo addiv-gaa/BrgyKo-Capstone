@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import BarangayCalendar from "../components/BarangayCalendar";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -94,10 +92,10 @@ export default function StaffSchedulePage() {
     const closeModal = () => setSelectedRequest(null);
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     
                     <div className="w-full h-full"> 
@@ -116,7 +114,7 @@ export default function StaffSchedulePage() {
                                         <select 
                                             value={formData.event_type}
                                             onChange={(e) => setFormData({...formData, event_type: e.target.value})}
-                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-blue-600"
+                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"
                                         >
                                             <option value="ACTIVITY">Barangay Activity</option>
                                             <option value="ABSENCE">Official Absence</option>
@@ -129,7 +127,7 @@ export default function StaffSchedulePage() {
                                             value={formData.title}
                                             onChange={(e) => setFormData({...formData, title: e.target.value})}
                                             placeholder="e.g. Kapitan on Leave"
-                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-blue-600"
+                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"
                                         />
                                     </div>
                                     <div>
@@ -138,7 +136,7 @@ export default function StaffSchedulePage() {
                                             type="datetime-local" required
                                             value={formData.start_time}
                                             onChange={(e) => setFormData({...formData, start_time: e.target.value})}
-                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-blue-600"
+                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"
                                         />
                                     </div>
                                     <div>
@@ -147,10 +145,10 @@ export default function StaffSchedulePage() {
                                             type="datetime-local" required
                                             value={formData.end_time}
                                             onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-blue-600"
+                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"
                                         />
                                     </div>
-                                    <button type="submit" className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 mt-2 transition-colors">
+                                    <button type="submit" className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 mt-2 transition-colors">
                                         Save to Calendar
                                     </button>
                                 </form>
@@ -162,7 +160,7 @@ export default function StaffSchedulePage() {
 
             {selectedRequest && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity p-4">
-                    {/* Added max-h-screen and overflow-y-auto to handle vertically tall content */}
+                    {/* Added max-h-full and overflow-y-auto to handle vertically tall content */}
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
                         
                         <div className="flex justify-between items-center p-5 border-b border-gray-200 shrink-0">
@@ -184,7 +182,7 @@ export default function StaffSchedulePage() {
                             <div className="grid grid-cols-3 gap-2 border-b border-gray-100 pb-4">
                                 <span className="text-xs font-semibold text-gray-500 uppercase">Item/Facility</span>
                                 {/* Added break-words to handle extremely long item names */}
-                                <span className="col-span-2 font-bold text-blue-700 wrap-break-word">{getRequestedItem(selectedRequest)}</span>
+                                <span className="col-span-2 font-bold text-green-700 wrap-break-word">{getRequestedItem(selectedRequest)}</span>
                             </div>
                             <div className="grid grid-cols-3 gap-2 border-b border-gray-100 pb-4">
                                 <span className="text-xs font-semibold text-gray-500 uppercase">Purpose</span>

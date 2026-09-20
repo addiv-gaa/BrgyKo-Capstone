@@ -1,6 +1,4 @@
 import { useState, useEffect, useContext } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import { AuthContext } from "../components/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -217,10 +215,10 @@ export default function Announcements() {
     };
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800 relative">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800 relative">
+            
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
                 
                 <main className="flex-1 w-full overflow-y-auto p-8 bg-[#f4f7fa] text-gray-800">
                     <div className="max-w-4xl mx-auto">
@@ -233,7 +231,7 @@ export default function Announcements() {
                             {canCreate && (
                                 <button 
                                     onClick={() => setIsModalOpen(true)}
-                                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+                                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                                     Create Announcement
@@ -257,7 +255,7 @@ export default function Announcements() {
                                             {/* Category & Tags Row (Displayed Near The Top) */}
                                             <div className="flex flex-wrap gap-2 mb-3">
                                                 {ann.categories && ann.categories.map((cat, i) => (
-                                                    <span key={`cat-${i}`} className="px-3 py-1 bg-blue-100 text-blue-800 text-[11px] font-bold rounded-full uppercase tracking-wider">
+                                                    <span key={`cat-${i}`} className="px-3 py-1 bg-green-100 text-green-800 text-[11px] font-bold rounded-full uppercase tracking-wider">
                                                         {cat}
                                                     </span>
                                                 ))}
@@ -279,12 +277,12 @@ export default function Announcements() {
                                             {/* Event Schedule Badges (If Linked) */}
                                             {ann.linked_event_details && (
                                                 <div className="flex flex-wrap items-center gap-3 mb-4">
-                                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-800 text-white text-xs font-semibold rounded-md shadow-sm">
+                                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-800 text-white text-xs font-semibold rounded-md shadow-sm">
                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                                         Starts: {ann.linked_event_details.start_time.replace('T', ' ')}
                                                     </div>
-                                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-900 text-xs font-semibold rounded-md border border-blue-200">
-                                                        <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-900 text-xs font-semibold rounded-md border border-green-200">
+                                                        <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                                         Ends: {ann.linked_event_details.end_time.replace('T', ' ')}
                                                     </div>
                                                 </div>
@@ -304,7 +302,7 @@ export default function Announcements() {
                                                             Your browser does not support the video tag.
                                                         </video>
                                                     ) : (
-                                                        <a href={ann.attachment} target="_blank" rel="noreferrer" className="p-4 inline-flex items-center gap-2 text-sm text-blue-700 hover:text-blue-900 font-semibold">
+                                                        <a href={ann.attachment} target="_blank" rel="noreferrer" className="p-4 inline-flex items-center gap-2 text-sm text-green-700 hover:text-green-900 font-semibold">
                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                                                             Download Attached Document
                                                         </a>
@@ -343,19 +341,19 @@ export default function Announcements() {
                                 
                                 <div>
                                     <label className="block text-sm font-bold text-gray-800 mb-2">Title <span className="text-red-500">*</span></label>
-                                    <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder-gray-400" placeholder="Announcement title" />
+                                    <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-800 placeholder-gray-400" placeholder="Announcement title" />
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-bold text-gray-800 mb-2">Content <span className="text-red-500">*</span></label>
-                                    <textarea required rows={5} value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder-gray-400 resize-none" placeholder="Write the announcement details..."></textarea>
+                                    <textarea required rows={5} value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-800 placeholder-gray-400 resize-none" placeholder="Write the announcement details..."></textarea>
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-bold text-gray-800 mb-2">Categories <span className="text-red-500">*</span></label>
                                     <div className="flex flex-wrap gap-2">
                                         {CATEGORY_OPTIONS.map(cat => (
-                                            <label key={cat} className={`px-4 py-1.5 border rounded-full text-xs font-semibold cursor-pointer transition-colors ${formData.categories.includes(cat) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                                            <label key={cat} className={`px-4 py-1.5 border rounded-full text-xs font-semibold cursor-pointer transition-colors ${formData.categories.includes(cat) ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
                                                 <input type="checkbox" className="hidden" checked={formData.categories.includes(cat)} onChange={() => handleCategoryToggle(cat)} />
                                                 {cat}
                                             </label>
@@ -366,7 +364,7 @@ export default function Announcements() {
                                 {/* Event Schedule Block */}
                                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
                                     <div className="flex items-center gap-2 mb-4">
-                                        <input type="checkbox" id="hasEvent" checked={hasEvent} onChange={(e) => setHasEvent(e.target.checked)} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer" />
+                                        <input type="checkbox" id="hasEvent" checked={hasEvent} onChange={(e) => setHasEvent(e.target.checked)} className="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer" />
                                         <label htmlFor="hasEvent" className="text-sm font-bold text-gray-700 uppercase tracking-wider cursor-pointer">Event Schedule <span className="text-gray-400 normal-case font-normal tracking-normal">(optional)</span></label>
                                     </div>
 
@@ -374,19 +372,19 @@ export default function Announcements() {
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-700 mb-1">Start Date</label>
-                                                <input type="date" required={hasEvent} value={eventData.startDate} onChange={e => setEventData({...eventData, startDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-700" />
+                                                <input type="date" required={hasEvent} value={eventData.startDate} onChange={e => setEventData({...eventData, startDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700" />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-700 mb-1">Start Time</label>
-                                                <input type="time" required={hasEvent} value={eventData.startTime} onChange={e => setEventData({...eventData, startTime: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-700" />
+                                                <input type="time" required={hasEvent} value={eventData.startTime} onChange={e => setEventData({...eventData, startTime: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700" />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-700 mb-1">End Date</label>
-                                                <input type="date" required={hasEvent} value={eventData.endDate} onChange={e => setEventData({...eventData, endDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-700" />
+                                                <input type="date" required={hasEvent} value={eventData.endDate} onChange={e => setEventData({...eventData, endDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700" />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-700 mb-1">End Time</label>
-                                                <input type="time" required={hasEvent} value={eventData.endTime} onChange={e => setEventData({...eventData, endTime: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-700" />
+                                                <input type="time" required={hasEvent} value={eventData.endTime} onChange={e => setEventData({...eventData, endTime: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700" />
                                             </div>
                                         </div>
                                     )}
@@ -403,7 +401,7 @@ export default function Announcements() {
                                             </span>
                                         ))}
                                     </div>
-                                    <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleTagKeyDown} className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Type a tag and press Enter" />
+                                    <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleTagKeyDown} className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" placeholder="Type a tag and press Enter" />
                                 </div>
 
                                 {/* Urgent Toggle */}
@@ -421,7 +419,7 @@ export default function Announcements() {
                                     <div className="relative border-2 border-dashed border-gray-300 rounded-xl bg-white hover:bg-gray-50 transition-colors p-8 text-center cursor-pointer group">
                                         <input type="file" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*,video/*" />
                                         <div className="flex flex-col items-center">
-                                            <svg className="w-8 h-8 text-gray-400 mb-2 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                            <svg className="w-8 h-8 text-gray-400 mb-2 group-hover:text-green-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                             <p className="text-sm font-semibold text-gray-700">Click to upload image, GIF, or video</p>
                                             <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider">{formData.attachment ? formData.attachment.name : 'JPG, PNG, GIF, MP4, WEBM'}</p>
                                         </div>
@@ -435,7 +433,7 @@ export default function Announcements() {
                             <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 w-1/3 bg-gray-200 text-gray-800 text-sm font-bold rounded-lg hover:bg-gray-300 transition-colors">
                                 Cancel
                             </button>
-                            <button type="submit" form="announcement-form" disabled={isSubmitting || formData.categories.length === 0} className="px-6 py-3 w-2/3 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-center shadow-md">
+                            <button type="submit" form="announcement-form" disabled={isSubmitting || formData.categories.length === 0} className="px-6 py-3 w-2/3 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-center shadow-md">
                                 {isSubmitting ? "Processing..." : "Post Announcement"}
                             </button>
                         </div>

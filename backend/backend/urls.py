@@ -45,6 +45,7 @@ from api.views import (
     EventViewSet,
     OfficialDocumentViewSet,
     IncidentReportViewSet, # NEW
+    EmergencyContactViewSet,
     StaffDemographicsAiView,
 
     # Admin Hub & Audit Logs
@@ -69,6 +70,7 @@ router.register(r'events', EventViewSet, basename='events')
 router.register(r'official-documents', OfficialDocumentViewSet, basename='official-documents')
 router.register(r'incident-reports', IncidentReportViewSet, basename='incident-reports') # NEW
 router.register(r'ai-queries', AiQueryStatisticViewSet, basename='ai-queries')
+router.register(r'emergency-contacts', EmergencyContactViewSet, basename='emergency-contacts')
 
 urlpatterns = [
     # --- Authentication & Registration ---

@@ -35,7 +35,7 @@ export default function HouseholdModal({ mode, household, coords, onClose, onSav
     };
 
     return (
-        <div className="fixed inset-0 z-2000 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in-up">
                 
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
@@ -48,11 +48,11 @@ export default function HouseholdModal({ mode, household, coords, onClose, onSav
                 <form className="p-6 space-y-5" onSubmit={handleSubmit}>
                     
                     {/* Coordinates Display (Read Only) */}
-                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-3">
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-100 flex items-center gap-3">
                         <span className="text-xl">📍</span>
                         <div className="text-sm">
-                            <span className="block font-semibold text-blue-900">Location Locked</span>
-                            <span className="text-blue-700 font-mono">
+                            <span className="block font-semibold text-green-900">Location Locked</span>
+                            <span className="text-green-700 font-mono">
                                 {mode === 'add' && coords ? `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}` : ''}
                                 {mode === 'edit' && household ? `${household.geometry.coordinates[1].toFixed(6)}, ${household.geometry.coordinates[0].toFixed(6)}` : ''}
                             </span>
@@ -64,7 +64,7 @@ export default function HouseholdModal({ mode, household, coords, onClose, onSav
                         <textarea 
                             name="address" 
                             rows={3}
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-blue-500 focus:border-blue-500" 
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-green-500 focus:border-green-500" 
                             defaultValue={household?.properties?.address || ''} 
                             placeholder="e.g., 123 Main St, near the basketball court..."
                             required 
@@ -76,7 +76,7 @@ export default function HouseholdModal({ mode, household, coords, onClose, onSav
                             <label className="block text-sm font-medium text-gray-700 mb-1">Housing Status</label>
                             <select 
                                 name="housing_status" 
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-blue-500 focus:border-blue-500" 
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-green-500 focus:border-green-500" 
                                 defaultValue={household?.properties?.housing_status || 'Owned'}
                             >
                                 <option value="Owned">Owned</option>
@@ -89,7 +89,7 @@ export default function HouseholdModal({ mode, household, coords, onClose, onSav
                             <label className="block text-sm font-medium text-gray-700 mb-1">Dwelling Type</label>
                             <select 
                                 name="dwelling_type" 
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-blue-500 focus:border-blue-500" 
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-green-500 focus:border-green-500" 
                                 defaultValue={household?.properties?.dwelling_type || 'Concrete'}
                             >
                                 <option value="Concrete">Concrete</option>
@@ -101,7 +101,7 @@ export default function HouseholdModal({ mode, household, coords, onClose, onSav
 
                     <div className="pt-4 flex gap-3 justify-end border-t border-gray-100 mt-6">
                         <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-                        <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 shadow-sm transition-colors">
+                        <button type="submit" className="px-5 py-2.5 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 shadow-sm transition-colors">
                             {mode === 'add' ? 'Save Location' : 'Update Structure'}
                         </button>
                     </div>

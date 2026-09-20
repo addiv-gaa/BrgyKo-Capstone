@@ -1,74 +1,102 @@
-import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useContext } from "react";
+import { AuthContext } from "./AuthContext";
+import { MENU_CONFIG } from "./sidebar";
 
-const PageHeader = () => {
+const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
     const navigate = useNavigate();
-    const [username, setUsername] = useState("My Profile");
+    const location = useLocation();
+    const auth = useContext(AuthContext);
+    const [userRole, setUserRole] = useState<string>("Resident");
 
-    // Extract the username from the stored JWT token
     useEffect(() => {
-        const token = localStorage.getItem('access');
-        if (token) {
-            try {
-                // Decode the payload portion of the JWT token
-                const base64Url = token.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                }).join(''));
-
-                const payload = JSON.parse(jsonPayload);
-                if (payload.username) {
-                    setUsername(payload.username);
-                }
-            } catch (error) {
-                console.error("Failed to decode token", error);
+        let extractedRole = "";
+        try {
+            const token = localStorage.getItem('access');
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                extractedRole = payload.role || payload.roles || "";
             }
-        }
-    }, []);
+        } catch (error) {}
 
-    const LogoutClicked = () => navigate('/logout');
-    const ProfileClicked = () => navigate('/profile'); // Directs them to the Profile page
+        if (!extractedRole && auth?.user) {
+            const contextUser = auth.user as any;
+            extractedRole = contextUser.role || contextUser.roles || "";
+        }
+
+        if (Array.isArray(extractedRole)) {
+            setUserRole(extractedRole[0] || "Resident");
+        } else if (typeof extractedRole === 'string') {
+            setUserRole(extractedRole || "Resident");
+        }
+    }, [auth]);
+
+    // Format role for display (e.g., "Resident", "Barangay Staff")
+    const displayRole = userRole.toLowerCase() === 'resident' ? 'Resident' : 
+                        userRole.toLowerCase() === 'tanod' ? 'Tanod' : 'Barangay Staff';
+
+    const ProfileClicked = () => navigate('/profile');
+
+    // Find the current page title based on the path
+    let currentTitle = "Dashboard";
+    const currentPath = location.pathname;
+    
+    // Flatten all menu items to easily find the matching one
+    const allMenuItems = [
+        ...MENU_CONFIG.residentServices,
+        ...MENU_CONFIG.tanodAdministration,
+        ...MENU_CONFIG.staffAdministration
+    ];
+    
+    const matchedItem = allMenuItems.find(item => item.path === currentPath);
+    if (matchedItem) {
+        currentTitle = matchedItem.label;
+    } else if (currentPath.includes('/profile')) {
+        currentTitle = "My Profile";
+    }
+
+    const isLoggedIn = !!auth?.user || !!localStorage.getItem('access');
 
     return (
-        <header className="h-15 w-full bg-blue-600 flex items-center justify-between p-1 px-6 sticky top-0 shrink-0 z-50 shadow-md">
+        <header className="h-16 w-full bg-white flex items-center justify-between px-6 sticky top-0 shrink-0 z-50 border-b border-gray-200 shadow-sm">
             
-            {/* Logo / Brand Name */}
-            <div className="flex flex-col text-sm/[1.2] text-white font-bold cursor-default">
-                <span>BarangayKo</span>
+            {/* Left Side: Hamburger & Title */}
+            <div className="flex items-center gap-4">
+                <button onClick={toggleSidebar} className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+                <div className="flex flex-col">
+                    <h1 className="text-sm font-bold text-gray-900 leading-tight">{currentTitle}</h1>
+                    <p className="text-[11px] text-gray-500 leading-tight">Brgy. San Gabriel A — Gen. Trias, Cavite</p>
+                </div>
             </div>
             
-            {/* Right Side Actions Container */}
-            <div className="flex items-center gap-5">
-                
-                {/* Username / Profile Link */}
-                <button 
-                    onClick={ProfileClicked}
-                    className="flex items-center gap-2 text-white hover:text-blue-200 transition-colors text-sm font-semibold"
-                >
-                    {/* User Avatar Icon */}
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {username}
-                </button>
-
-                {/* Subtle Divider Line */}
-                <div className="h-6 w-px bg-white/30"></div>
-
-                {/* Logout Button */}
-                <button 
-                    onClick={LogoutClicked}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-transparent border-2 border-white/80 hover:bg-white/10 text-white rounded-full text-sm font-bold transition-colors"
-                >
-                    {/* Logout Icon */}
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    Logout
-                </button>
+            {/* Right Side: Auth Button */}
+            <div className="flex items-center">
+                {isLoggedIn ? (
+                    <button 
+                        onClick={() => navigate('/logout')}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-md text-xs font-semibold hover:bg-red-100 transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Logout
+                    </button>
+                ) : (
+                    <button 
+                        onClick={() => navigate('/login')}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-md text-xs font-semibold hover:bg-green-100 transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
+                        </svg>
+                        Login
+                    </button>
+                )}
             </div>
-
         </header>
     );
 };

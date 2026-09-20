@@ -1,6 +1,4 @@
 import { useState, useEffect, useContext } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import { AuthContext } from "../components/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -50,6 +48,11 @@ export default function AdminHub() {
 
     // Data State
     const [logs, setLogs] = useState<AuditLog[]>([]);
+    const [logPage, setLogPage] = useState(1);
+    const [logTotalPages, setLogTotalPages] = useState(1);
+    const [logActionFilter, setLogActionFilter] = useState('');
+    const [logModelFilter, setLogModelFilter] = useState('');
+    const [logUserFilter, setLogUserFilter] = useState('');
     const [staffList, setStaffList] = useState<StaffMember[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -104,17 +107,46 @@ export default function AdminHub() {
         }
     }, []);
 
+
+    const fetchLogs = async () => {
+        const token = localStorage.getItem('access');
+        if (!token) return;
+        try {
+            const queryParams = new URLSearchParams({
+                page: logPage.toString(),
+                page_size: '15',
+                action: logActionFilter,
+                model: logModelFilter,
+                user: logUserFilter
+            });
+            const res = await fetch(`${API_URL}/api/admin/audit-logs/?${queryParams.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const logsData = await res.json();
+                setLogs(logsData.results ? logsData.results : (Array.isArray(logsData) ? logsData : []));
+                if (logsData.num_pages) setLogTotalPages(logsData.num_pages);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    useEffect(() => {
+        if (isAuthorized) {
+            fetchLogs();
+        }
+    }, [logPage, logActionFilter, logModelFilter, logUserFilter, isAuthorized]);
+
     const fetchData = async () => {
         setIsLoading(true);
         const token = localStorage.getItem('access');
         try {
-            const [logsRes, staffRes, settingsRes] = await Promise.all([
-                fetch(`${API_URL}/api/admin/audit-logs/`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            const [staffRes, settingsRes] = await Promise.all([
                 fetch(`${API_URL}/api/admin/staff-management/`, { headers: { 'Authorization': `Bearer ${token}` } }),
                 fetch(`${API_URL}/api/system/settings/`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
-            if (logsRes.ok) setLogs(await logsRes.json());
             if (staffRes.ok) setStaffList(await staffRes.json());
             if (settingsRes.ok) setSettingsForm(await settingsRes.json());
         } catch (error) {
@@ -210,28 +242,17 @@ export default function AdminHub() {
 
     if (!isAuthorized && !isLoading) {
         return (
-            <div className="h-screen w-full flex flex-col bg-gray-50">
-                <PageHeader />
-                <div className="flex flex-1">
-                    <Sidebar />
-                    <main className="flex-1 flex items-center justify-center p-8 bg-[#f8fafc]">
-                        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center max-w-md">
-                            <h2 className="text-xl font-bold text-gray-900 mb-2">Access Restricted</h2>
-                            <p className="text-gray-500 text-sm">You do not have administrative clearance to view this hub.</p>
-                        </div>
-                    </main>
+            <div className="h-full flex items-center justify-center p-8 bg-[#f8fafc]">
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center max-w-md">
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Access Restricted</h2>
+                    <p className="text-gray-500 text-sm">You do not have administrative clearance to view this hub.</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-50 overflow-hidden text-gray-800 font-sans">
-            <PageHeader />
-            <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
-                
-                <main className="flex-1 w-full overflow-y-auto p-8 bg-[#f8fafc]">
+        <div className="h-full w-full overflow-y-auto p-8 bg-[#f8fafc] text-gray-800 font-sans">
                     <div className="w-full space-y-8">
                         
                         {/* Header & Tabs */}
@@ -365,10 +386,32 @@ export default function AdminHub() {
                             <div className={`flex flex-col h-full max-h-[700px] ${cardClass}`}>
                                 <div className="px-6 py-5 border-b border-gray-50 flex justify-between items-center bg-white shrink-0">
                                     <h3 className="text-base font-bold text-gray-900">System Activity Logs</h3>
-                                    <button onClick={fetchData} className="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center gap-1.5 transition-colors">
+                                    <button onClick={fetchLogs} className="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center gap-1.5 transition-colors">
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                         Sync Latest
                                     </button>
+                                </div>
+                                <div className="px-6 py-4 bg-gray-50/50 border-b border-gray-100 flex flex-wrap gap-4 items-center shrink-0">
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase">Action:</label>
+                                        <select value={logActionFilter} onChange={e => {setLogActionFilter(e.target.value); setLogPage(1);}} className="text-sm border-gray-200 rounded-md py-1.5 px-3 bg-white">
+                                            <option value="">All Actions</option>
+                                            <option value="Created">Created</option>
+                                            <option value="Updated">Updated</option>
+                                            <option value="Deleted">Deleted</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase">Module:</label>
+                                        <select value={logModelFilter} onChange={e => {setLogModelFilter(e.target.value); setLogPage(1);}} className="text-sm border-gray-200 rounded-md py-1.5 px-3 bg-white">
+                                            <option value="">All Modules</option>
+                                            <option value="Resident">Residents</option>
+                                            <option value="UserProfile">User Profiles</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-1">
+                                        <input type="text" placeholder="Search by username..." value={logUserFilter} onChange={e => {setLogUserFilter(e.target.value); setLogPage(1);}} className="text-sm border border-gray-200 rounded-md py-1.5 px-3 w-full max-w-xs" />
+                                    </div>
                                 </div>
                                 <div className="overflow-y-auto flex-1">
                                     <table className="w-full text-sm text-left">
@@ -399,6 +442,13 @@ export default function AdminHub() {
                                             ))}
                                         </tbody>
                                     </table>
+                                </div>
+                                <div className="px-6 py-4 border-t border-gray-100 bg-white flex justify-between items-center shrink-0">
+                                    <span className="text-sm text-gray-500 font-semibold">Page {logPage} of {logTotalPages}</span>
+                                    <div className="flex gap-2">
+                                        <button disabled={logPage <= 1} onClick={() => setLogPage(p => Math.max(1, p - 1))} className="px-4 py-1.5 text-sm font-semibold border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-700">Previous</button>
+                                        <button disabled={logPage >= logTotalPages} onClick={() => setLogPage(p => p + 1)} className="px-4 py-1.5 text-sm font-semibold border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-700">Next</button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -449,28 +499,6 @@ export default function AdminHub() {
                                             </div>
                                         </div>
 
-                                        {/* Hotlines Group */}
-                                        <div className="space-y-5 bg-gray-50/50 p-6 rounded-xl border border-gray-100">
-                                            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                                                <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                                                Emergency Dispatch Numbers
-                                            </h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                <div>
-                                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Medical / Rescue</label>
-                                                    <input type="text" required value={settingsForm.emergency_hotline} onChange={(e) => setSettingsForm({...settingsForm, emergency_hotline: e.target.value})} className={inputClass} placeholder="911" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Police Desk</label>
-                                                    <input type="text" required value={settingsForm.police_hotline} onChange={(e) => setSettingsForm({...settingsForm, police_hotline: e.target.value})} className={inputClass} placeholder="117" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Fire Department</label>
-                                                    <input type="text" required value={settingsForm.fire_hotline} onChange={(e) => setSettingsForm({...settingsForm, fire_hotline: e.target.value})} className={inputClass} placeholder="112" />
-                                                </div>
-                                            </div>
-                                        </div>
-
                                         {/* Feature Toggles / Kill-Switches */}
                                         <div className="space-y-5 bg-gray-50/50 p-6 rounded-xl border border-gray-100">
                                             <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
@@ -492,32 +520,6 @@ export default function AdminHub() {
                                                     </div>
                                                 </label>
 
-                                                {/* Accept Permit Requests Toggle */}
-                                                <label className="flex items-center justify-between cursor-pointer p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors shadow-sm">
-                                                    <div className="pr-4">
-                                                        <div className="text-sm font-bold text-gray-900">Accept Permit Requests</div>
-                                                        <div className="text-xs text-gray-500 mt-0.5">Global kill-switch for online document requests.</div>
-                                                    </div>
-                                                    <div className="relative shrink-0">
-                                                        <input type="checkbox" className="sr-only" checked={settingsForm.accept_permit_requests} onChange={(e) => setSettingsForm({...settingsForm, accept_permit_requests: e.target.checked})} />
-                                                        <div className={`block w-12 h-7 rounded-full transition-colors ${settingsForm.accept_permit_requests ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-                                                        <div className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform duration-300 shadow-sm ${settingsForm.accept_permit_requests ? 'transform translate-x-5' : ''}`}></div>
-                                                    </div>
-                                                </label>
-
-                                                {/* Accept Reservations Toggle */}
-                                                <label className="flex items-center justify-between cursor-pointer p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors shadow-sm">
-                                                    <div className="pr-4">
-                                                        <div className="text-sm font-bold text-gray-900">Accept Facility Reservations</div>
-                                                        <div className="text-xs text-gray-500 mt-0.5">Enable or disable court/equipment borrowing.</div>
-                                                    </div>
-                                                    <div className="relative shrink-0">
-                                                        <input type="checkbox" className="sr-only" checked={settingsForm.accept_reservations} onChange={(e) => setSettingsForm({...settingsForm, accept_reservations: e.target.checked})} />
-                                                        <div className={`block w-12 h-7 rounded-full transition-colors ${settingsForm.accept_reservations ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-                                                        <div className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform duration-300 shadow-sm ${settingsForm.accept_reservations ? 'transform translate-x-5' : ''}`}></div>
-                                                    </div>
-                                                </label>
-
                                                 {/* Maintenance Mode Toggle */}
                                                 <label className="flex items-center justify-between cursor-pointer p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors shadow-sm">
                                                     <div className="pr-4">
@@ -533,26 +535,6 @@ export default function AdminHub() {
                                             </div>
                                         </div>
 
-                                        {/* Workflow & Policy Limits Group */}
-                                        <div className="space-y-5 bg-gray-50/50 p-6 rounded-xl border border-gray-100">
-                                            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                                                <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                Workflow & Policy Limits
-                                            </h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div>
-                                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Max Pending Requests Per User</label>
-                                                    <input type="number" min="1" max="10" required value={settingsForm.max_pending_requests_per_user} onChange={(e) => setSettingsForm({...settingsForm, max_pending_requests_per_user: parseInt(e.target.value) || 1})} className={inputClass} />
-                                                    <p className="text-[11px] text-gray-500 mt-1">Prevents spam by limiting active document requests.</p>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Reservation Lead Time (Days)</label>
-                                                    <input type="number" min="0" max="30" required value={settingsForm.reservation_lead_time_days} onChange={(e) => setSettingsForm({...settingsForm, reservation_lead_time_days: parseInt(e.target.value) || 0})} className={inputClass} />
-                                                    <p className="text-[11px] text-gray-500 mt-1">Minimum advance notice required to book facilities.</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
                                         <div className="pt-2 flex justify-end">
                                             <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md">
                                                 {isSubmitting ? "Saving..." : "Save Configuration"}
@@ -565,8 +547,6 @@ export default function AdminHub() {
                         )}
 
                     </div>
-                </main>
-            </div>
         </div>
     );
 }

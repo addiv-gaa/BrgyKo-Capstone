@@ -82,7 +82,23 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
             const checked = (e.target as HTMLInputElement).checked;
             setFormData((prev) => ({ ...prev, [name]: checked }));
         } else {
-            setFormData((prev) => ({ ...prev, [name]: value }));
+            setFormData((prev) => {
+                const newData = { ...prev, [name]: value };
+                
+                // Automatically check Senior Citizen if birthdate makes them 60+
+                if (name === 'birth_date' && value) {
+                    const today = new Date();
+                    const birthDate = new Date(value);
+                    let age = today.getFullYear() - birthDate.getFullYear();
+                    const m = today.getMonth() - birthDate.getMonth();
+                    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                        age--;
+                    }
+                    newData.is_senior_citizen = age >= 60;
+                }
+                
+                return newData;
+            });
         }
     };
 
@@ -91,12 +107,12 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
         onSave(formData);
     };
 
-    const inputClass = `w-full border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${isViewOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`;
+    const inputClass = `w-full border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 ${isViewOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`;
     const labelClass = "block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1";
     const sectionHeaderClass = "text-sm font-bold text-gray-800 border-b border-gray-200 pb-2 mb-4 mt-6 uppercase tracking-wide";
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
                 
                 <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
@@ -235,19 +251,19 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
                             {/* FIXED ALL CHECKBOX NAMES */}
                             <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" name="is_4ps_beneficiary" checked={formData.is_4ps_beneficiary} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-blue-600 rounded" />
+                                <input type="checkbox" name="is_4ps_beneficiary" checked={formData.is_4ps_beneficiary} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-green-600 rounded" />
                                 <span className="text-sm font-medium text-gray-700">4Ps Beneficiary</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" name="is_senior_citizen" checked={formData.is_senior_citizen} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-blue-600 rounded" />
+                                <input type="checkbox" name="is_senior_citizen" checked={formData.is_senior_citizen} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-green-600 rounded" />
                                 <span className="text-sm font-medium text-gray-700">Senior Citizen</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" name="is_pwd" checked={formData.is_pwd} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-blue-600 rounded" />
+                                <input type="checkbox" name="is_pwd" checked={formData.is_pwd} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-green-600 rounded" />
                                 <span className="text-sm font-medium text-gray-700">PWD</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" name="is_solo_parent" checked={formData.is_solo_parent} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-blue-600 rounded" />
+                                <input type="checkbox" name="is_solo_parent" checked={formData.is_solo_parent} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-green-600 rounded" />
                                 <span className="text-sm font-medium text-gray-700">Solo Parent</span>
                             </label>
                         </div>
@@ -260,7 +276,7 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
                         {isViewOnly ? 'Close' : 'Cancel'}
                     </button>
                     {!isViewOnly && (
-                        <button type="submit" form="resident-form" className="px-5 py-2 text-sm font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700 shadow-sm">
+                        <button type="submit" form="resident-form" className="px-5 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700 shadow-sm">
                             Save Resident
                         </button>
                     )}

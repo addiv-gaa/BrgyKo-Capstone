@@ -1,8 +1,5 @@
 import { useState, useEffect } from "react";
 import { PDFDocument, rgb } from "pdf-lib";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
-
 const API_URL = import.meta.env.VITE_API_URL;
 
 interface DjangoCertificate {
@@ -35,7 +32,7 @@ const getStatusBadgeClasses = (status: string) => {
         case 'PENDING':
             return 'bg-orange-100 text-orange-800 border-orange-200';
         case 'PROCESSING':
-            return 'bg-blue-100 text-blue-800 border-blue-200';
+            return 'bg-green-100 text-green-800 border-green-200';
         case 'APPROVED':
         case 'RELEASED':
             return 'bg-green-100 text-green-800 border-green-200';
@@ -170,10 +167,10 @@ function CertificateRequests() {
         .sort((a, b) => new Date(a.date_requested).getTime() - new Date(b.date_requested).getTime());
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800 relative">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800 relative">
+            
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
                 <main className="flex-1 w-full overflow-y-auto p-8 bg-[#f4f7fa] text-gray-800">
                     <div className="w-full">
                         <div className="mb-6">
@@ -191,9 +188,9 @@ function CertificateRequests() {
                                 <span className="text-sm font-semibold text-orange-700 uppercase tracking-wider">Pending</span>
                                 <span className="text-2xl font-bold text-orange-800 mt-1">{requests.filter(r => r.status.toUpperCase() === 'PENDING').length}</span>
                             </div>
-                            <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200 flex flex-col">
-                                <span className="text-sm font-semibold text-blue-700 uppercase tracking-wider">Processing</span>
-                                <span className="text-2xl font-bold text-blue-800 mt-1">{requests.filter(r => r.status.toUpperCase() === 'PROCESSING').length}</span>
+                            <div className="bg-green-50 p-4 rounded-lg shadow-sm border border-green-200 flex flex-col">
+                                <span className="text-sm font-semibold text-green-700 uppercase tracking-wider">Processing</span>
+                                <span className="text-2xl font-bold text-green-800 mt-1">{requests.filter(r => r.status.toUpperCase() === 'PROCESSING').length}</span>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg shadow-sm border border-green-200 flex flex-col">
                                 <span className="text-sm font-semibold text-green-700 uppercase tracking-wider">Released</span>
@@ -211,7 +208,7 @@ function CertificateRequests() {
                                         onClick={() => setFilter(status)}
                                         className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                                             filter === status 
-                                            ? 'border-blue-600 text-blue-600 bg-white' 
+                                            ? 'border-green-600 text-green-600 bg-white' 
                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                                         }`}
                                     >
@@ -255,7 +252,7 @@ function CertificateRequests() {
                                                                 value={request.status.toUpperCase()}
                                                                 onChange={(e) => handleStatusChange(request.id, e.target.value)}
                                                                 disabled={updatingId === request.id}
-                                                                className={`bg-white border border-gray-300 text-gray-700 py-1.5 px-2 rounded-md text-xs font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${updatingId === request.id ? 'opacity-50' : ''}`}
+                                                                className={`bg-white border border-gray-300 text-gray-700 py-1.5 px-2 rounded-md text-xs font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer ${updatingId === request.id ? 'opacity-50' : ''}`}
                                                             >
                                                                 <option value="PENDING">Pending</option>
                                                                 <option value="PROCESSING">Processing</option>
@@ -329,7 +326,7 @@ function CertificateRequests() {
                             <button 
                                 onClick={handleGeneratePDF}
                                 disabled={isGenerating}
-                                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                             >
                                 {isGenerating ? "Generating..." : (
                                     <>

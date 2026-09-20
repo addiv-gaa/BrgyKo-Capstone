@@ -56,7 +56,7 @@ export default function BarangayCalendar() {
   }, []);
 
   const eventStyleGetter = (event: any) => {
-    let backgroundColor = '#1c4ed8'; 
+    let backgroundColor = '#16a34a'; 
     if (event.type === 'RESERVATION') backgroundColor = '#16a34a'; 
     if (event.type === 'ABSENCE') backgroundColor = '#dc2626'; 
 
@@ -77,13 +77,10 @@ export default function BarangayCalendar() {
       
       <div className="flex gap-4 mb-4">
         <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#1c4ed8]"></span>
+            <span className="w-3 h-3 rounded-full bg-[#16a34a]"></span>
             <span className="text-sm font-medium">Activity</span>
         </div>
-        <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#16a34a]"></span>
-            <span className="text-sm font-medium">Reservation</span>
-        </div>
+
         <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-[#dc2626]"></span>
             <span className="text-sm font-medium">Absence</span>

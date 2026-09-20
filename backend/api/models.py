@@ -550,3 +550,19 @@ class BarangaySettings(models.Model):
         
     def __str__(self):
         return f"Settings for {self.barangay_name}"
+
+class EmergencyContact(models.Model):
+    CATEGORY_CHOICES = [
+        ('Barangay', 'Barangay Contacts'),
+        ('Municipal', 'Municipal / City Contacts'),
+        ('National', 'National Hotlines'),
+    ]
+    name = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, blank=True, null=True)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='Barangay')
+    phone = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, default='phone')
+    order = models.IntegerField(default=0)
+    
+    def __str__(self):
+        return f"{self.name} - {self.phone}"

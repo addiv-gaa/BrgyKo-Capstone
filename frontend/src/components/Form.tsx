@@ -153,7 +153,7 @@ function Form({ route, method }: FormProps) {
                         <div>
                             <label htmlFor="username" className="block text-sm/6 font-medium text-black">Username</label>
                             <div className="mt-2">
-                                <input id="username" name="username" type="text" required value={username} onChange={(e) => setUsername(e.target.value)} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:text-sm/6" />
+                                <input id="username" name="username" type="text" required value={username} onChange={(e) => setUsername(e.target.value)} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-green-600 sm:text-sm/6" />
                             </div>
                         </div>
 
@@ -162,7 +162,7 @@ function Form({ route, method }: FormProps) {
                             <div>
                                 <label htmlFor="email" className="block text-sm/6 font-medium text-black">Email Address</label>
                                 <div className="mt-2">
-                                    <input id="email" name="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:text-sm/6" />
+                                    <input id="email" name="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-green-600 sm:text-sm/6" />
                                 </div>
                             </div>
                         )}
@@ -173,27 +173,27 @@ function Form({ route, method }: FormProps) {
                                 <label htmlFor="password" className="block text-sm/6 font-medium text-black">Password</label>
                                 {method === "login" && (
                                     <div className="text-sm">
-                                        <a href="#" className="font-semibold text-blue-400 hover:text-blue-300">Forgot password?</a>
+                                        <a href="#" className="font-semibold text-green-400 hover:text-green-300">Forgot password?</a>
                                     </div>
                                 )}
                             </div>
                             <div className="mt-2">
-                                <input id="password" name="password" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:text-sm/6" />
+                                <input id="password" name="password" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-green-600 sm:text-sm/6" />
                             </div>
                         </div>
 
                         {/* SUBMIT BUTTON */}
                         <div>
-                            <button type="submit" disabled={loading} className="flex w-full justify-center rounded-md bg-blue-500 px-3 py-1.5 text-sm/6 font-semibold text-white hover:bg-blue-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button type="submit" disabled={loading} className="flex w-full justify-center rounded-md bg-green-500 px-3 py-1.5 text-sm/6 font-semibold text-white hover:bg-green-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {loading ? "Please wait..." : name}
                             </button>
                         </div>
                         
                         {/* TOGGLE LINKS */}
                         {method === "login" ? (
-                            <p className="text-center text-sm text-gray-500 mt-4">Not a member? <span onClick={() => navigate("/register")} className="font-semibold text-blue-500 hover:text-blue-400 cursor-pointer">Register now</span></p>
+                            <p className="text-center text-sm text-gray-500 mt-4">Not a member? <span onClick={() => navigate("/register")} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Register now</span></p>
                         ) : (
-                            <p className="text-center text-sm text-gray-500 mt-4">Already have an account? <span onClick={() => navigate("/login")} className="font-semibold text-blue-500 hover:text-blue-400 cursor-pointer">Sign in</span></p>
+                            <p className="text-center text-sm text-gray-500 mt-4">Already have an account? <span onClick={() => navigate("/login")} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Sign in</span></p>
                         )}
                     </form>
                 ) : (
@@ -201,7 +201,7 @@ function Form({ route, method }: FormProps) {
                     <form onSubmit={handleVerifyOtp} className="space-y-6">
                         <div>
                             <label className="block text-sm/6 font-medium text-black mb-1">Enter 6-Digit OTP Code</label>
-                            <input type="text" maxLength={6} required value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" className="block w-full rounded-md bg-white px-3 py-2 text-center tracking-widest text-lg font-bold text-black outline-1 outline-gray-300 focus:outline-2 focus:outline-blue-600" />
+                            <input type="text" maxLength={6} required value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" className="block w-full rounded-md bg-white px-3 py-2 text-center tracking-widest text-lg font-bold text-black outline-1 outline-gray-300 focus:outline-2 focus:outline-green-600" />
                         </div>
                         <div>
                             <button type="submit" disabled={loading} className="flex w-full justify-center rounded-md bg-green-600 px-3 py-1.5 text-sm/6 font-semibold text-white hover:bg-green-500 disabled:opacity-50">
@@ -214,7 +214,7 @@ function Form({ route, method }: FormProps) {
                             <p className="text-sm text-gray-600">
                                 Didn't receive the code?{" "}
                                 {canResend ? (
-                                    <span onClick={handleResendOtp} className="font-semibold text-blue-600 hover:text-blue-500 cursor-pointer">
+                                    <span onClick={handleResendOtp} className="font-semibold text-green-600 hover:text-green-500 cursor-pointer">
                                         Resend OTP
                                     </span>
                                 ) : (

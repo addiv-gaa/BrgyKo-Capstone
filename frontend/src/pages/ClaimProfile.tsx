@@ -130,7 +130,7 @@ export default function ClaimProfile() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+        <div className="min-h-full bg-gray-100 flex items-center justify-center p-6">
             <div className={`bg-white rounded-xl shadow-lg w-full p-8 border border-gray-200 transition-all duration-300 ${isNewApplication ? 'max-w-2xl' : 'max-w-md'}`}>
                 
                 <div className="text-center mb-6">
@@ -156,7 +156,7 @@ export default function ClaimProfile() {
                             <input 
                                 type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)}
                                 disabled={isNewApplication} // Lock these so they don't change what they searched for
-                                placeholder="e.g. Juan" className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-gray-100"
+                                placeholder="e.g. Juan" className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-green-600 disabled:bg-gray-100"
                             />
                         </div>
 
@@ -165,7 +165,7 @@ export default function ClaimProfile() {
                             <input 
                                 type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)}
                                 disabled={isNewApplication}
-                                placeholder="e.g. Dela Cruz" className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-gray-100"
+                                placeholder="e.g. Dela Cruz" className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-green-600 disabled:bg-gray-100"
                             />
                         </div>
 
@@ -174,7 +174,7 @@ export default function ClaimProfile() {
                             <input 
                                 type="date" required value={birthdate} onChange={(e) => setBirthdate(e.target.value)}
                                 disabled={isNewApplication}
-                                className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-gray-100"
+                                className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-green-600 disabled:bg-gray-100"
                             />
                         </div>
                     </div>
@@ -184,7 +184,7 @@ export default function ClaimProfile() {
                         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100 mt-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Sex</label>
-                                <select value={sex} onChange={(e) => setSex(e.target.value)} className="w-full border border-gray-300 rounded-md p-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600">
+                                <select value={sex} onChange={(e) => setSex(e.target.value)} className="w-full border border-gray-300 rounded-md p-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-green-600">
                                     <option value="Male">Male</option>
                                     <option value="Female">Female</option>
                                 </select>
@@ -192,14 +192,14 @@ export default function ClaimProfile() {
                             
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Civil Status</label>
-                                <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value)} className="w-full border border-gray-300 rounded-md p-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600">
+                                <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value)} className="w-full border border-gray-300 rounded-md p-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-green-600">
                                     {CIVIL_STATUS_CHOICES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Purok</label>
-                                <select value={purok} onChange={(e) => setPurok(e.target.value)} className="w-full border border-gray-300 rounded-md p-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600">
+                                <select value={purok} onChange={(e) => setPurok(e.target.value)} className="w-full border border-gray-300 rounded-md p-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-green-600">
                                     {PUROK_CHOICES.map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </div>
@@ -208,7 +208,7 @@ export default function ClaimProfile() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
                                 <input 
                                     type="text" required value={contactNumber} onChange={(e) => setContactNumber(e.target.value)}
-                                    placeholder="09..." className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                                    placeholder="09..." className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none focus:ring-2 focus:ring-green-600 bg-white"
                                 />
                             </div>
 
@@ -218,7 +218,7 @@ export default function ClaimProfile() {
                                 <input 
                                     type="file" accept="image/*" required
                                     onChange={(e) => setIdPicture(e.target.files ? e.target.files[0] : null)}
-                                    className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm focus:ring-2 focus:ring-blue-600 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                    className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm focus:ring-2 focus:ring-green-600 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                                 />
                                 <p className="text-[11px] text-gray-500 mt-1">Provide a clear photo of a government-issued ID for verification.</p>
                             </div>
@@ -228,7 +228,7 @@ export default function ClaimProfile() {
                     <div className="pt-2">
                         <button 
                             type="submit" disabled={isLoading}
-                            className="w-full bg-[#1c4ed8] hover:bg-blue-800 text-white font-semibold py-2.5 rounded-md transition-colors disabled:opacity-50"
+                            className="w-full bg-[#16a34a] hover:bg-green-800 text-white font-semibold py-2.5 rounded-md transition-colors disabled:opacity-50"
                         >
                             {isLoading 
                                 ? "Processing..." 

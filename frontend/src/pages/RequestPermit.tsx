@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from "react";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
-
 const API_URL = import.meta.env.VITE_API_URL;
 
 // 1. Define the shape of your API data for TypeScript
@@ -153,7 +150,7 @@ export default function RequestPermit() {
             case 'PENDING':
                 return <span className="px-2.5 py-1 bg-yellow-50 text-yellow-700 text-xs font-medium rounded-md border border-yellow-200">Pending</span>;
             case 'PROCESSING':
-                return <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-md border border-blue-200">Processing</span>;
+                return <span className="px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-md border border-green-200">Processing</span>;
             case 'REJECTED':
                 return <span className="px-2.5 py-1 bg-red-50 text-red-700 text-xs font-medium rounded-md border border-red-200">Rejected</span>;
             default:
@@ -174,11 +171,11 @@ export default function RequestPermit() {
 
     // --- Render ---
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
 
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
 
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     <div className="max-w-7xl mx-auto space-y-6">
@@ -204,7 +201,7 @@ export default function RequestPermit() {
                                             name="permit_type"
                                             value={formData.permit_type}
                                             onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 bg-white"
                                         >
                                             <option value="BUSINESS">Business Permit</option>
                                             <option value="CONSTRUCTION">Construction Permit</option>
@@ -224,7 +221,7 @@ export default function RequestPermit() {
                                             onChange={handleChange}
                                             placeholder="Enter your full name" 
                                             required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
+                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 placeholder-gray-400"
                                         />
                                     </div>
 
@@ -239,7 +236,7 @@ export default function RequestPermit() {
                                             onChange={handleChange}
                                             placeholder="Enter your address" 
                                             required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
+                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 placeholder-gray-400"
                                         />
                                     </div>
 
@@ -254,7 +251,7 @@ export default function RequestPermit() {
                                                 value={formData.date_needed}
                                                 onChange={handleChange}
                                                 required
-                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 text-gray-600"
+                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 text-gray-600"
                                             />
                                         </div>
                                         <div>
@@ -268,7 +265,7 @@ export default function RequestPermit() {
                                                 onChange={handleChange}
                                                 placeholder="Enter the nature of the request" 
                                                 required
-                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
+                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 placeholder-gray-400"
                                             />
                                         </div>
                                     </div>
@@ -284,14 +281,14 @@ export default function RequestPermit() {
                                             onChange={handleChange}
                                             placeholder="List required documents" 
                                             required
-                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400"
+                                            className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 placeholder-gray-400"
                                         />
                                     </div>
 
                                     <div className="pt-2">
                                         <button 
                                             type="submit" 
-                                            className="w-full bg-[#1c4ed8] hover:bg-blue-800 text-white font-medium rounded-md py-3 flex items-center justify-center transition-colors"
+                                            className="w-full bg-[#16a34a] hover:bg-green-800 text-white font-medium rounded-md py-3 flex items-center justify-center transition-colors"
                                         >
                                             Submit Request
                                         </button>
@@ -357,8 +354,8 @@ export default function RequestPermit() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden p-6 text-center">
                         
-                        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-50 mb-4">
-                            <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-50 mb-4">
+                            <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
@@ -372,7 +369,7 @@ export default function RequestPermit() {
                             <button 
                                 onClick={handleFinalConfirm}
                                 disabled={isSubmitting}
-                                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#1c4ed8] text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#16a34a] text-sm font-medium text-white hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
                             >
                                 {isSubmitting ? (
                                     <>
@@ -387,7 +384,7 @@ export default function RequestPermit() {
                             <button 
                                 onClick={() => setIsConfirmModalOpen(false)}
                                 disabled={isSubmitting}
-                                className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                                className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
                             >
                                 Wait, go back
                             </button>

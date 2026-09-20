@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom"; 
 import api from "../api";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
-
 interface ResidentProfile {
     first_name: string;
     last_name: string;
@@ -129,10 +126,10 @@ export default function Profile() {
     };
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
                 <main className="flex-1 w-full overflow-y-auto p-8 bg-[#f4f7fa]">
                     <div className="max-w-3xl mx-auto bg-white border border-gray-200 rounded-lg shadow-sm p-8">
                         <div className="flex justify-between items-center mb-6 border-b pb-4">
@@ -206,7 +203,7 @@ export default function Profile() {
 
                                 {/* OFFICIAL RECORDS SECTION (Read-Only) */}
                                 <div>
-                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 text-blue-600">Official Records (Read-Only)</h3>
+                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 text-green-600">Official Records (Read-Only)</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-md border border-gray-200">
                                         <div>
                                             <label className="block text-xs font-medium text-gray-500 uppercase">First Name</label>
@@ -239,7 +236,7 @@ export default function Profile() {
                                         <button 
                                             type="button"
                                             onClick={() => setIsCorrectionModalOpen(true)}
-                                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded border border-blue-200 transition-colors"
+                                            className="text-xs font-semibold text-green-600 hover:text-green-800 bg-green-50 px-3 py-1.5 rounded border border-green-200 transition-colors"
                                         >
                                             Request Profile Correction Online
                                         </button>
@@ -248,7 +245,7 @@ export default function Profile() {
 
                                 {/* EDITABLE SECTION */}
                                 <div className="pt-4 border-t border-gray-200">
-                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 text-blue-600">Contact Information</h3>
+                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 text-green-600">Contact Information</h3>
                                     <div className="max-w-md">
                                         <label className="block text-sm font-medium text-gray-700">Active Mobile Number</label>
                                         <input 
@@ -256,13 +253,13 @@ export default function Profile() {
                                             value={contactNumber} 
                                             onChange={(e) => setContactNumber(e.target.value)} 
                                             placeholder="e.g. 09123456789" 
-                                            className="mt-1 block w-full rounded-md bg-white border border-gray-300 px-3 py-2 text-gray-800 focus:outline-blue-600 focus:ring-blue-600 shadow-sm" 
+                                            className="mt-1 block w-full rounded-md bg-white border border-gray-300 px-3 py-2 text-gray-800 focus:outline-green-600 focus:ring-green-600 shadow-sm" 
                                         />
                                     </div>
                                 </div>
 
                                 <div className="pt-4 flex justify-end">
-                                    <button type="submit" disabled={saving} className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-sm">
+                                    <button type="submit" disabled={saving} className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 shadow-sm">
                                         {saving ? "Saving..." : "Update Contact Info"}
                                     </button>
                                 </div>
@@ -303,7 +300,7 @@ export default function Profile() {
                                         type="text" 
                                         value={correctionData.requested_first_name} 
                                         onChange={(e) => setCorrectionData({...correctionData, requested_first_name: e.target.value})}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-blue-600 bg-white"
+                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-green-600 bg-white"
                                     />
                                 </div>
                                 <div>
@@ -312,7 +309,7 @@ export default function Profile() {
                                         type="text" 
                                         value={correctionData.requested_last_name} 
                                         onChange={(e) => setCorrectionData({...correctionData, requested_last_name: e.target.value})}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-blue-600 bg-white"
+                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-green-600 bg-white"
                                     />
                                 </div>
                             </div>
@@ -324,7 +321,7 @@ export default function Profile() {
                                         type="date" 
                                         value={correctionData.requested_birth_date} 
                                         onChange={(e) => setCorrectionData({...correctionData, requested_birth_date: e.target.value})}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-blue-600 bg-white"
+                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-green-600 bg-white"
                                     />
                                 </div>
                                 <div>
@@ -332,7 +329,7 @@ export default function Profile() {
                                     <select 
                                         value={correctionData.requested_civil_status} 
                                         onChange={(e) => setCorrectionData({...correctionData, requested_civil_status: e.target.value})}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-blue-600 bg-white"
+                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-green-600 bg-white"
                                     >
                                         <option value="SINGLE">Single</option>
                                         <option value="MARRIED">Married</option>
@@ -350,7 +347,7 @@ export default function Profile() {
                                     onChange={(e) => setCorrectionData({...correctionData, reason: e.target.value})}
                                     placeholder="e.g., Typo in registry name, unable to travel due to disability..."
                                     required
-                                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-blue-600 bg-white"
+                                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-green-600 bg-white"
                                 />
                             </div>
 
@@ -365,7 +362,7 @@ export default function Profile() {
                                 <button 
                                     type="submit" 
                                     disabled={submittingCorrection}
-                                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
                                 >
                                     {submittingCorrection ? "Submitting..." : "Submit Request"}
                                 </button>

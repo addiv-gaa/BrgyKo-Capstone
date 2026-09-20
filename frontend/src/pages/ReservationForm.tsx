@@ -1,7 +1,5 @@
 import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import { AuthContext } from "../components/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -142,10 +140,10 @@ export default function ReservationForm() {
     // --- GLOBAL SETTING CHECK: Facility Reservations Kill-Switch ---
     if (settings && !settings.accept_reservations) {
         return (
-            <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-                <PageHeader />
+            <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+                
                 <div className="flex flex-1 overflow-hidden">
-                    <Sidebar />
+                    
                     <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa] flex items-center justify-center">
                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-3 max-w-lg w-full shadow-sm">
                             <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto font-bold text-lg">!</div>
@@ -167,17 +165,17 @@ export default function ReservationForm() {
     }
 
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     
                     <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-sm border border-gray-200 mt-6">
                         <div className="mb-8">
                             <button 
                                 onClick={() => navigate('/resident/schedule')}
-                                className="text-sm font-medium text-blue-600 hover:text-blue-800 mb-4 inline-block"
+                                className="text-sm font-medium text-green-600 hover:text-green-800 mb-4 inline-block"
                             >
                                 &larr; Back to Calendar
                             </button>
@@ -191,7 +189,7 @@ export default function ReservationForm() {
                             </div>
                         )}
                         
-                        <div className="bg-blue-50 border border-blue-100 text-blue-800 p-4 rounded-md mb-6 text-sm">
+                        <div className="bg-green-50 border border-green-100 text-green-800 p-4 rounded-md mb-6 text-sm">
                             <span className="font-bold">Note:</span> The administration requires a minimum advance notice of <span className="font-bold">{leadDays} day(s)</span> for all bookings.
                         </div>
 
@@ -201,7 +199,7 @@ export default function ReservationForm() {
                                 type="button"
                                 onClick={() => setReservationType('facility')}
                                 className={`flex-1 py-2.5 rounded-md text-sm font-semibold transition-all ${
-                                    reservationType === 'facility' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-600 hover:text-gray-900'
+                                    reservationType === 'facility' ? 'bg-white shadow-sm text-green-700' : 'text-gray-600 hover:text-gray-900'
                                 }`}
                             >
                                 Book a Facility
@@ -210,7 +208,7 @@ export default function ReservationForm() {
                                 type="button"
                                 onClick={() => setReservationType('equipment')}
                                 className={`flex-1 py-2.5 rounded-md text-sm font-semibold transition-all ${
-                                    reservationType === 'equipment' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-600 hover:text-gray-900'
+                                    reservationType === 'equipment' ? 'bg-white shadow-sm text-green-700' : 'text-gray-600 hover:text-gray-900'
                                 }`}
                             >
                                 Borrow Equipment
@@ -224,7 +222,7 @@ export default function ReservationForm() {
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-1">Select Facility</label>
                                     <select 
-                                        className="w-full p-3 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full p-3 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 outline-none"
                                         value={formData.facility}
                                         onChange={(e) => setFormData({...formData, facility: e.target.value})}
                                         disabled={isLoading}
@@ -243,7 +241,7 @@ export default function ReservationForm() {
                                     <div className="col-span-2">
                                         <label className="block text-sm font-semibold text-gray-700 mb-1">Select Equipment</label>
                                         <select 
-                                            className="w-full p-3 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full p-3 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 outline-none"
                                             value={formData.equipment}
                                             onChange={(e) => setFormData({...formData, equipment: e.target.value})}
                                             disabled={isLoading}
@@ -258,7 +256,7 @@ export default function ReservationForm() {
                                         <label className="block text-sm font-semibold text-gray-700 mb-1">Quantity</label>
                                         <input 
                                             type="number" min="1" 
-                                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
                                             value={formData.equipment_quantity}
                                             onChange={(e) => setFormData({...formData, equipment_quantity: parseInt(e.target.value) || 1})}
                                         />
@@ -271,7 +269,7 @@ export default function ReservationForm() {
                                 <input 
                                     type="text" required
                                     placeholder="e.g. Liga ng Barangay / Birthday Party"
-                                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
                                     value={formData.purpose}
                                     onChange={(e) => setFormData({...formData, purpose: e.target.value})}
                                 />
@@ -284,7 +282,7 @@ export default function ReservationForm() {
                                         type="datetime-local" 
                                         min={minDateTimeString}
                                         required
-                                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
                                         value={formData.start_time}
                                         onChange={(e) => setFormData({...formData, start_time: e.target.value})}
                                     />
@@ -295,7 +293,7 @@ export default function ReservationForm() {
                                         type="datetime-local" 
                                         min={formData.start_time || minDateTimeString}
                                         required
-                                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
                                         value={formData.end_time}
                                         onChange={(e) => setFormData({...formData, end_time: e.target.value})}
                                     />
@@ -306,7 +304,7 @@ export default function ReservationForm() {
                                 <button 
                                     type="submit" 
                                     disabled={isSubmitting || isLoading}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-md transition-colors disabled:opacity-50"
+                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-md transition-colors disabled:opacity-50"
                                 >
                                     {isSubmitting ? 'Submitting Request...' : 'Submit Reservation Request'}
                                 </button>

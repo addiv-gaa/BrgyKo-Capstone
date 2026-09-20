@@ -20,6 +20,7 @@ export default function AssignResidentModal({ householdId, onClose, onAssignSucc
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<ResidentSearchData[]>([]);
     const [isAssigning, setIsAssigning] = useState<number | null>(null);
+    const [relationships, setRelationships] = useState<Record<number, string>>({});
 
     // Prevent background scrolling
     useEffect(() => {
@@ -39,15 +40,13 @@ export default function AssignResidentModal({ householdId, onClose, onAssignSucc
     useEffect(() => {
         const fetchResidents = async () => {
             try {
-                // Fetch residents. If no query, maybe fetch the latest ones. 
                 const url = searchQuery 
                     ? `${API_URL}/api/residents/?search=${encodeURIComponent(searchQuery)}`
-                    : `${API_URL}/api/residents/`; // You could add ?limit=10 to not overload the initial open
+                    : `${API_URL}/api/residents/`; 
                 
                 const response = await fetch(url, { headers: getAuthHeaders() });
                 if (response.ok) {
                     const data = await response.json();
-                    // Filter out residents that are ALREADY in this exact household
                     const results = (data.results || data).filter((r: ResidentSearchData) => r.household !== householdId);
                     setSearchResults(results);
                 }
@@ -60,19 +59,18 @@ export default function AssignResidentModal({ householdId, onClose, onAssignSucc
         return () => clearTimeout(timeoutId);
     }, [searchQuery, householdId]);
 
-    // Assign the resident to the household
     const handleAssign = async (residentId: number) => {
         setIsAssigning(residentId);
+        const rel = relationships[residentId] || 'Other';
         try {
-            // We use PATCH to only update the 'household' field on the Resident model
             const response = await fetch(`${API_URL}/api/residents/${residentId}/`, {
                 method: 'PATCH',
                 headers: getAuthHeaders(),
-                body: JSON.stringify({ household: householdId })
+                body: JSON.stringify({ household: householdId, relationship_to_head: rel })
             });
 
             if (response.ok) {
-                onAssignSuccess(); // Close modal and refresh map
+                onAssignSuccess();
             } else {
                 alert("Failed to assign resident.");
             }
@@ -84,16 +82,14 @@ export default function AssignResidentModal({ householdId, onClose, onAssignSucc
     };
 
     return (
-        <div className="fixed inset-0 z-2000 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden animate-fade-in-up">
                 
-                {/* Header */}
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
                     <h2 className="text-xl font-bold text-gray-900">Link Existing Resident</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
                 </div>
                 
-                {/* Search Bar Area */}
                 <div className="p-4 border-b border-gray-100 bg-gray-50">
                     <div className="relative w-full">
                         <svg className="w-4 h-4 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -104,33 +100,46 @@ export default function AssignResidentModal({ householdId, onClose, onAssignSucc
                             placeholder="Search by name..." 
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm bg-white"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm bg-white"
                             autoFocus
                         />
                     </div>
                 </div>
 
-                {/* Results List */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {searchResults.length > 0 ? searchResults.map((resident) => (
-                        <div key={resident.id} className="flex justify-between items-center p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                            <div>
+                        <div key={resident.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors gap-2">
+                            <div className="flex-1">
                                 <h3 className="font-semibold text-gray-900">{resident.first_name} {resident.last_name}</h3>
                                 <p className="text-xs text-gray-500">
                                     {resident.purok} {resident.household ? '(Moving from another house)' : '(Unmapped)'}
                                 </p>
                             </div>
-                            <button 
-                                onClick={() => handleAssign(resident.id)}
-                                disabled={isAssigning === resident.id}
-                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                                    isAssigning === resident.id 
-                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
-                                }`}
-                            >
-                                {isAssigning === resident.id ? 'Adding...' : 'Add'}
-                            </button>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <select 
+                                    className="border border-gray-300 rounded-md p-1.5 text-xs focus:ring-green-500 focus:border-green-500 flex-1 sm:flex-none"
+                                    value={relationships[resident.id] || 'Other'}
+                                    onChange={(e) => setRelationships(prev => ({ ...prev, [resident.id]: e.target.value }))}
+                                >
+                                    <option value="Head">Head</option>
+                                    <option value="Spouse">Spouse</option>
+                                    <option value="Child">Child</option>
+                                    <option value="Parent">Parent</option>
+                                    <option value="Sibling">Sibling</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                <button 
+                                    onClick={() => handleAssign(resident.id)}
+                                    disabled={isAssigning === resident.id}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                                        isAssigning === resident.id 
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                                    }`}
+                                >
+                                    {isAssigning === resident.id ? 'Adding...' : 'Add'}
+                                </button>
+                            </div>
                         </div>
                     )) : (
                         <div className="text-center py-8 text-sm text-gray-500 italic">

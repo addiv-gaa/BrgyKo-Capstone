@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import PageHeader from "../components/header";
-import Sidebar from "../components/sidebar";
 import { AuthContext } from "../components/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -277,7 +275,7 @@ export default function RequestCertificate() {
             case 'PENDING':
                 return <span className="px-2.5 py-1 bg-yellow-50 text-yellow-700 text-xs font-medium rounded-md border border-yellow-200">Pending</span>;
             case 'PROCESSING':
-                return <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-md border border-blue-200">Processing</span>;
+                return <span className="px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-md border border-green-200">Processing</span>;
             case 'REJECTED':
                 return <span className="px-2.5 py-1 bg-red-50 text-red-700 text-xs font-medium rounded-md border border-red-200">Rejected</span>;
             default:
@@ -292,10 +290,10 @@ export default function RequestCertificate() {
     // --- GLOBAL SETTING CHECK: If certificate requests are disabled by admin ---
     if (settings && !settings.accept_permit_requests) {
         return (
-            <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-                <PageHeader />
+            <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+                
                 <div className="flex flex-1 overflow-hidden">
-                    <Sidebar />
+                    
                     <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa] flex items-center justify-center">
                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-3 max-w-lg w-full shadow-sm">
                             <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto font-bold text-lg">!</div>
@@ -312,11 +310,11 @@ export default function RequestCertificate() {
 
     // --- Render ---
     return (
-        <div className="h-screen w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            <PageHeader />
+        <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
+            
 
             <div className="flex flex-1 overflow-hidden">
-                <Sidebar />
+                
 
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
                     <div className="max-w-7xl mx-auto space-y-6">
@@ -357,7 +355,7 @@ export default function RequestCertificate() {
                                                 name="certificate_type"
                                                 value={formData.certificate_type}
                                                 onChange={handleChange}
-                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 bg-white"
                                             >
                                                 {CERTIFICATE_TYPES.map(cert => (
                                                     <option key={cert.id} value={cert.id}>{cert.label}</option>
@@ -366,16 +364,16 @@ export default function RequestCertificate() {
                                         </div>
 
                                         {selectedCert && selectedCert.requirements.length > 0 && (
-                                            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r mt-2">
-                                                <h4 className="font-semibold text-blue-800 text-xs uppercase tracking-wider mb-2">
+                                            <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r mt-2">
+                                                <h4 className="font-semibold text-green-800 text-xs uppercase tracking-wider mb-2">
                                                     Required Documents for {selectedCert.label}
                                                 </h4>
-                                                <ul className="list-disc pl-5 text-sm text-blue-900 space-y-1">
+                                                <ul className="list-disc pl-5 text-sm text-green-900 space-y-1">
                                                     {selectedCert.requirements.map((req, index) => (
                                                         <li key={index}>{req}</li>
                                                     ))}
                                                 </ul>
-                                                <p className="text-xs text-blue-700 mt-3 italic">
+                                                <p className="text-xs text-green-700 mt-3 italic">
                                                     * Please bring these documents when claiming your certificate at the barangay hall.
                                                 </p>
                                             </div>
@@ -393,7 +391,7 @@ export default function RequestCertificate() {
                                                         name="request_type" 
                                                         checked={requestType === 'myself'} 
                                                         onChange={() => setRequestType('myself')}
-                                                        className="mr-2 text-blue-600 focus:ring-blue-600"
+                                                        className="mr-2 text-green-600 focus:ring-green-600"
                                                     />
                                                     <span className="text-sm font-medium">For Myself</span>
                                                 </label>
@@ -403,7 +401,7 @@ export default function RequestCertificate() {
                                                         name="request_type" 
                                                         checked={requestType === 'someone_else'} 
                                                         onChange={() => setRequestType('someone_else')}
-                                                        className="mr-2 text-blue-600 focus:ring-blue-600"
+                                                        className="mr-2 text-green-600 focus:ring-green-600"
                                                     />
                                                     <span className="text-sm font-medium">For Someone Else</span>
                                                 </label>
@@ -435,7 +433,7 @@ export default function RequestCertificate() {
                                                 onChange={(e) => setRequestedName(e.target.value)}
                                                 disabled={requestType === 'myself'}
                                                 placeholder="Enter exact full name..."
-                                                className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-600 bg-white'}`}
+                                                className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-green-600 bg-white'}`}
                                             />
                                         </div>
 
@@ -450,7 +448,7 @@ export default function RequestCertificate() {
                                                     value={requestType === 'someone_else' ? requestedDob : formData.date_of_birth}
                                                     onChange={(e) => setRequestedDob(e.target.value)}
                                                     disabled={requestType === 'myself'} 
-                                                    className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-600 bg-white'}`}
+                                                    className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-green-600 bg-white'}`}
                                                 />
                                             </div>
                                             <div>
@@ -461,7 +459,7 @@ export default function RequestCertificate() {
                                                     value={requestType === 'someone_else' ? requestedCivilStatus : formData.civil_status}
                                                     onChange={(e) => setRequestedCivilStatus(e.target.value)}
                                                     disabled={requestType === 'myself'} 
-                                                    className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed appearance-none' : 'focus:ring-2 focus:ring-blue-600 bg-white'}`}
+                                                    className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed appearance-none' : 'focus:ring-2 focus:ring-green-600 bg-white'}`}
                                                 >
                                                     <option value="SINGLE">Single</option>
                                                     <option value="MARRIED">Married</option>
@@ -480,7 +478,7 @@ export default function RequestCertificate() {
                                                 value={formData.purpose}
                                                 onChange={handleChange}
                                                 required
-                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                                                className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 bg-white"
                                             >
                                                 <option value="" disabled>Select a purpose...</option>
                                                 {PURPOSES.map((purpose, index) => (
@@ -500,7 +498,7 @@ export default function RequestCertificate() {
                                                     onChange={(e) => setCustomPurpose(e.target.value)}
                                                     placeholder="Type your specific purpose here..."
                                                     required
-                                                    className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-400 bg-white"
+                                                    className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-2 focus:ring-green-600 placeholder-gray-400 bg-white"
                                                 />
                                             </div>
                                         )}
@@ -516,7 +514,7 @@ export default function RequestCertificate() {
                                                 onChange={(e) => setRequestedContact(e.target.value)}
                                                 disabled={requestType === 'myself'} 
                                                 placeholder="e.g. 09123456789"
-                                                className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-600 bg-white'}`}
+                                                className={`w-full border border-gray-300 rounded-md p-2.5 outline-none ${requestType === 'myself' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-green-600 bg-white'}`}
                                             />
                                         </div>
 
@@ -524,7 +522,7 @@ export default function RequestCertificate() {
                                             <button 
                                                 type="submit" 
                                                 disabled={isSubmitting}
-                                                className="w-full bg-[#1c4ed8] hover:bg-blue-800 text-white font-medium rounded-md py-3 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="w-full bg-[#16a34a] hover:bg-green-800 text-white font-medium rounded-md py-3 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Submit Request
                                             </button>
@@ -589,8 +587,8 @@ export default function RequestCertificate() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden p-6 text-center">
                         
-                        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-50 mb-4">
-                            <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-50 mb-4">
+                            <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
@@ -610,7 +608,7 @@ export default function RequestCertificate() {
                             <button 
                                 onClick={handleFinalConfirm}
                                 disabled={isSubmitting}
-                                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#1c4ed8] text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#16a34a] text-sm font-medium text-white hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
                             >
                                 {isSubmitting ? (
                                     <>
@@ -625,7 +623,7 @@ export default function RequestCertificate() {
                             <button 
                                 onClick={() => setIsConfirmModalOpen(false)}
                                 disabled={isSubmitting}
-                                className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                                className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
                             >
                                 Wait, go back
                             </button>
