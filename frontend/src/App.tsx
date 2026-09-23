@@ -74,7 +74,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const staffRoles = ['CAPTAIN', 'SECRETARY', 'TREASURER', 'COUNCIL', 'SK', 'TANOD'];
+  const staffRoles = ['CAPTAIN', 'ADMIN', 'STAFF'];
   const isStaff = normalizedRoles.some(role => staffRoles.includes(role));
 
   const location = useLocation();
@@ -154,11 +154,11 @@ function App() {
             />
             <Route 
               path="/claimprofile" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT', 'TANOD', 'SECRETARY', 'CAPTAIN']}><ClaimProfile /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['RESIDENT', 'STAFF', 'ADMIN', 'CAPTAIN']}><ClaimProfile /></ProtectedRoute>} 
             />
             <Route 
               path="/reportincident" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT', 'TANOD', 'SECRETARY', 'CAPTAIN']}><ReportIncident /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['RESIDENT', 'STAFF', 'ADMIN', 'CAPTAIN']}><ReportIncident /></ProtectedRoute>} 
             />
 
             {/* =========================================
@@ -166,55 +166,55 @@ function App() {
                 ========================================= */}
             <Route 
               path="/residents" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><Residents /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><Residents /></ProtectedRoute>} 
             />
             <Route 
               path="/residentapproval" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><ResidentApprovals /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><ResidentApprovals /></ProtectedRoute>} 
             />
             <Route 
               path="/profileupdate" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><ProfileUpdateApprovals /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><ProfileUpdateApprovals /></ProtectedRoute>} 
             />
             <Route 
               path="/certrequests" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><CertificateRequests /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><CertificateRequests /></ProtectedRoute>} 
             />
             <Route 
               path="/permitrequests" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><PermitRequests /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><PermitRequests /></ProtectedRoute>} 
             />
             <Route 
               path="/inventory" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><Inventory /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><Inventory /></ProtectedRoute>} 
             />
             <Route 
               path="/welfare" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><Welfare /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><Welfare /></ProtectedRoute>} 
             />
             <Route 
               path="/skmodule" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><SKModule /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><SKModule /></ProtectedRoute>} 
             />
             <Route 
               path="/smsblast" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><SMSBlast /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><SMSBlast /></ProtectedRoute>} 
             />
             <Route 
               path="/reports" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><Reports /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><Reports /></ProtectedRoute>} 
             />
             <Route 
               path="/geomapping" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN', 'TANOD']}><GeoMapping /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><GeoMapping /></ProtectedRoute>} 
             />
             <Route 
               path="/documents" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><Documents /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><Documents /></ProtectedRoute>} 
             />
             <Route 
               path="/adminhub" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN']}><AdminHub /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminHub /></ProtectedRoute>} 
             />  
             
             {/* =========================================
@@ -222,11 +222,11 @@ function App() {
                 ========================================= */}
             <Route 
               path="/barangaycalendarstaff" 
-              element={<ProtectedRoute allowedRoles={['SECRETARY', 'CAPTAIN', 'TANOD']}><StaffSchedulePage /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><StaffSchedulePage /></ProtectedRoute>} 
             />
             <Route 
               path="/tanod/dashboard" 
-              element={<ProtectedRoute allowedRoles={['TANOD', 'SECRETARY', 'CAPTAIN']}><TanodDashboard /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><TanodDashboard /></ProtectedRoute>} 
             />
 
           </Routes>

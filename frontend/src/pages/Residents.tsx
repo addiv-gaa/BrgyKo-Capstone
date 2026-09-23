@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
+import { AuthContext } from '../components/AuthContext';
 import ResidentModal, { type ResidentProperties } from '../components/ResidentModal';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -24,6 +25,7 @@ export interface ResidentData {
     mothers_last_name?: string;
     
     purok: string;
+    is_registered_voter: boolean;
     relationship_to_head: string;
     household?: number | null;
     is_4ps_beneficiary: boolean;
@@ -41,6 +43,9 @@ const calculateAge = (dob: string | null) => {
 };
 
 export default function ResidentPage() {
+    const authContext = useContext(AuthContext);
+    const isCaptain = authContext?.user?.role === 'CAPTAIN';
+    
     const [residents, setResidents] = useState<ResidentData[]>([]);
     const [householdOptions, setHouseholdOptions] = useState<{id: number, address: string}[]>([]);
     
@@ -51,6 +56,7 @@ export default function ResidentPage() {
         purok: '',
         sex: '',
         civil_status: '',
+        is_registered_voter: false,
         is_4ps_beneficiary: false,
         is_senior_citizen: false,
         is_pwd: false,
@@ -364,7 +370,8 @@ export default function ResidentPage() {
     const clearFilters = () => {
         setFilters({
             purok: '', sex: '', civil_status: '',
-            is_4ps_beneficiary: false, is_senior_citizen: false, is_pwd: false, is_solo_parent: false
+            is_4ps_beneficiary: false, is_senior_citizen: false, is_pwd: false, is_solo_parent: false,
+            is_registered_voter: false
         });
         setSearchQuery('');
         setPage(1);
@@ -412,9 +419,9 @@ export default function ResidentPage() {
                                 )}
                             </button>
 
-                            <button onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }} className="bg-[#15803d] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-green-800 transition-colors flex items-center gap-2 shadow-sm">
+                            {!isCaptain && (<button onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }} className="bg-[#15803d] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-green-800 transition-colors flex items-center gap-2 shadow-sm">
                                 <span>+ Add Resident</span>
-                            </button>
+                            </button>)}
                         </div>
                     </div>
 
@@ -574,6 +581,7 @@ export default function ResidentPage() {
                                         <th className="px-6 py-4 cursor-pointer hover:bg-gray-200" onClick={() => {setOrdering(ordering === 'purok' ? '-purok' : 'purok'); setPage(1);}}>
                                             <div className="flex items-center gap-1">Purok {ordering === 'purok' ? '↑' : ordering === '-purok' ? '↓' : ''}</div>
                                         </th>
+                                        <th className="px-6 py-4">Voter Status</th>
                                         <th className="px-6 py-4">Welfare Status</th>
                                         <th className="px-6 py-4 text-center sticky right-0 bg-gray-50 shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.1)]">Actions</th>
                                     </tr>
@@ -611,6 +619,13 @@ export default function ResidentPage() {
                                                 <td className="px-6 py-4 text-gray-600">{resident.mothers_middle_name || '-'}</td>
                                                 <td className="px-6 py-4 text-gray-600">{resident.mothers_last_name || '-'}</td>
                                                 <td className="px-6 py-4 font-medium text-gray-900">{resident.purok}</td>
+                                                <td className="px-6 py-4">
+                                                    {resident.is_registered_voter ? (
+                                                        <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">Registered</span>
+                                                    ) : (
+                                                        <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-200">Not Registered</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 flex gap-1.5 flex-wrap w-48">
                                                     {resident.is_4ps_beneficiary && <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold border border-purple-200">4Ps</span>}
                                                     {resident.is_senior_citizen && <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200">Senior</span>}
@@ -638,7 +653,7 @@ export default function ResidentPage() {
                                         );
                                     }) : (
                                         <tr>
-                                            <td colSpan={21} className="px-6 py-12 text-center text-gray-500 font-medium">
+                                            <td colSpan={22} className="px-6 py-12 text-center text-gray-500 font-medium">
                                                 <div className="flex flex-col items-center justify-center">
                                                     <svg className="w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                                                     No residents found matching your criteria.

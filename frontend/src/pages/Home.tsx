@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../components/AuthContext";
 import StatCard from "../components/statcard";
+import DashboardAdminView from "../components/DashboardAdminView";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -208,13 +209,7 @@ export default function Home() {
                         </div>
                         
                         {/* --- VIEW 1: CAPTAIN & SECRETARY --- */}
-                        {isCaptainOrSecretary && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                                <StatCard title="Total Residents" value={(stats.total_residents || 0).toLocaleString()} icon={<UsersIcon />} bgClass="bg-[#1e7b2b]" textClass="text-white" />
-                                <StatCard title="Welfare Beneficiaries" value={welfareBeneficiariesCount.toLocaleString()} icon={<HeartHandIcon />} bgClass="bg-[#14b8a6]" textClass="text-white" />
-                                <StatCard title="Chatbot Queries" value={(stats.chatbot_queries || 0).toLocaleString()} icon={<ChatIcon />} bgClass="bg-[#ef4444]" textClass="text-white" />
-                            </div>
-                        )}
+                        {isCaptainOrSecretary && <DashboardAdminView />}
 
                         {/* --- VIEW 2: TANOD / FIELD STAFF --- */}
                         {isTanod && (

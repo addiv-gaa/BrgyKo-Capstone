@@ -8,12 +8,9 @@ class UserProfile(models.Model):
     # --- NEW: User Roles for RBAC ---
     ROLE_CHOICES = [
         ('RESIDENT', 'Resident'),
-        ('SECRETARY', 'Secretary (Admin)'),
-        ('CAPTAIN', 'Barangay Captain (Admin)'),
-        ('COUNCIL', 'Barangay Council / Konsehal'),
-        ('TREASURER', 'Treasurer'),
-        ('TANOD', 'Tanod'),
-        ('SK', 'SK (Sangguniang Kabataan)'),
+        ('STAFF', 'Staff'),
+        ('ADMIN', 'Admin'),
+        ('CAPTAIN', 'Captain'),
     ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='otp_profile')
@@ -26,19 +23,6 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.get_role_display()}"
-
-    def save(self, *args, **kwargs):
-        # Automatically tag as Senior Citizen if age >= 60
-        if self.birth_date:
-            today = date.today()
-            age = today.year - self.birth_date.year - ((today.month, today.day) < (self.birth_date.month, self.birth_date.day))
-            
-            # If they are 60+, force the tag to True
-            if age >= 60:
-                self.is_senior_citizen = True
-                
-        # Call the original save method to commit to the database
-        super().save(*args, **kwargs)
 
 
 class CertificateRequest(models.Model):
@@ -386,6 +370,7 @@ class Resident(models.Model):
     birth_place = models.CharField(max_length=255, blank=True, null=True)
     civil_status = models.CharField(max_length=50, default='Single')
     citizenship = models.CharField(max_length=100, default='Filipino')
+    is_registered_voter = models.BooleanField(default=False)
     sex = models.CharField(max_length=10, choices=SEX_CHOICES, default='Male')
     contact_number = models.CharField(max_length=20, blank=True, null=True)
     purok = models.CharField(max_length=50)

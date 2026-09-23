@@ -42,7 +42,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
                     const decoded = jwtDecode<CustomJwtPayload>(newAccessToken);
                     
                     // FIX 3: Safely parse roles whether Django sends a string or an array
-                    const rolesFromToken = decoded.roles || (decoded.role ? [decoded.role] : []);
+                    const rolesFromToken = (decoded.roles || (decoded.role ? [decoded.role] : [])).map(r => r.toUpperCase());
                     setUserRoles(rolesFromToken);
                     setIsAuthorized(true);
                 } else {
@@ -71,7 +71,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
                     await refreshAuthToken();
                 } else {
                     // Token is valid. Safely parse roles whether string or array.
-                    const rolesFromToken = decoded.roles || (decoded.role ? [decoded.role] : []);
+                    const rolesFromToken = (decoded.roles || (decoded.role ? [decoded.role] : [])).map(r => r.toUpperCase());
                     setUserRoles(rolesFromToken);
                     setIsAuthorized(true);
                 }

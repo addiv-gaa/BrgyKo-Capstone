@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.throttling import UserRateThrottle
-from .permissions import IsAdminGroup, IsStaffGroup
+from .permissions import IsAdminUser, IsInternalUser
 from rest_framework.views import APIView
 from .serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -502,7 +502,7 @@ class IncidentReportViewSet(viewsets.ModelViewSet):
 # 6. MANAGER & STAFF VIEWSETS
 # ==========================================
 class CertificateRequestManagerViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsStaffGroup]
+    permission_classes = [IsInternalUser]
     queryset = CertificateRequest.objects.all().order_by('-date_requested')
     serializer_class = CertificateRequestSerializer
 
@@ -523,14 +523,14 @@ class CertificateRequestManagerViewSet(viewsets.ModelViewSet):
         return Response({"message": f"Certificate request {new_status.lower()}."})
 
 class PermitRequestManagerViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsStaffGroup]
+    permission_classes = [IsInternalUser]
     queryset = PermitRequest.objects.all().order_by('-date_requested')
     serializer_class = PermitRequestSerializer
 
 class ResidentApprovalViewSet(viewsets.ModelViewSet):
     queryset = ResidentApplication.objects.all().order_by('-created_at')
     serializer_class = ResidentApplicationSerializer
-    permission_classes = [IsStaffGroup]
+    permission_classes = [IsInternalUser]
 
     @action(detail=False, methods=['get'])
     def pending(self, request):
@@ -600,16 +600,51 @@ class ResidentViewSet(viewsets.ModelViewSet):
         'purok', 
         'household', 
         'relationship_to_head',
-        'is_4ps_beneficiary', 
-        'is_senior_citizen', 
-        'is_pwd', 
-        'is_solo_parent',
+        'is_registered_voter',
         'sex',
         'civil_status',
         'inhabitant_type'
     ]
     ordering_fields = ['first_name', 'last_name', 'purok', 'birth_date', 'id']
     ordering = ['-id']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        
+        # 1. Youth Filter
+        is_youth = self.request.query_params.get('is_youth')
+        if is_youth == 'true':
+            from datetime import date
+            today = date.today()
+            def sub_years(d, years):
+                try: return d.replace(year=d.year - years)
+                except ValueError: return d.replace(year=d.year - years, day=d.day - 1)
+            age_15 = sub_years(today, 15)
+            age_31 = sub_years(today, 31)
+            qs = qs.filter(birth_date__lte=age_15, birth_date__gt=age_31)
+            
+        # 2. Welfare 'OR' Filter
+        from django.db.models import Q
+        welfare_q = Q()
+        has_welfare = False
+        
+        if self.request.query_params.get('is_pwd') in ['True', 'true', '1']:
+            welfare_q |= Q(is_pwd=True)
+            has_welfare = True
+        if self.request.query_params.get('is_senior_citizen') in ['True', 'true', '1']:
+            welfare_q |= Q(is_senior_citizen=True)
+            has_welfare = True
+        if self.request.query_params.get('is_solo_parent') in ['True', 'true', '1']:
+            welfare_q |= Q(is_solo_parent=True)
+            has_welfare = True
+        if self.request.query_params.get('is_4ps_beneficiary') in ['True', 'true', '1']:
+            welfare_q |= Q(is_4ps_beneficiary=True)
+            has_welfare = True
+            
+        if has_welfare:
+            qs = qs.filter(welfare_q)
+            
+        return qs
 
     @action(detail=False, methods=['post'], url_path='import-excel')
     def import_excel(self, request):
@@ -864,7 +899,7 @@ class FacilityViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsStaffGroup()]
+            return [IsInternalUser()]
         return super().get_permissions()
 
 class EquipmentViewSet(viewsets.ModelViewSet):
@@ -874,7 +909,7 @@ class EquipmentViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsStaffGroup()]
+            return [IsInternalUser()]
         return super().get_permissions()
 
 class ReservationViewSet(viewsets.ModelViewSet):
@@ -979,7 +1014,7 @@ class EventViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsStaffGroup()] 
+            return [IsInternalUser()] 
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -1021,7 +1056,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
         
         # Keep staff-only restriction for creating, updating, or deleting
-        return [IsStaffGroup()]
+        return [IsInternalUser()]
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -1042,21 +1077,112 @@ class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated] 
 
     def get(self, request):
-        welfare_count = Resident.objects.filter(
+        from datetime import date
+        today = date.today()
+        
+        def sub_years(d, years):
+            try:
+                return d.replace(year=d.year - years)
+            except ValueError:
+                return d.replace(year=d.year - years, day=d.day - 1)
+
+        age_15_date = sub_years(today, 15)
+        age_30_date = sub_years(today, 30)
+        age_60_date = sub_years(today, 60)
+
+        # 1. Base Querysets
+        residents = Resident.objects.all()
+        households = Household.objects.all()
+
+        total_residents = residents.count()
+
+        # 2. Card Metrics
+        welfare_count = residents.filter(
             Q(is_4ps_beneficiary=True) | 
             Q(is_senior_citizen=True) | 
             Q(is_pwd=True) | 
             Q(is_solo_parent=True)
         ).count()
 
+        registered_voters = residents.filter(is_registered_voter=True).count()
+        
+        # Youth: age between 15 (inclusive) and 30 (inclusive)
+        # That means birth_date <= date 15 years ago AND birth_date >= date 31 years ago
+        age_31_date = sub_years(today, 31)
+        youth_residents = residents.filter(birth_date__lte=age_15_date, birth_date__gt=age_31_date).count()
+
+        # 3. Chart Data (Aggregated Server-Side)
+        
+        # Gender
+        gender_data = list(residents.values('sex').annotate(value=Count('id')))
+        # rename 'sex' to 'name'
+        for g in gender_data:
+            g['name'] = g.pop('sex')
+
+        # Welfare
+        welfare_data = [
+            {"name": "4Ps", "value": residents.filter(is_4ps_beneficiary=True).count()},
+            {"name": "PWD", "value": residents.filter(is_pwd=True).count()},
+            {"name": "Solo Parent", "value": residents.filter(is_solo_parent=True).count()},
+            {"name": "Senior", "value": residents.filter(is_senior_citizen=True).count()},
+        ]
+
+        # Voter
+        voter_data = [
+            {"name": "Registered", "value": registered_voters},
+            {"name": "Not Registered", "value": total_residents - registered_voters},
+        ]
+
+        # Age Brackets
+        children = residents.filter(birth_date__gt=age_15_date).count()
+        seniors_age = residents.filter(birth_date__lte=age_60_date).count()
+        adults = total_residents - (children + youth_residents + seniors_age)
+        age_data = [
+            {"name": "0-14 (Children)", "value": children},
+            {"name": "15-30 (Youth)", "value": youth_residents},
+            {"name": "31-59 (Adults)", "value": adults},
+            {"name": "60+ (Seniors)", "value": seniors_age},
+        ]
+
+        # Purok
+        purok_data = list(residents.values('purok').annotate(value=Count('id')))
+        for p in purok_data:
+            p['name'] = p.pop('purok') or 'Unknown'
+
+        # Civil Status
+        civil_data = list(residents.values('civil_status').annotate(value=Count('id')))
+        for c in civil_data:
+            c['name'] = c.pop('civil_status') or 'Unknown'
+
+        # Housing Status
+        housing_data = list(households.values('housing_status').annotate(value=Count('id')))
+        for h in housing_data:
+            h['name'] = h.pop('housing_status') or 'Unknown'
+
         stats = {
-            "total_residents": Resident.objects.count(),
+            # Cards
+            "total_residents": total_residents,
+            "welfare_beneficiaries": welfare_count, 
+            "registered_voters": registered_voters,
+            "youth_residents": youth_residents,
+            
+            # Additional Dashboard metrics
             "certs_this_month": CertificateRequest.objects.count(),
             "pending_reservations": Reservation.objects.filter(status='PENDING').count(), 
             "pending_documents": CertificateRequest.objects.filter(status='PENDING').count(),
-            "welfare_beneficiaries": welfare_count, 
-            "sk_programs": 6,            
             "chatbot_queries": AiQueryStatistic.objects.count(),
+
+            # Charts
+            "charts": {
+                "monthly_ai": list(AiQueryStatistic.objects.filter(created_at__year=today.year).values('created_at__month').annotate(ai=Count('id')).order_by('created_at__month')),
+                "gender": gender_data,
+                "welfare": welfare_data,
+                "voter": voter_data,
+                "age": age_data,
+                "purok": purok_data,
+                "civil_status": civil_data,
+                "housing_status": housing_data
+            }
         }
         return Response(stats)
 
@@ -1242,16 +1368,9 @@ class OfficialDocumentViewSet(viewsets.ModelViewSet):
 # 9. ADMIN HUB & AUDIT LOGS
 # ==========================================
 class AdminAuditLogAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
-        try:
-            role = request.user.otp_profile.role.upper()
-        except Exception:
-            raise PermissionDenied("User profile not found.")
-            
-        if role not in ['CAPTAIN', 'SECRETARY']:
-            raise PermissionDenied("Only Captains and Secretaries can view audit logs.")
 
         # Query Parameters
         page = int(request.GET.get('page', 1))
@@ -1368,19 +1487,9 @@ class AdminAuditLogAPIView(APIView):
 
 
 class StaffManagementAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_permissions_check(self, request):
-        try:
-            role = request.user.otp_profile.role.upper()
-        except Exception:
-            raise PermissionDenied("User profile not found.")
-            
-        if role not in ['CAPTAIN', 'SECRETARY']:
-            raise PermissionDenied("Only Captains and Secretaries can manage staff accounts.")
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
-        self.get_permissions_check(request)
         
         staff_profiles = UserProfile.objects.exclude(role='RESIDENT').select_related('user').order_by('-user__date_joined')
         
@@ -1397,7 +1506,6 @@ class StaffManagementAPIView(APIView):
         return Response(staff_data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        self.get_permissions_check(request)
 
         username = request.data.get('username')
         password = request.data.get('password')
@@ -1535,5 +1643,5 @@ class EmergencyContactViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
-        return [IsStaffGroup()]
+        return [IsInternalUser()]
 

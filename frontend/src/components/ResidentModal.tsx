@@ -22,6 +22,7 @@ export interface ResidentProperties {
     purok: string;
     relationship_to_head: string;
     household: number | null;
+    is_registered_voter: boolean;
     is_4ps_beneficiary: boolean;
     is_senior_citizen: boolean; // FIXED: Changed from has_ to is_
     is_pwd: boolean;            // FIXED: Changed from has_ to is_
@@ -57,6 +58,7 @@ const DEFAULT_FORM_STATE: ResidentProperties = {
     purok: '',
     relationship_to_head: 'Head',
     household: null,
+    is_registered_voter: false,
     is_4ps_beneficiary: false,
     is_senior_citizen: false, // FIXED
     is_pwd: false,            // FIXED
@@ -180,6 +182,12 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
                             <div className="md:col-span-2">
                                 <label className={labelClass}>Birth Date *</label>
                                 <input type="date" name="birth_date" value={formData.birth_date} onChange={handleChange} required disabled={isViewOnly} className={inputClass} />
+                            </div>
+                            <div className="md:col-span-4 flex items-center pt-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="is_registered_voter" checked={formData.is_registered_voter} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-blue-600 rounded" />
+                                    <span className="text-sm font-medium text-gray-700">Registered Voter</span>
+                                </label>
                             </div>
                         </div>
 

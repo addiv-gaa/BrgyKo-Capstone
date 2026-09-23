@@ -78,10 +78,9 @@ export default function AdminHub() {
     });
 
     const STAFF_ROLES = [
-        { value: 'TREASURER', label: 'Treasurer' },
-        { value: 'COUNCIL', label: 'Barangay Council' },
-        { value: 'SK', label: 'SK' },
-        { value: 'TANOD', label: 'Tanod' },
+        { value: 'ADMIN', label: 'Admin' },
+        { value: 'STAFF', label: 'Staff' },
+        { value: 'CAPTAIN', label: 'Captain' },
     ];
 
     useEffect(() => {
@@ -98,7 +97,7 @@ export default function AdminHub() {
 
         const userRole = (Array.isArray(extractedRole) ? extractedRole[0] : extractedRole).toUpperCase();
         
-        if (userRole === 'CAPTAIN' || userRole === 'SECRETARY') {
+        if (userRole === 'ADMIN') {
             setIsAuthorized(true);
             fetchData();
         } else {
