@@ -30,18 +30,9 @@ export default function RequestPermit() {
 
     // --- Data Fetching ---
     const fetchPreviousRequests = async () => {
-        const token = localStorage.getItem('access'); 
-        
-        if (!token) {
-            setIsLoading(false);
-            return;
-        }
-
         try {
             const response = await fetch(`${API_URL}/api/permits/`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                credentials: 'include'
             });
 
             if (response.ok) {
@@ -88,22 +79,14 @@ export default function RequestPermit() {
 
     // NEW: Step 2 - Execute the API call when the user clicks 'Yes' in the modal
     const handleFinalConfirm = async () => {
-        const token = localStorage.getItem('access');
-
-        if (!token) {
-            alert("You must be logged in to submit a request.");
-            setIsConfirmModalOpen(false);
-            return;
-        }
-
         setIsSubmitting(true);
 
         try {
             const response = await fetch(`${API_URL}/api/permits/`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(formData) 
             });

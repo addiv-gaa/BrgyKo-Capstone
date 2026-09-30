@@ -1,5 +1,5 @@
-import { useContext } from "react"
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom"
+import { useContext, useEffect } from "react"
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom"
 import DashboardLayout from "./components/DashboardLayout"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
@@ -35,14 +35,39 @@ import ReportIncident from "./pages/ReportIncident"
 import TanodDashboard from "./pages/TanodDashboard"
 import AdminHub from "./pages/AdminHub"
 
+
 function Logout() {
-  localStorage.clear()
-  return <Navigate to="/login" />
+  const auth = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const doLogout = async () => {
+      if (auth) {
+        await auth.logout();
+      }
+      localStorage.clear();
+      navigate('/login', { replace: true });
+    };
+    doLogout();
+  }, [auth, navigate]);
+
+  return <div className="flex h-screen items-center justify-center">Logging out...</div>;
 }
 
 function RegisterAndLogout() {
-  localStorage.clear()
-  return <Register />
+  const auth = useContext(AuthContext);
+  
+  useEffect(() => {
+    const doLogout = async () => {
+      if (auth) {
+        await auth.logout();
+      }
+      localStorage.clear();
+    };
+    doLogout();
+  }, [auth]);
+
+  return <Register />;
 }
 
 // Global Maintenance Mode Guard Wrapper
@@ -58,21 +83,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     ? [(user.roles as string).toUpperCase()]
     : [];
 
-  // 2. Fallback: Directly decode the token from localStorage if context roles are empty
-  if (normalizedRoles.length === 0) {
-    try {
-      const token = localStorage.getItem('access');
-      if (token) {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const rawRole = payload.role || payload.roles || [];
-        normalizedRoles = Array.isArray(rawRole) 
-          ? rawRole.map((r: string) => r.toUpperCase()) 
-          : [rawRole.toUpperCase()];
-      }
-    } catch (e) {
-      // Ignore token parse errors
-    }
-  }
+
 
   const staffRoles = ['CAPTAIN', 'ADMIN', 'STAFF'];
   const isStaff = normalizedRoles.some(role => staffRoles.includes(role));

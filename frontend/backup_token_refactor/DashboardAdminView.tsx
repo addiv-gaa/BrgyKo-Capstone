@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     UsersIcon, HeartHandshake, ShieldAlertIcon, MapIcon, CalendarIcon, MegaphoneIcon, Search 
 } from 'lucide-react';
-import api from '../api';
 import { 
     PieChart, Pie, Cell, 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Legend, LabelList,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
     AreaChart, Area
 } from 'recharts';
 
@@ -57,27 +56,6 @@ const StatCard = ({ title, value, icon, active, onClick, colorKey }: any) => {
     );
 };
 
-
-const CustomMaleLabel = (props: any) => {
-    const { x, y, width, height, value } = props;
-    if (!value) return null;
-    return (
-        <text x={x - Math.abs(width) - 5} y={y + height / 2} fill="#6b7280" fontSize={10} fontWeight="bold" textAnchor="end" dominantBaseline="central">
-            {Math.abs(value)}
-        </text>
-    );
-};
-
-const CustomFemaleLabel = (props: any) => {
-    const { x, y, width, height, value } = props;
-    if (!value) return null;
-    return (
-        <text x={x + width + 5} y={y + height / 2} fill="#6b7280" fontSize={10} fontWeight="bold" textAnchor="start" dominantBaseline="central">
-            {value}
-        </text>
-    );
-};
-
 export default function DashboardAdminView() {
     const [stats, setStats] = useState<any>(null);
     const [monthlyData, setMonthlyData] = useState<any[]>([]);
@@ -95,38 +73,27 @@ export default function DashboardAdminView() {
     const [searchQuery, setSearchQuery] = useState('');
     const [purokFilter, setPurokFilter] = useState('');
     const [sexFilter, setSexFilter] = useState('');
-    
     const [civilStatusFilter, setCivilStatusFilter] = useState('');
-
-    const pyramidData = useMemo(() => {
-        return stats?.charts?.age ? stats.charts.age.map((item: any) => ({
-            ...item,
-            MalePlot: -(item.Male || 0),
-            FemalePlot: (item.Female || 0)
-        })) : [];
-    }, [stats?.charts?.age]);
-
 
     useEffect(() => {
         const fetchStats = async () => {
-            try {
-                const res = await api.get('/api/dashboard-stats/');
-                if (res.status === 200) {
-                    const data = res.data;
-                    setStats(data);
-                    
-                    // Process Monthly AI Data
-                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                    const emptyMonthlyData = monthNames.map(m => ({ name: m, ai: 0 }));
-                    if (data.charts.monthly_ai) {
-                        data.charts.monthly_ai.forEach((item: any) => {
-                            emptyMonthlyData[item.created_at__month - 1].ai = item.ai;
-                        });
-                    }
-                    setMonthlyData(emptyMonthlyData);
+            const token = localStorage.getItem('access');
+            const res = await fetch(`${API_URL}/api/dashboard-stats/`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setStats(data);
+                
+                // Process Monthly AI Data
+                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                const emptyMonthlyData = monthNames.map(m => ({ name: m, ai: 0 }));
+                if (data.charts.monthly_ai) {
+                    data.charts.monthly_ai.forEach((item: any) => {
+                        emptyMonthlyData[item.created_at__month - 1].ai = item.ai;
+                    });
                 }
-            } catch (err) {
-                console.error("Error fetching dashboard stats:", err);
+                setMonthlyData(emptyMonthlyData);
             }
         };
         fetchStats();
@@ -137,6 +104,7 @@ export default function DashboardAdminView() {
         
         const fetchFilteredResidents = async () => {
             setLoading(true);
+            const token = localStorage.getItem('access');
             
             let query = `?page=${page}&page_size=10`;
             if (activeFilter === 'voters') query += '&is_registered_voter=True';
@@ -162,12 +130,13 @@ export default function DashboardAdminView() {
                 if (welfareFilters.fourps) query += '&is_4ps_beneficiary=True';
             }
 
-            try {
-                const res = await api.get(`/api/residents/${query}`);
-                setResidents(res.data.results || res.data);
-                setTotalPages(Math.ceil(res.data.count / 10) || 1);
-            } catch (err) {
-                console.error("Error fetching residents:", err);
+            const res = await fetch(`${API_URL}/api/residents/${query}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setResidents(data.results || data);
+                setTotalPages(Math.ceil(data.count / 10) || 1);
             }
             setLoading(false);
         };
@@ -374,9 +343,9 @@ export default function DashboardAdminView() {
                         <h2 className="text-sm font-bold text-gray-800 mb-4">Population by Gender</h2>
                         <div className="flex items-center justify-start h-64">
                             <div className="w-1/2 h-full relative">
-                                <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                                <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
-                                        <Pie data={stats.charts.gender} innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value" stroke="none" isAnimationActive={false}>
+                                        <Pie data={stats.charts.gender} innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value" stroke="none">
                                             {stats.charts.gender?.map((entry: any, index: number) => (
                                                 <Cell key={`cell-${index}`} fill={BINARY_COLORS[index % BINARY_COLORS.length]} />
                                             ))}
@@ -412,13 +381,13 @@ export default function DashboardAdminView() {
                             </span>
                         </div>
                         <div className="h-52">
-                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                            <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} allowDecimals={false} domain={['dataMin', 'dataMax + 2']} />
                                     <Tooltip formatter={(value: any) => [`${value} Queries`, 'Resident AI']} />
-                                    <Area type="monotone" dataKey="ai" stroke="#166534" fill="#dcfce7" strokeWidth={3} activeDot={{ r: 6, fill: '#166534', strokeWidth: 0 }}  isAnimationActive={false}/>
+                                    <Area type="monotone" dataKey="ai" stroke="#166534" fill="#dcfce7" strokeWidth={3} activeDot={{ r: 6, fill: '#166534', strokeWidth: 0 }} />
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
@@ -436,13 +405,13 @@ export default function DashboardAdminView() {
                             </div>
                         </div>
                         <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                            <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={stats.charts.welfare} margin={{ top: 20, right: 10, left: -25, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} allowDecimals={false} />
                                     <Tooltip cursor={{ fill: '#f9fafb' }} formatter={(value: any) => [`${value} Residents`, 'Count']} />
-                                    <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={30} isAnimationActive={false}>
+                                    <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={30}>
                                         {stats.charts.welfare.map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={WELFARE_COLORS[entry.name] || '#14b8a6'} />
                                         ))}
@@ -453,21 +422,37 @@ export default function DashboardAdminView() {
                     </div>
                 </div>
 
-                {/* ROW 2: Pie Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* ROW 2: 4 Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    {/* 4. Age Bracket Distribution (Horizontal Bar Chart) */}
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                        <h2 className="text-sm font-bold text-gray-800 mb-4 text-center">Age Distribution</h2>
+                        <div className="h-56">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart layout="vertical" data={stats.charts.age} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
+                                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} allowDecimals={false} />
+                                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} width={95} />
+                                    <Tooltip cursor={{ fill: '#f9fafb' }} formatter={(value: any) => [`${value} Residents`, 'Count']} />
+                                    <Bar dataKey="value" fill="#15803d" radius={[0, 4, 4, 0]} barSize={16} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    
                     {/* 5. Voter Distribution (Dashboard specific) */}
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                         <div className="flex justify-between items-center mb-2">
                             <h2 className="text-sm font-bold text-gray-800">Voter Status</h2>
                             <div className="flex gap-1.5 flex-wrap justify-end">
-                                <span className="bg-[#14532d] text-white px-2 py-1 rounded text-[10px] font-bold">Reg: {countReg.toLocaleString()}</span>
-                                <span className="bg-[#16a34a] text-white px-2 py-1 rounded text-[10px] font-bold">Unreg: {countUnreg.toLocaleString()}</span>
+                                <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold">Reg: {countReg.toLocaleString()}</span>
+                                <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] font-bold">Unreg: {countUnreg.toLocaleString()}</span>
                             </div>
                         </div>
                         <div className="h-56">
-                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                            <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Pie data={stats.charts.voter} innerRadius={35} outerRadius={55} paddingAngle={2} dataKey="value" stroke="none" isAnimationActive={false}>
+                                    <Pie data={stats.charts.voter} innerRadius={35} outerRadius={55} paddingAngle={2} dataKey="value" stroke="none">
                                         {stats.charts.voter.map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={BINARY_COLORS[index % BINARY_COLORS.length]} />
                                         ))}
@@ -478,20 +463,37 @@ export default function DashboardAdminView() {
                             </ResponsiveContainer>
                         </div>
                     </div>
+
+                    {/* 6. Purok Distribution (Dashboard specific) */}
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                        <h2 className="text-sm font-bold text-gray-800 mb-4 text-center">Population by Purok</h2>
+                        <div className="h-56">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart layout="vertical" data={stats.charts.purok} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
+                                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} allowDecimals={false} />
+                                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} width={95} />
+                                    <Tooltip cursor={{ fill: '#f9fafb' }} formatter={(value: any) => [`${value} Residents`, 'Count']} />
+                                    <Bar dataKey="value" fill="#15803d" radius={[0, 4, 4, 0]} barSize={16} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
                     {/* 7. Civil Status Distribution (Dashboard specific) */}
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                         <div className="flex justify-between items-center mb-2">
                             <h2 className="text-sm font-bold text-gray-800">Civil Status</h2>
                             <div className="flex gap-1.5 flex-wrap justify-end">
-                                <span className="bg-[#16a34a] text-white px-1.5 py-1 rounded text-[10px] font-bold">Single: {countSingle.toLocaleString()}</span>
-                                <span className="bg-[#022c22] text-white px-1.5 py-1 rounded text-[10px] font-bold">Married: {countMarried.toLocaleString()}</span>
-                                <span className="bg-[#065f46] text-white px-1.5 py-1 rounded text-[10px] font-bold">Widowed: {countWidowed.toLocaleString()}</span>
+                                <span className="bg-blue-100 text-blue-700 px-1.5 py-1 rounded text-[10px] font-bold">Single: {countSingle.toLocaleString()}</span>
+                                <span className="bg-orange-100 text-orange-700 px-1.5 py-1 rounded text-[10px] font-bold">Married: {countMarried.toLocaleString()}</span>
+                                <span className="bg-red-100 text-red-700 px-1.5 py-1 rounded text-[10px] font-bold">Widowed: {countWidowed.toLocaleString()}</span>
                             </div>
                         </div>
                         <div className="h-56">
-                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                            <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Pie data={stats.charts.civil_status} outerRadius={55} dataKey="value" stroke="none" isAnimationActive={false}>
+                                    <Pie data={stats.charts.civil_status} outerRadius={55} dataKey="value" stroke="none">
                                         {stats.charts.civil_status.map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={SPECTRUM_COLORS[index % SPECTRUM_COLORS.length]} />
                                         ))}
@@ -499,49 +501,6 @@ export default function DashboardAdminView() {
                                     <Tooltip formatter={(value: any) => [`${value} Residents`, 'Count']} />
                                     <Legend wrapperStyle={{ fontSize: '12px' }} />
                                 </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ROW 3: Bar & Pyramid Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* 6. Purok Distribution (Dashboard specific) */}
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                        <h2 className="text-sm font-bold text-gray-800 mb-4 text-center">Population by Purok</h2>
-                        <div className="h-[420px]">
-                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
-                                <BarChart layout="vertical" data={stats.charts.purok} margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
-                                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} allowDecimals={false} />
-                                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} width={95} />
-                                    <Tooltip cursor={{ fill: '#f9fafb' }} formatter={(value: any) => [`${value} Residents`, 'Count']} />
-                                    <Bar dataKey="value" fill="#15803d" radius={[0, 4, 4, 0]} isAnimationActive={false}>
-                                          <LabelList dataKey="value" position="right" fill="#6b7280" fontSize={10} fontWeight="bold" />
-                                      </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                    {/* 4. Age Bracket Distribution (Pyramid Chart) */}
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                        <h2 className="text-sm font-bold text-gray-800 mb-4 text-center">Age Distribution</h2>
-                        <div className="h-[420px]">
-                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
-                                <BarChart layout="vertical" data={pyramidData} stackOffset="sign" margin={{ top: 0, right: 40, left: 40, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={true} stroke="#f3f4f6" />
-                                    <XAxis type="number" domain={([dataMin, dataMax]: any) => { const max = Math.max(Math.abs(dataMin || 0), Math.abs(dataMax || 0)); const pad = max + Math.max(1, Math.ceil(max * 0.2)); return [-pad, pad]; }} tickFormatter={(v) => stats.total_residents ? ((Math.abs(v) / stats.total_residents) * 100).toFixed(1) + '%' : '0%'} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-                                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} width={140} interval={0} />
-                                    <Tooltip cursor={{ fill: '#f9fafb' }} formatter={(value: any, name: any) => [Math.abs(value), name === 'MalePlot' ? 'Male' : 'Female']} />
-                                    <Legend wrapperStyle={{ fontSize: '12px' }} formatter={(value) => value === 'MalePlot' ? 'Male' : 'Female'} />
-                                    <ReferenceLine x={0} stroke="#9ca3af" />
-                                    <Bar dataKey="MalePlot" fill={BINARY_COLORS[0]} stackId="a" isAnimationActive={false}>
-                                        <LabelList dataKey="MalePlot" content={<CustomMaleLabel />} />
-                                    </Bar>
-                                    <Bar dataKey="FemalePlot" fill={BINARY_COLORS[1]} stackId="a" isAnimationActive={false}>
-                                        <LabelList dataKey="FemalePlot" content={<CustomFemaleLabel />} />
-                                    </Bar>
-                                </BarChart>
                             </ResponsiveContainer>
                         </div>
                     </div>

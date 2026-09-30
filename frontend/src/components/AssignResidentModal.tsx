@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from '../api';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -28,25 +29,17 @@ export default function AssignResidentModal({ householdId, onClose, onAssignSucc
         return () => { document.body.style.overflow = 'unset'; };
     }, []);
 
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('access');
-        return {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        };
-    };
-
     // Fetch residents based on search query
     useEffect(() => {
         const fetchResidents = async () => {
             try {
                 const url = searchQuery 
-                    ? `${API_URL}/api/residents/?search=${encodeURIComponent(searchQuery)}`
-                    : `${API_URL}/api/residents/`; 
+                    ? `/api/residents/?search=${encodeURIComponent(searchQuery)}`
+                    : `/api/residents/`; 
                 
-                const response = await fetch(url, { headers: getAuthHeaders() });
-                if (response.ok) {
-                    const data = await response.json();
+                const response = await api.get(url);
+                if (response.status === 200) {
+                    const data = response.data;
                     const results = (data.results || data).filter((r: ResidentSearchData) => r.household !== householdId);
                     setSearchResults(results);
                 }
@@ -63,13 +56,12 @@ export default function AssignResidentModal({ householdId, onClose, onAssignSucc
         setIsAssigning(residentId);
         const rel = relationships[residentId] || 'Other';
         try {
-            const response = await fetch(`${API_URL}/api/residents/${residentId}/`, {
-                method: 'PATCH',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ household: householdId, relationship_to_head: rel })
+            const response = await api.patch(`/api/residents/${residentId}/`, {
+                household: householdId, 
+                relationship_to_head: rel 
             });
 
-            if (response.ok) {
+            if (response.status >= 200 && response.status < 300) {
                 onAssignSuccess();
             } else {
                 alert("Failed to assign resident.");

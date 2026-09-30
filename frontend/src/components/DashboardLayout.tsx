@@ -13,7 +13,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Header and Main Content stacked on the right */}
-            <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="flex flex-1 flex-col overflow-hidden transition-[flex] duration-300 will-change-auto transform-gpu">
                 <div className="shrink-0 w-full">
                     <PageHeader toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
                 </div>

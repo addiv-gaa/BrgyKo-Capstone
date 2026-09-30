@@ -16,10 +16,9 @@ export default function ResidentApprovals() {
     }, []);
 
     const fetchPendingResidents = async () => {
-        const token = localStorage.getItem('access');
         try {
             const response = await fetch(`${API_URL}/api/resident-approvals/pending/`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
             if (response.ok) {
                 setPendingResidents(await response.json());
@@ -32,13 +31,12 @@ export default function ResidentApprovals() {
     };
 
     const handleAction = async (id: number, status: 'APPROVED' | 'REJECTED', reason = '') => {
-        const token = localStorage.getItem('access');
         try {
             const response = await fetch(`${API_URL}/api/resident-approvals/${id}/update_status/`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ status, rejection_reason: reason })
             });

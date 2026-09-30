@@ -56,14 +56,9 @@ function CertificateRequests() {
 
     useEffect(() => {
         const fetchRequests = async () => {
-            const token = localStorage.getItem('access'); 
-            if (!token) {
-                setIsLoading(false);
-                return; 
-            }
             try {
                 const response = await fetch(`${API_URL}/api/manager/certificates/`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include'
                 });
                 if (response.ok) {
                     const data = await response.json();
@@ -84,13 +79,12 @@ function CertificateRequests() {
 
     const handleStatusChange = async (id: number, newStatus: string) => {
         setUpdatingId(id);
-        const token = localStorage.getItem('access');
         try {
             // FIXED: Added /update_status/ to the API endpoint
             const response = await fetch(`${API_URL}/api/manager/certificates/${id}/update_status/`, {
                 method: 'PATCH',
+                credentials: 'include',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ status: newStatus })

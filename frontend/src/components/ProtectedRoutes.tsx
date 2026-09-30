@@ -1,18 +1,10 @@
 import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";
 import api from "../api"; 
-import { REFRESH_TOKEN, ACCESS_TOKEN } from "../constants";
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
     allowedRoles?: string[];
-}
-
-interface CustomJwtPayload {
-    exp?: number;
-    role?: string;   // Added: If Django sends a single role string
-    roles?: string[]; // Added: If Django sends an array of roles
 }
 
 export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
@@ -20,63 +12,23 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
     const [userRoles, setUserRoles] = useState<string[]>([]);
 
     useEffect(() => {
-        const refreshAuthToken = async () => {
-            // FIX 1: Renamed variable to prevent shadowing the function name
-            const currentRefreshToken = localStorage.getItem(REFRESH_TOKEN);
-            
-            // FIX 2: Ensure refresh token exists before making the API call
-            if (!currentRefreshToken) {
-                setIsAuthorized(false);
-                return;
-            }
-            
+        const checkAuth = async () => {
             try {
-                const res = await api.post("/api/token/refresh/", {
-                    refresh: currentRefreshToken,
-                });
+                // Call the /api/auth/me/ endpoint — the HttpOnly cookie is sent automatically.
+                // If this succeeds, the user is authenticated.
+                const res = await api.get('/api/auth/me/');
                 
                 if (res.status === 200) {
-                    const newAccessToken = res.data.access;
-                    localStorage.setItem(ACCESS_TOKEN, newAccessToken);
-                    
-                    const decoded = jwtDecode<CustomJwtPayload>(newAccessToken);
-                    
-                    // FIX 3: Safely parse roles whether Django sends a string or an array
-                    const rolesFromToken = (decoded.roles || (decoded.role ? [decoded.role] : [])).map(r => r.toUpperCase());
-                    setUserRoles(rolesFromToken);
+                    const role = res.data.role?.toUpperCase() || '';
+                    setUserRoles(role ? [role] : []);
                     setIsAuthorized(true);
                 } else {
                     setIsAuthorized(false);
                 }
-            } catch (error) {
-                console.error("Failed to refresh token:", error);
-                setIsAuthorized(false);
-            }
-        };
-
-        const checkAuth = async () => {
-            const token = localStorage.getItem(ACCESS_TOKEN);
-            
-            if (!token) {
-                setIsAuthorized(false);
-                return;
-            }
-
-            try {
-                const decoded = jwtDecode<CustomJwtPayload>(token);
-                const tokenExpiration = decoded.exp;
-                const now = Date.now() / 1000;
-
-                if (tokenExpiration && tokenExpiration < now) {
-                    await refreshAuthToken();
-                } else {
-                    // Token is valid. Safely parse roles whether string or array.
-                    const rolesFromToken = (decoded.roles || (decoded.role ? [decoded.role] : [])).map(r => r.toUpperCase());
-                    setUserRoles(rolesFromToken);
-                    setIsAuthorized(true);
-                }
-            } catch (error) {
-                console.error("Failed to decode token:", error);
+            } catch {
+                // 401 or network error — user is not logged in.
+                // The axios interceptor will attempt a refresh automatically.
+                // If the refresh also fails, we end up here.
                 setIsAuthorized(false);
             }
         };

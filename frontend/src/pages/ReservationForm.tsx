@@ -52,13 +52,10 @@ export default function ReservationForm() {
 
     useEffect(() => {
         const fetchData = async () => {
-            const token = localStorage.getItem('access');
-            if (!token) return;
-
             try {
                 const [facRes, eqRes] = await Promise.all([
-                    fetch(`${API_URL}/api/facilities/`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(`${API_URL}/api/equipment/`, { headers: { 'Authorization': `Bearer ${token}` } })
+                    fetch(`${API_URL}/api/facilities/`, { credentials: 'include' }),
+                    fetch(`${API_URL}/api/equipment/`, { credentials: 'include' })
                 ]);
 
                 if (facRes.ok) setFacilities(await facRes.json());
@@ -93,7 +90,6 @@ export default function ReservationForm() {
         }
 
         setIsSubmitting(true);
-        const token = localStorage.getItem('access');
 
         // Clean up payload based on type
         const payload = {
@@ -108,9 +104,9 @@ export default function ReservationForm() {
         try {
             const response = await fetch(`${API_URL}/api/reservations/`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(payload)
             });

@@ -98,12 +98,9 @@ export default function RequestCertificate() {
 
     // --- Data Fetching ---
     const fetchUserProfile = async () => {
-        const token = localStorage.getItem('access');
-        if (!token) return;
-
         try {
             const response = await fetch(`${API_URL}/api/user/profile/`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
 
             if (response.ok) {
@@ -143,18 +140,9 @@ export default function RequestCertificate() {
     };
 
     const fetchPreviousRequests = async () => {
-        const token = localStorage.getItem('access'); 
-        
-        if (!token) {
-            setIsLoading(false);
-            return;
-        }
-
         try {
             const response = await fetch(`${API_URL}/api/certificates/`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                credentials: 'include'
             });
 
             if (response.ok) {
@@ -202,39 +190,31 @@ export default function RequestCertificate() {
     };
 
     const handleFinalConfirm = async () => {
-    const token = localStorage.getItem('access');
+        setIsSubmitting(true);
 
-    if (!token) {
-        alert("You must be logged in to submit a request.");
-        setIsConfirmModalOpen(false);
-        return;
-    }
+        // --- FIXED: Mapped perfectly to Django model ---
+        const finalPayload = {
+            certificate_type: formData.certificate_type,
+            purpose: formData.purpose === 'Other' ? customPurpose : formData.purpose,
+            
+            // Use exact field names from Django: 'request_for' and 'full_name'
+            request_for: requestType === 'myself' ? 'SELF' : 'OTHER',
+            full_name: requestType === 'someone_else' ? requestedName : formData.full_name,
+            
+            date_of_birth: requestType === 'someone_else' ? requestedDob : formData.date_of_birth,
+            civil_status: requestType === 'someone_else' ? requestedCivilStatus : formData.civil_status,
+            contact_number: requestType === 'someone_else' ? requestedContact : formData.contact_number,
+        };
 
-    setIsSubmitting(true);
-
-    // --- FIXED: Mapped perfectly to Django model ---
-    const finalPayload = {
-        certificate_type: formData.certificate_type,
-        purpose: formData.purpose === 'Other' ? customPurpose : formData.purpose,
-        
-        // Use exact field names from Django: 'request_for' and 'full_name'
-        request_for: requestType === 'myself' ? 'SELF' : 'OTHER',
-        full_name: requestType === 'someone_else' ? requestedName : formData.full_name,
-        
-        date_of_birth: requestType === 'someone_else' ? requestedDob : formData.date_of_birth,
-        civil_status: requestType === 'someone_else' ? requestedCivilStatus : formData.civil_status,
-        contact_number: requestType === 'someone_else' ? requestedContact : formData.contact_number,
-    };
-
-    try {
-        const response = await fetch(`${API_URL}/api/certificates/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}` 
-            },
-            body: JSON.stringify(finalPayload) 
-        });
+        try {
+            const response = await fetch(`${API_URL}/api/certificates/`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(finalPayload) 
+            });
 
             if (response.ok) {
                 alert("Request submitted successfully!");

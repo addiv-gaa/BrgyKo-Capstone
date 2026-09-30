@@ -7,7 +7,7 @@ export const MENU_CONFIG = {
         { label: "Dashboard", path: "/", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
         { label: "Announcements", path: "/announcements", icon: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" },
         { label: "Barangay Calendar", path: "/resident/schedule", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
-        { label: "Org Chart", path: "/barangayofficials", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
+        { label: "Barangay Council", path: "/barangayofficials", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
         { label: "Emergency Contacts", path: "/emergencycontacts", icon: "M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" },
         { label: "AI Assistant", path: "/aiassistant", icon: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" },
     ],
@@ -36,25 +36,12 @@ const Sidebar = ({ isOpen = true }: { isOpen?: boolean }) => {
     useEffect(() => {
         let extractedRole = "";
         let extractedUsername = "";
-        try {
-            const token = localStorage.getItem('access');
-            if (token) {
-                const base64Url = token.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                }).join(''));
 
-                const payload = JSON.parse(jsonPayload);
-                extractedRole = payload.role || payload.roles || "";
-                extractedUsername = payload.username || payload.name || "";
-            }
-        } catch (error) {}
-
-        if (!extractedRole && auth?.user) {
+        // Read user info from AuthContext (token is now an HttpOnly cookie and cannot be decoded client-side)
+        if (auth?.user) {
             const contextUser = auth.user as any;
             extractedRole = contextUser.role || contextUser.roles || "";
-            if (!extractedUsername) extractedUsername = contextUser.username || contextUser.name || "";
+            extractedUsername = contextUser.username || contextUser.name || "";
         }
 
         if (Array.isArray(extractedRole)) {
@@ -96,7 +83,7 @@ const Sidebar = ({ isOpen = true }: { isOpen?: boolean }) => {
     };
 
     return (
-        <div className={`h-screen bg-[#1e7b2b] text-white flex flex-col shrink-0 shadow-[4px_0_15px_rgba(0,0,0,0.1)] transition-all duration-300 relative overflow-hidden ${
+        <div className={`h-screen bg-[#1e7b2b] text-white flex flex-col shrink-0 shadow-[4px_0_15px_rgba(0,0,0,0.1)] transition-[width] duration-300 relative overflow-hidden will-change-[width] transform-gpu ${
             isOpen ? 'w-64' : 'w-0'
         }`}>
             {/* Background watermark */}

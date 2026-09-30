@@ -25,6 +25,7 @@ from .permissions import IsAdminUser, IsInternalUser
 from rest_framework.views import APIView
 from .serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import permissions
 
 from django.shortcuts import render
@@ -52,6 +53,7 @@ from .models import (
     BarangaySettings,
     ResidentApplication,
     EmergencyContact,
+    BarangayOfficial,
 )
 
 from .serializers import (
@@ -72,7 +74,7 @@ from .serializers import (
     BarangaySettingsSerializer,
     ResidentApplicationSerializer,
     AiQueryStatisticSerializer,
-    EmergencyContactSerializer,
+    EmergencyContactSerializer, BarangayOfficialSerializer,
 )
 
 genai.configure(api_key=settings.GOOGLE_API_KEY)
@@ -93,6 +95,128 @@ class IncidentReportThrottle(UserRateThrottle):
 # ==========================================
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception as e:
+            return super().post(request, *args, **kwargs)
+
+        user = serializer.user
+        access_token = serializer.validated_data.get('access')
+        refresh_token = serializer.validated_data.get('refresh')
+
+        response = Response()
+
+        # Set access token as HttpOnly cookie
+        response.set_cookie(
+            key='access_token',
+            value=access_token,
+            httponly=True,
+            secure=not settings.DEBUG,   # True in production (HTTPS), False in dev
+            samesite='Lax',
+            max_age=30 * 60,             # 30 minutes (matches SIMPLE_JWT setting)
+            path='/',
+        )
+
+        # Set refresh token as HttpOnly cookie
+        response.set_cookie(
+            key='refresh_token',
+            value=refresh_token,
+            httponly=True,
+            secure=not settings.DEBUG,
+            samesite='Lax',
+            max_age=24 * 60 * 60,        # 1 day (matches SIMPLE_JWT setting)
+            path='/',
+        )
+
+        # Get user info to send in the response body
+        try:
+            role = user.otp_profile.role
+        except Exception:
+            role = 'RESIDENT'
+
+        response.data = {
+            'detail': 'Login successful',
+            'user': {
+                'username': user.username,
+                'first_name': user.first_name,
+                'role': role,
+            }
+        }
+        response.status_code = 200
+
+        return response
+
+
+class CustomTokenRefreshView(APIView):
+    """Reads the refresh token from the HttpOnly cookie and issues a new access token cookie."""
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        refresh_token = request.COOKIES.get('refresh_token')
+
+        if not refresh_token:
+            return Response({'error': 'No refresh token found.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            refresh = RefreshToken(refresh_token)
+            new_access_token = str(refresh.access_token)
+
+            response = Response({'detail': 'Token refreshed successfully.'})
+            response.set_cookie(
+                key='access_token',
+                value=new_access_token,
+                httponly=True,
+                secure=not settings.DEBUG,
+                samesite='Lax',
+                max_age=30 * 60,
+                path='/',
+            )
+            return response
+        except Exception:
+            response = Response({'error': 'Invalid or expired refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
+            response.delete_cookie('access_token', path='/', samesite='Lax')
+            response.delete_cookie('refresh_token', path='/', samesite='Lax')
+            return response
+
+
+class LogoutView(APIView):
+    """Clears the HttpOnly auth cookies."""
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        response = Response({'detail': 'Logged out successfully.'})
+        response.delete_cookie(
+            'access_token', 
+            path='/',
+            samesite='Lax'
+        )
+        response.delete_cookie(
+            'refresh_token', 
+            path='/',
+            samesite='Lax'
+        )
+        return response
+
+
+class CurrentUserView(APIView):
+    """Returns the currently authenticated user's info. Used by the frontend
+    to know who is logged in since it can no longer decode the HttpOnly cookie."""
+
+    def get(self, request):
+        print(f"DEBUG COOKIES: {request.COOKIES}")
+        try:
+            role = request.user.otp_profile.role
+        except Exception:
+            role = 'RESIDENT'
+
+        return Response({
+            'username': request.user.username,
+            'first_name': request.user.first_name,
+            'role': role,
+        })
 
 class CreateUserView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -575,6 +699,7 @@ class ResidentApprovalViewSet(viewsets.ModelViewSet):
             return Response({"message": f"Resident {application.first_name} officially added to the registry."}, status=status.HTTP_200_OK)
 
 class HouseholdViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsInternalUser]
     queryset = Household.objects.prefetch_related('residents').all()
     serializer_class = HouseholdSerializer
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
@@ -608,9 +733,18 @@ class ResidentViewSet(viewsets.ModelViewSet):
     ordering_fields = ['first_name', 'last_name', 'purok', 'birth_date', 'id']
     ordering = ['-id']
 
+    def perform_create(self, serializer):
+        # All manually created residents go to the approval queue
+        serializer.save(is_approved=False, submitted_by=self.request.user if self.request.user.is_authenticated else None)
+
+
     def get_queryset(self):
         qs = super().get_queryset()
-        
+
+        if self.request.query_params.get('pending') == 'true':
+            qs = qs.filter(is_approved=False)
+        else:
+            qs = qs.filter(is_approved=True)
         # 1. Youth Filter
         is_youth = self.request.query_params.get('is_youth')
         if is_youth == 'true':
@@ -645,6 +779,22 @@ class ResidentViewSet(viewsets.ModelViewSet):
             qs = qs.filter(welfare_q)
             
         return qs
+
+    @action(detail=False, methods=['patch'], url_path='bulk-approve')
+    def bulk_approve(self, request):
+        if not hasattr(request.user, 'otp_profile') or request.user.otp_profile.role != 'CAPTAIN':
+            return Response({"error": "Only the Captain can approve residents."}, status=status.HTTP_403_FORBIDDEN)
+        ids = request.data.get('ids', [])
+        Resident.objects.filter(id__in=ids, is_approved=False).update(is_approved=True)
+        return Response({"message": f"{len(ids)} residents approved successfully."}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='bulk-deny')
+    def bulk_deny(self, request):
+        if not hasattr(request.user, 'otp_profile') or request.user.otp_profile.role != 'CAPTAIN':
+            return Response({"error": "Only the Captain can deny residents."}, status=status.HTTP_403_FORBIDDEN)
+        ids = request.data.get('ids', [])
+        Resident.objects.filter(id__in=ids, is_approved=False).delete()
+        return Response({"message": f"{len(ids)} residents denied and removed."}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='import-excel')
     def import_excel(self, request):
@@ -746,6 +896,8 @@ class ResidentViewSet(viewsets.ModelViewSet):
 
                     # 3. Handle fallbacks ONLY if it is a brand new record
                     if created:
+                        resident.is_approved = False
+                        resident.submitted_by = request.user if request.user.is_authenticated else None
                         resident.purok = 'Unassigned'
                         resident.is_4ps_beneficiary = False
                         resident.is_pwd = False
@@ -862,7 +1014,7 @@ class ResidentViewSet(viewsets.ModelViewSet):
                 )
 
             # Securely filter the incoming flags to ensure only welfare booleans are updated
-            allowed_fields = ['is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent']
+            allowed_fields = ['is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent', 'is_registered_voter']
             update_data = {}
             for key, value in flags.items():
                 if key in allowed_fields and value is not None:
@@ -1134,15 +1286,39 @@ class DashboardStatsView(APIView):
         ]
 
         # Age Brackets
-        children = residents.filter(birth_date__gt=age_15_date).count()
-        seniors_age = residents.filter(birth_date__lte=age_60_date).count()
-        adults = total_residents - (children + youth_residents + seniors_age)
-        age_data = [
-            {"name": "0-14 (Children)", "value": children},
-            {"name": "15-30 (Youth)", "value": youth_residents},
-            {"name": "31-59 (Adults)", "value": adults},
-            {"name": "60+ (Seniors)", "value": seniors_age},
+        age_brackets = [
+            ("Under 5 years old", 0, 4),
+            ("5-9 years old", 5, 9),
+            ("10-14 years old", 10, 14),
+            ("15-19 years old", 15, 19),
+            ("20-24 years old", 20, 24),
+            ("25-29 years old", 25, 29),
+            ("30-34 years old", 30, 34),
+            ("35-39 years old", 35, 39),
+            ("40-44 years old", 40, 44),
+            ("45-49 years old", 45, 49),
+            ("50-54 years old", 50, 54),
+            ("55-59 years old", 55, 59),
+            ("60-64 years old", 60, 64),
+            ("65-69 years old", 65, 69),
+            ("70-74 years old", 70, 74),
+            ("75-79 years old", 75, 79),
         ]
+
+        age_data = []
+        for name, min_age, max_age in age_brackets:
+            min_date = sub_years(today, min_age)
+            max_date = sub_years(today, max_age + 1)
+            base_qs = residents.filter(birth_date__lte=min_date, birth_date__gt=max_date)
+            male_count = base_qs.filter(sex='Male').count()
+            female_count = base_qs.filter(sex='Female').count()
+            age_data.append({"name": name, "Male": male_count, "Female": female_count})
+
+        date_80 = sub_years(today, 80)
+        base_qs_80 = residents.filter(birth_date__lte=date_80)
+        m_80 = base_qs_80.filter(sex='Male').count()
+        f_80 = base_qs_80.filter(sex='Female').count()
+        age_data.append({"name": "80 years old and over", "Male": m_80, "Female": f_80})
 
         # Purok
         purok_data = list(residents.values('purok').annotate(value=Count('id')))
@@ -1456,14 +1632,24 @@ class AdminAuditLogAPIView(APIView):
                 details = "Record deleted permanently"
 
             target_info = f"({record.history_id})"
-            if model_name == "UserProfile" and hasattr(record, 'user'):
-                target_info = f"({record.user.username})"
+            if model_name == "UserProfile":
+                try:
+                    target_info = f"({record.user.username})"
+                except Exception:
+                    target_info = f"(User ID: {getattr(record, 'user_id', 'Unknown')} - Deleted)"
+
+            action_user = "System"
+            try:
+                if record.history_user:
+                    action_user = record.history_user.username
+            except Exception:
+                action_user = "Deleted User"
 
             log_data.append({
                 "id": record.history_id,
                 "model": model_name,
                 "action": action_map.get(record.history_type, 'Unknown'),
-                "user": record.history_user.username if record.history_user else "System",
+                "user": action_user,
                 "date": record.history_date.isoformat(),
                 "details": details,
             })
@@ -1516,9 +1702,8 @@ class StaffManagementAPIView(APIView):
             return Response({"error": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         # --- SECURITY FIX: Strict Whitelist ---
-        # Explicitly block the creation of CAPTAIN, ADMIN, and SECRETARY accounts
         staff_role_upper = staff_role.upper()
-        allowed_roles = ['TREASURER', 'COUNCIL', 'SK', 'TANOD']
+        allowed_roles = ['ADMIN', 'STAFF', 'CAPTAIN', 'SECRETARY', 'TREASURER', 'COUNCIL', 'SK', 'TANOD']
         
         if staff_role_upper not in allowed_roles:
             return Response(
@@ -1529,14 +1714,15 @@ class StaffManagementAPIView(APIView):
 
         try:
             new_user = User.objects.create_user(username=username, email=email, password=password)
+            if staff_role_upper in ['ADMIN', 'STAFF', 'CAPTAIN', 'SECRETARY']:
+                new_user.is_staff = True
+                new_user.save()
             UserProfile.objects.create(user=new_user, role=staff_role_upper)
             return Response({"message": f"{staff_role_upper} account created successfully."}, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request):
-        self.get_permissions_check(request)
-
         user_id = request.data.get('user_id')
         action_type = request.data.get('action_type')
 
@@ -1551,15 +1737,17 @@ class StaffManagementAPIView(APIView):
 
             # --- SECURITY FIX: Admin Modification Protection ---
             target_profile = UserProfile.objects.filter(user=target_user).first()
-            if target_profile and target_profile.role in ['CAPTAIN', 'SECRETARY'] and request.user.otp_profile.role != 'CAPTAIN':
+            requester_role = request.user.otp_profile.role if hasattr(request.user, 'otp_profile') else 'RESIDENT'
+            
+            if target_profile and target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role not in ['CAPTAIN', 'ADMIN']:
                 return Response(
                     {"error": f"You do not have clearance to modify a {target_profile.role} account."}, 
                     status=status.HTTP_403_FORBIDDEN
                 )
 
             if action_type == 'toggle_status':
-                # Double-check protection: Never allow deactivating a Captain or Secretary from the frontend
-                if target_profile.role in ['CAPTAIN', 'SECRETARY']:
+                # Double-check protection: Never allow deactivating a Captain or Secretary from the frontend unless you're an ADMIN
+                if target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role != 'ADMIN':
                     return Response({"error": "Critical system accounts cannot be revoked via the dashboard."}, status=status.HTTP_403_FORBIDDEN)
                 
                 target_user.is_active = not target_user.is_active
@@ -1575,18 +1763,24 @@ class StaffManagementAPIView(APIView):
                 target_user.save()
                 return Response({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
 
+            elif action_type == 'delete_account':
+                if target_profile and target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role != 'ADMIN':
+                    return Response({"error": "Critical system accounts cannot be deleted."}, status=status.HTTP_403_FORBIDDEN)
+                target_user.delete()
+                return Response({"message": "Account permanently deleted."}, status=status.HTTP_200_OK)
+
             elif action_type == 'change_role':
                 new_role = request.data.get('new_role')
                 if not new_role:
                     return Response({"error": "New role is required."}, status=status.HTTP_400_BAD_REQUEST)
                 
                 new_role = new_role.upper()
-                allowed_roles = ['TREASURER', 'COUNCIL', 'SK', 'TANOD']
+                allowed_roles = ['ADMIN', 'STAFF', 'CAPTAIN', 'SECRETARY', 'TREASURER', 'COUNCIL', 'SK', 'TANOD']
                 
                 if new_role not in allowed_roles:
                     return Response({"error": "Invalid or unauthorized role assignment."}, status=status.HTTP_403_FORBIDDEN)
                 
-                if target_profile.role in ['CAPTAIN', 'SECRETARY']:
+                if target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role != 'ADMIN':
                     return Response({"error": "Cannot downgrade critical system accounts."}, status=status.HTTP_403_FORBIDDEN)
 
                 target_profile.role = new_role
@@ -1639,6 +1833,16 @@ class AiQueryStatisticViewSet(viewsets.ReadOnlyModelViewSet):
 class EmergencyContactViewSet(viewsets.ModelViewSet):
     queryset = EmergencyContact.objects.all().order_by('category', 'order', 'id')
     serializer_class = EmergencyContactSerializer
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [permissions.AllowAny()]
+        return [IsInternalUser()]
+
+
+class BarangayOfficialViewSet(viewsets.ModelViewSet):
+    queryset = BarangayOfficial.objects.all().order_by('order', 'id')
+    serializer_class = BarangayOfficialSerializer
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:

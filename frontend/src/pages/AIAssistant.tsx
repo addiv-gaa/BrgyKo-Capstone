@@ -51,21 +51,13 @@ export default function AiAssistant() {
         setInputValue("");
         setIsLoading(true);
 
-        const token = localStorage.getItem('access'); 
-        
-        // --- Build headers dynamically ---
-        const headers: HeadersInit = {
-            'Content-Type': 'application/json'
-        };
-        
-        if (token && token !== "null" && token !== "undefined") {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
         try {
             const response = await fetch(`${API_URL}/api/ai-assistant/`, {
                 method: 'POST',
-                headers: headers,
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({ prompt: text })
             });
 

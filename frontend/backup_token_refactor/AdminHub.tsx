@@ -1,4 +1,3 @@
-import api from '../api';
 import { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../components/AuthContext";
 
@@ -85,7 +84,18 @@ export default function AdminHub() {
     ];
 
     useEffect(() => {
-        const userRole = (auth?.user?.role || (auth?.user?.roles && auth.user.roles[0]) || "").toUpperCase();
+        let extractedRole = "";
+        try {
+            const token = localStorage.getItem('access');
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                extractedRole = payload.role || payload.roles || "";
+            }
+        } catch (e) {
+            console.error("Token decoding failed", e);
+        }
+
+        const userRole = (Array.isArray(extractedRole) ? extractedRole[0] : extractedRole).toUpperCase();
         
         if (userRole === 'ADMIN') {
             setIsAuthorized(true);
@@ -94,10 +104,12 @@ export default function AdminHub() {
             setIsAuthorized(false);
             setIsLoading(false);
         }
-    }, [auth?.user]);
+    }, []);
 
 
     const fetchLogs = async () => {
+        const token = localStorage.getItem('access');
+        if (!token) return;
         try {
             const queryParams = new URLSearchParams({
                 page: logPage.toString(),
@@ -106,9 +118,11 @@ export default function AdminHub() {
                 model: logModelFilter,
                 user: logUserFilter
             });
-            const res = await api.get(`/api/admin/audit-logs/?${queryParams.toString()}`);
-            if ((res.status >= 200 && res.status < 300)) {
-                const logsData = res.data;
+            const res = await fetch(`${API_URL}/api/admin/audit-logs/?${queryParams.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const logsData = await res.json();
                 setLogs(logsData.results ? logsData.results : (Array.isArray(logsData) ? logsData : []));
                 if (logsData.num_pages) setLogTotalPages(logsData.num_pages);
             }
@@ -125,14 +139,15 @@ export default function AdminHub() {
 
     const fetchData = async () => {
         setIsLoading(true);
+        const token = localStorage.getItem('access');
         try {
             const [staffRes, settingsRes] = await Promise.all([
-                api.get(`/api/admin/staff-management/`),
-                api.get(`/api/system/settings/`)
+                fetch(`${API_URL}/api/admin/staff-management/`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${API_URL}/api/system/settings/`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
-            if ((staffRes.status >= 200 && staffRes.status < 300)) setStaffList(staffRes.data);
-            if ((settingsRes.status >= 200 && settingsRes.status < 300)) setSettingsForm(settingsRes.data);
+            if (staffRes.ok) setStaffList(await staffRes.json());
+            if (settingsRes.ok) setSettingsForm(await settingsRes.json());
         } catch (error) {
             console.error("Error fetching admin data:", error);
         } finally {
@@ -143,10 +158,15 @@ export default function AdminHub() {
     const handleStaffSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
+        const token = localStorage.getItem('access');
         try {
-            const res = await api.post(`/api/admin/staff-management/`, staffForm);
-            const data = res.data;
-            if ((res.status >= 200 && res.status < 300)) {
+            const res = await fetch(`${API_URL}/api/admin/staff-management/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(staffForm)
+            });
+            const data = await res.json();
+            if (res.ok) {
                 alert(data.message);
                 setStaffForm({ username: "", email: "", password: "", role: "TANOD" });
                 fetchData(); 
@@ -157,40 +177,44 @@ export default function AdminHub() {
 
     const handleToggleStatus = async (userId: number) => {
         if (!window.confirm("Change this account's access status?")) return;
+        const token = localStorage.getItem('access');
         try {
-            const res = await api.patch(`/api/admin/staff-management/`, { user_id: userId, action_type: 'toggle_status' });
-            if ((res.status >= 200 && res.status < 300)) fetchData();
-            else alert((res.data).error);
-        } catch (error) { console.error(error); }
-    };
-
-    const handleDeleteAccount = async (userId: number) => {
-        if (!window.confirm("Are you sure you want to PERMANENTLY DELETE this account? This cannot be undone.")) return;
-        try {
-            const res = await api.patch(`/api/admin/staff-management/`, { user_id: userId, action_type: 'delete_account' });
-            if ((res.status >= 200 && res.status < 300)) {
-                alert("Account deleted successfully.");
-                fetchData();
-            } else alert((res.data).error);
+            const res = await fetch(`${API_URL}/api/admin/staff-management/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ user_id: userId, action_type: 'toggle_status' })
+            });
+            if (res.ok) fetchData();
+            else alert((await res.json()).error);
         } catch (error) { console.error(error); }
     };
 
     const handleResetPassword = async (userId: number) => {
         const newPassword = window.prompt("Enter the new temporary password:");
         if (!newPassword) return;
+        const token = localStorage.getItem('access');
         try {
-            const res = await api.patch(`/api/admin/staff-management/`, { user_id: userId, action_type: 'reset_password', new_password: newPassword });
-            const data = res.data;
+            const res = await fetch(`${API_URL}/api/admin/staff-management/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ user_id: userId, action_type: 'reset_password', new_password: newPassword })
+            });
+            const data = await res.json();
             alert(data.message || data.error);
         } catch (error) { console.error(error); }
     };
 
     const handleChangeRole = async (userId: number, newRole: string) => {
         if (!window.confirm(`Change this user's role to ${newRole}?`)) return;
+        const token = localStorage.getItem('access');
         try {
-            const res = await api.patch(`/api/admin/staff-management/`, { user_id: userId, action_type: 'change_role', new_role: newRole });
-            const data = res.data;
-            if ((res.status >= 200 && res.status < 300)) fetchData();
+            const res = await fetch(`${API_URL}/api/admin/staff-management/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ user_id: userId, action_type: 'change_role', new_role: newRole })
+            });
+            const data = await res.json();
+            if (res.ok) fetchData();
             else alert(data.error);
         } catch (error) { console.error(error); }
     };
@@ -198,10 +222,15 @@ export default function AdminHub() {
     const handleSettingsSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
+        const token = localStorage.getItem('access');
         try {
-            const res = await api.post(`/api/system/settings/`, settingsForm);
-            const data = res.data;
-            if ((res.status >= 200 && res.status < 300)) { alert(data.message); fetchData(); } 
+            const res = await fetch(`${API_URL}/api/system/settings/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(settingsForm)
+            });
+            const data = await res.json();
+            if (res.ok) { alert(data.message); fetchData(); } 
             else { alert(`Error: ${data.error || JSON.stringify(data)}`); }
         } catch (error) { alert("Failed to update settings."); } 
         finally { setIsSubmitting(false); }
@@ -333,9 +362,6 @@ export default function AdminHub() {
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-4 text-right space-x-2">
-                                                            <button onClick={() => handleDeleteAccount(staff.id)} className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-md transition-colors shadow-sm">
-                                                                Delete
-                                                            </button>
                                                             <button onClick={() => handleResetPassword(staff.id)} className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-md transition-colors shadow-sm">
                                                                 Reset Pw
                                                             </button>

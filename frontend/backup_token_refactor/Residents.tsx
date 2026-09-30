@@ -1,4 +1,3 @@
-import api from '../api';
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { AuthContext } from '../components/AuthContext';
 import ResidentModal, { type ResidentProperties } from '../components/ResidentModal';
@@ -33,9 +32,6 @@ export interface ResidentData {
     is_senior_citizen: boolean;
     is_pwd: boolean;
     is_solo_parent: boolean;
-    is_indigenous: boolean;
-    is_ofw: boolean;
-    is_out_of_school: boolean;
 }
 
 // --- UI Helper Functions ---
@@ -48,7 +44,7 @@ const calculateAge = (dob: string | null) => {
 
 export default function ResidentPage() {
     const authContext = useContext(AuthContext);
-    const isReadOnly = ['CAPTAIN', 'STAFF'].includes(authContext?.user?.role || '');
+    const isCaptain = authContext?.user?.role === 'CAPTAIN';
     
     const [residents, setResidents] = useState<ResidentData[]>([]);
     const [householdOptions, setHouseholdOptions] = useState<{id: number, address: string}[]>([]);
@@ -64,10 +60,7 @@ export default function ResidentPage() {
         is_4ps_beneficiary: false,
         is_senior_citizen: false,
         is_pwd: false,
-        is_solo_parent: false,
-        is_indigenous: false,
-        is_ofw: false,
-        is_out_of_school: false
+        is_solo_parent: false
     });
 
     // Pagination & Sorting State
@@ -97,32 +90,21 @@ export default function ResidentPage() {
         is_4ps_beneficiary: boolean | null,
         is_senior_citizen: boolean | null,
         is_pwd: boolean | null,
-        is_solo_parent: boolean | null,
-        is_registered_voter: boolean | null,
-        is_indigenous: boolean | null,
-        is_ofw: boolean | null,
-        is_out_of_school: boolean | null
+        is_solo_parent: boolean | null
     }>({
         is_4ps_beneficiary: null,
         is_senior_citizen: null,
         is_pwd: null,
-        is_solo_parent: null,
-        is_registered_voter: null,
-        is_indigenous: null,
-        is_ofw: null,
-        is_out_of_school: null
+        is_solo_parent: null
     });
 
-    const [activeTab, setActiveTab] = useState<'directory' | 'queue'>('directory');
-
-    // NEW: Approval Queue Modal State
-    const [confirmAction, setConfirmAction] = useState<{
-        isOpen: boolean;
-        actionType: 'approve' | 'deny';
-        isBulk: boolean;
-        targetId?: number;
-    }>({ isOpen: false, actionType: 'approve', isBulk: false });
-    const [isConfirming, setIsConfirming] = useState(false);
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem('access'); 
+        return {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        };
+    };
 
     const fetchResidents = async () => {
         try {
@@ -132,10 +114,6 @@ export default function ResidentPage() {
                 ordering: ordering,
             });
 
-            if (activeTab === 'queue') {
-                queryParams.append('pending', 'true');
-            }
-
             if (searchQuery) queryParams.append('search', searchQuery);
             if (filters.purok) queryParams.append('purok', filters.purok);
             if (filters.sex) queryParams.append('sex', filters.sex);
@@ -144,13 +122,10 @@ export default function ResidentPage() {
             if (filters.is_senior_citizen) queryParams.append('is_senior_citizen', 'True');
             if (filters.is_pwd) queryParams.append('is_pwd', 'True');
             if (filters.is_solo_parent) queryParams.append('is_solo_parent', 'True');
-            if (filters.is_indigenous) queryParams.append('is_indigenous', 'True');
-            if (filters.is_ofw) queryParams.append('is_ofw', 'True');
-            if (filters.is_out_of_school) queryParams.append('is_out_of_school', 'True');
 
-            const response = await api.get(`/api/residents/?${queryParams.toString()}`);
-            if ((response.status >= 200 && response.status < 300)) {
-                const data = response.data;
+            const response = await fetch(`${API_URL}/api/residents/?${queryParams.toString()}`, { headers: getAuthHeaders() });
+            if (response.ok) {
+                const data = await response.json();
                 if (data.results) {
                     setResidents(data.results);
                     setTotalPages(Math.ceil(data.count / 50));
@@ -169,9 +144,9 @@ export default function ResidentPage() {
 
     const fetchHouseholdsForDropdown = async () => {
         try {
-            const response = await api.get(`/api/households/`);
-            if ((response.status >= 200 && response.status < 300)) {
-                const data = response.data;
+            const response = await fetch(`${API_URL}/api/households/`, { headers: getAuthHeaders() });
+            if (response.ok) {
+                const data = await response.json();
                 const formatted = (data.features || []).map((f: any) => ({
                     id: f.id,
                     address: f.properties.address
@@ -193,43 +168,7 @@ export default function ResidentPage() {
             fetchResidents();
         }, 300);
         return () => clearTimeout(delayDebounceFn);
-    }, [page, filters, searchQuery, ordering, activeTab]);
-
-    const handleSingleApprove = (id: number) => setConfirmAction({ isOpen: true, actionType: 'approve', isBulk: false, targetId: id });
-    const handleSingleDeny = (id: number) => setConfirmAction({ isOpen: true, actionType: 'deny', isBulk: false, targetId: id });
-    
-    const handleBulkApprove = () => {
-        if (!selectedRows.length) return;
-        setConfirmAction({ isOpen: true, actionType: 'approve', isBulk: true });
-    };
-
-    const handleBulkDeny = () => {
-        if (!selectedRows.length) return;
-        setConfirmAction({ isOpen: true, actionType: 'deny', isBulk: true });
-    };
-
-    const executeConfirmAction = async () => {
-        setIsConfirming(true);
-        const ids = confirmAction.isBulk ? selectedRows : (confirmAction.targetId ? [confirmAction.targetId] : []);
-        const endpoint = confirmAction.actionType === 'approve' ? '/api/residents/bulk-approve/' : '/api/residents/bulk-deny/';
-        
-        try {
-            if (confirmAction.actionType === 'approve') {
-                await api.patch(endpoint, { ids });
-            } else {
-                await api.post(endpoint, { ids });
-            }
-            if (confirmAction.isBulk) setSelectedRows([]);
-            fetchResidents();
-            setConfirmAction(prev => ({ ...prev, isOpen: false }));
-        } catch (error) { 
-            console.error(error); 
-            alert(`Error ${confirmAction.actionType}ing resident(s)`); 
-        } finally {
-            setIsConfirming(false);
-        }
-    };
-
+    }, [page, filters, searchQuery, ordering]);
 
     // --- BULK SELECTION HANDLERS ---
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,12 +195,16 @@ export default function ResidentPage() {
 
         setIsBulkDeleting(true);
         try {
-            const response = await api.post(`/api/residents/bulk_delete/`, { ids: selectedRows });
+            const response = await fetch(`${API_URL}/api/residents/bulk_delete/`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ ids: selectedRows })
+            });
 
-            if ((response.status >= 200 && response.status < 300)) {
+            if (response.ok) {
                 fetchResidents();
             } else {
-                const errorData = response.data;
+                const errorData = await response.json();
                 alert(errorData.error || "Failed to bulk delete residents.");
             }
         } catch (error) {
@@ -279,16 +222,20 @@ export default function ResidentPage() {
 
         setIsBulkUpdating(true);
         try {
-            const response = await api.post(`/api/residents/bulk_update_welfare/`, { ids: selectedRows, flags: bulkUpdateFlags });
+            const response = await fetch(`${API_URL}/api/residents/bulk_update_welfare/`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ ids: selectedRows, flags: bulkUpdateFlags })
+            });
 
-            if ((response.status >= 200 && response.status < 300)) {
+            if (response.ok) {
                 setShowBulkUpdateModal(false);
                 setSelectedRows([]); // Reset selection
                 // Reset flags for next time
-                setBulkUpdateFlags({ is_4ps_beneficiary: null, is_senior_citizen: null, is_pwd: null, is_solo_parent: null, is_registered_voter: null, is_indigenous: null, is_ofw: null, is_out_of_school: null });
+                setBulkUpdateFlags({ is_4ps_beneficiary: null, is_senior_citizen: null, is_pwd: null, is_solo_parent: null });
                 fetchResidents();
             } else {
-                const errorData = response.data;
+                const errorData = await response.json();
                 alert(errorData.error || "Failed to update welfare statuses.");
             }
         } catch (error) {
@@ -309,13 +256,18 @@ export default function ResidentPage() {
         formData.append('file', file);
 
         setIsUploading(true);
+        const token = localStorage.getItem('access');
 
         try {
-            const response = await api.post(`/api/residents/import-excel/`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            const response = await fetch(`${API_URL}/api/residents/import-excel/`, {
+                method: 'POST',
+                headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+                body: formData
+            });
 
-            const data = response.data;
+            const data = await response.json();
 
-            if ((response.status >= 200 && response.status < 300)) {
+            if (response.ok) {
                 setImportResults({ message: data.message, errors: data.errors || [] });
                 fetchResidents();
             } else {
@@ -334,11 +286,14 @@ export default function ResidentPage() {
     const handleExportExcel = async () => {
         setIsExporting(true);
         try {
-            const response = await api.get(`/api/residents/export_excel/`, { responseType: 'blob' });
+            const response = await fetch(`${API_URL}/api/residents/export_excel/`, {
+                method: 'GET',
+                headers: getAuthHeaders()
+            });
 
-            if (!(response.status >= 200 && response.status < 300)) throw new Error("Failed to export registry");
+            if (!response.ok) throw new Error("Failed to export registry");
 
-            const blob = response.data;
+            const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -366,13 +321,17 @@ export default function ResidentPage() {
                 ? `${API_URL}/api/residents/${selectedResident?.id}/` 
                 : `${API_URL}/api/residents/`;
 
-            const response = await api({ method: method, url: url.replace(API_URL, ''), data: formData });
+            const response = await fetch(url, {
+                method: method,
+                headers: getAuthHeaders(),
+                body: JSON.stringify(formData)
+            });
 
-            if ((response.status >= 200 && response.status < 300)) {
+            if (response.ok) {
                 setIsModalOpen(false);
                 fetchResidents();
             } else {
-                const errorData = response.data;
+                const errorData = await response.json();
                 console.error("Validation Error:", errorData);
                 alert("Failed to save. Check console for details.");
             }
@@ -385,8 +344,11 @@ export default function ResidentPage() {
     const handleDeleteResident = async (id: number) => {
         if (!window.confirm("Are you sure you want to delete this resident?")) return;
         try {
-            const response = await api.delete(`/api/residents/${id}/`);
-            if ((response.status >= 200 && response.status < 300) || response.status === 204) fetchResidents();
+            const response = await fetch(`${API_URL}/api/residents/${id}/`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            if (response.ok || response.status === 204) fetchResidents();
         } catch (error) {
             console.error("Network error deleting resident:", error);
         }
@@ -409,7 +371,7 @@ export default function ResidentPage() {
         setFilters({
             purok: '', sex: '', civil_status: '',
             is_4ps_beneficiary: false, is_senior_citizen: false, is_pwd: false, is_solo_parent: false,
-            is_registered_voter: false, is_indigenous: false, is_ofw: false, is_out_of_school: false
+            is_registered_voter: false
         });
         setSearchQuery('');
         setPage(1);
@@ -435,39 +397,32 @@ export default function ResidentPage() {
                         </div>
                         
                         <div className="flex gap-3">
-                            {activeTab === 'directory' && (
-                                <>
-                                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls" className="hidden" />
-                                    <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50">
-                                        {isUploading ? "Importing..." : <span>Import Excel</span>}
-                                    </button>
-                                    <button onClick={handleExportExcel} disabled={isExporting} className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50">
-                                        {isExporting ? "Exporting..." : <span>Export Excel</span>}
-                                    </button>
-                                    {!isReadOnly && (
-                                        <button onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }} className="bg-[#15803d] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-green-800 transition-colors flex items-center gap-2 shadow-sm">
-                                            <span>+ Add Resident</span>
-                                        </button>
-                                    )}
-                                </>
-                            )}
+                            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls" className="hidden" />
+                            
+                            <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50">
+                                {isUploading ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        Importing...
+                                    </>
+                                ) : <span>Import Excel</span>}
+                            </button>
+
+                            <button onClick={handleExportExcel} disabled={isExporting} className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50">
+                                {isExporting ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        Exporting...
+                                    </>
+                                ) : (
+                                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg><span>Export Excel</span></>
+                                )}
+                            </button>
+
+                            {!isCaptain && (<button onClick={() => { setModalMode('add'); setSelectedResident(null); setIsModalOpen(true); }} className="bg-[#15803d] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-green-800 transition-colors flex items-center gap-2 shadow-sm">
+                                <span>+ Add Resident</span>
+                            </button>)}
                         </div>
-                    </div>
-                    
-                    {/* TABS */}
-                    <div className="flex space-x-1 border-b border-gray-200 mb-6">
-                        <button
-                            onClick={() => { setActiveTab('directory'); setPage(1); }}
-                            className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'directory' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Resident Directory
-                        </button>
-                        <button
-                            onClick={() => { setActiveTab('queue'); setPage(1); }}
-                            className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'queue' ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Approval Queue
-                        </button>
                     </div>
 
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6 relative">
@@ -479,38 +434,27 @@ export default function ResidentPage() {
                                     <span className="bg-white text-green-700 px-2 py-0.5 rounded-md text-xs">{selectedRows.length}</span> 
                                     Residents Selected
                                 </div>
-                                {activeTab === 'directory' && !isReadOnly && (
-                                    <div className="flex gap-3 items-center">
-                                        <button 
-                                            onClick={() => setShowBulkUpdateModal(true)}
-                                            className="bg-white text-green-700 hover:bg-green-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                            Update Welfare
-                                        </button>
-                                        <button 
-                                            onClick={handleBulkDelete}
-                                            disabled={isBulkDeleting}
-                                            className="bg-white text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            {isBulkDeleting ? 'Deleting...' : 'Delete Selected'}
-                                        </button>
-                                        <div className="w-px h-6 bg-green-400 mx-1"></div>
-                                    </div>
-                                )}
-                                {activeTab === 'queue' && authContext?.user?.role === 'CAPTAIN' && (
-                                    <div className="flex gap-3 items-center">
-                                        <button onClick={handleBulkApprove} className="bg-white text-green-700 hover:bg-green-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2">Approve Selected</button>
-                                        <button onClick={handleBulkDeny} className="bg-white text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2">Deny Selected</button>
-                                        <div className="w-px h-6 bg-green-400 mx-1"></div>
-                                    </div>
-                                )}
-
-                                <button onClick={() => setSelectedRows([])} className="text-white hover:text-green-200 text-sm font-medium transition-colors ml-4">
-                                    Clear Selection
-                                </button>
-
+                                <div className="flex gap-3 items-center">
+                                    <button 
+                                        onClick={() => setShowBulkUpdateModal(true)}
+                                        className="bg-white text-green-700 hover:bg-green-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                        Update Welfare
+                                    </button>
+                                    <button 
+                                        onClick={handleBulkDelete}
+                                        disabled={isBulkDeleting}
+                                        className="bg-white text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        {isBulkDeleting ? 'Deleting...' : 'Delete Selected'}
+                                    </button>
+                                    <div className="w-px h-6 bg-green-400 mx-1"></div>
+                                    <button onClick={() => setSelectedRows([])} className="text-white hover:text-green-200 text-sm font-medium transition-colors">
+                                        Clear Selection
+                                    </button>
+                                </div>
                             </div>
                         )}
 
@@ -574,18 +518,6 @@ export default function ResidentPage() {
                                         <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-pink-50 hover:border-pink-200 transition-colors">
                                             <input type="checkbox" name="is_solo_parent" checked={filters.is_solo_parent} onChange={handleFilterChange} className="w-4 h-4 text-pink-600 rounded" />
                                             <span className="font-medium text-gray-700">Solo Parent</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-yellow-50 hover:border-yellow-200 transition-colors">
-                                            <input type="checkbox" name="is_indigenous" checked={filters.is_indigenous} onChange={handleFilterChange} className="w-4 h-4 text-yellow-600 rounded" />
-                                            <span className="font-medium text-gray-700">Indigenous (IP)</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-cyan-50 hover:border-cyan-200 transition-colors">
-                                            <input type="checkbox" name="is_ofw" checked={filters.is_ofw} onChange={handleFilterChange} className="w-4 h-4 text-cyan-600 rounded" />
-                                            <span className="font-medium text-gray-700">OFW</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 text-sm hover:bg-red-50 hover:border-red-200 transition-colors">
-                                            <input type="checkbox" name="is_out_of_school" checked={filters.is_out_of_school} onChange={handleFilterChange} className="w-4 h-4 text-red-600 rounded" />
-                                            <span className="font-medium text-gray-700">Out of School</span>
                                         </label>
                                     </div>
                                     <button onClick={clearFilters} className="text-sm text-gray-500 hover:text-red-600 font-semibold transition-colors mt-2 md:mt-0">
@@ -699,10 +631,7 @@ export default function ResidentPage() {
                                                     {resident.is_senior_citizen && <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200">Senior</span>}
                                                     {resident.is_pwd && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">PWD</span>}
                                                     {resident.is_solo_parent && <span className="bg-pink-100 text-pink-700 px-2 py-0.5 rounded text-[10px] font-bold border border-pink-200">Solo Parent</span>}
-                                                    {resident.is_indigenous && <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-[10px] font-bold border border-yellow-200">IP</span>}
-                                                    {resident.is_ofw && <span className="bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded text-[10px] font-bold border border-cyan-200">OFW</span>}
-                                                    {resident.is_out_of_school && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">OSC/OSY</span>}
-                                                    {!resident.is_4ps_beneficiary && !resident.is_senior_citizen && !resident.is_pwd && !resident.is_solo_parent && !resident.is_indigenous && !resident.is_ofw && !resident.is_out_of_school && (
+                                                    {!resident.is_4ps_beneficiary && !resident.is_senior_citizen && !resident.is_pwd && !resident.is_solo_parent && (
                                                         <span className="text-gray-400 text-xs italic">None</span>
                                                     )}
                                                 </td>
@@ -712,26 +641,12 @@ export default function ResidentPage() {
                                                         <button onClick={() => { setModalMode('view'); setSelectedResident(resident as ResidentProperties); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 bg-blue-50 p-2 rounded-lg transition-colors" title="View Details">
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                         </button>
-                                                        {activeTab === 'directory' && !isReadOnly && (
-                                                            <>
-                                                                <button onClick={() => { setModalMode('edit'); setSelectedResident(resident as ResidentProperties); setIsModalOpen(true); }} className="text-emerald-600 hover:text-emerald-800 bg-emerald-50 p-2 rounded-lg transition-colors" title="Edit Resident">
-                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                                                </button>
-                                                                <button onClick={() => handleDeleteResident(resident.id)} className="text-red-600 hover:text-red-800 bg-red-50 p-2 rounded-lg transition-colors" title="Delete Resident">
-                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                        {activeTab === 'queue' && authContext?.user?.role === 'CAPTAIN' && (
-                                                            <>
-                                                                <button onClick={() => handleSingleApprove(resident.id)} className="text-green-600 hover:text-green-800 bg-green-50 p-2 rounded-lg transition-colors font-bold text-xs" title="Approve">
-                                                                    Approve
-                                                                </button>
-                                                                <button onClick={() => handleSingleDeny(resident.id)} className="text-red-600 hover:text-red-800 bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs" title="Deny">
-                                                                    Deny
-                                                                </button>
-                                                            </>
-                                                        )}
+                                                        <button onClick={() => { setModalMode('edit'); setSelectedResident(resident as ResidentProperties); setIsModalOpen(true); }} className="text-emerald-600 hover:text-emerald-800 bg-emerald-50 p-2 rounded-lg transition-colors" title="Edit Resident">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                        </button>
+                                                        <button onClick={() => handleDeleteResident(resident.id)} className="text-red-600 hover:text-red-800 bg-red-50 p-2 rounded-lg transition-colors" title="Delete Resident">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -791,14 +706,10 @@ export default function ResidentPage() {
                                 </p>
                                 
                                 {Object.entries({
-                                    'is_registered_voter': 'Registered Voter',
                                     'is_4ps_beneficiary': '4Ps Beneficiary',
                                     'is_senior_citizen': 'Senior Citizen',
                                     'is_pwd': 'PWD',
-                                    'is_solo_parent': 'Solo Parent',
-                                    'is_indigenous': 'Indigenous (IP)',
-                                    'is_ofw': 'OFW',
-                                    'is_out_of_school': 'Out of School'
+                                    'is_solo_parent': 'Solo Parent'
                                 }).map(([key, label]) => (
                                     <div key={key} className="flex flex-col gap-1.5">
                                         <label className="text-xs font-bold text-gray-700">{label}</label>
@@ -831,58 +742,6 @@ export default function ResidentPage() {
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
-
-            {/* --- NEW: CONFIRMATION MODAL --- */}
-            {confirmAction.isOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 transform transition-all">
-                        <div className={`px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white ${confirmAction.actionType === 'approve' ? 'border-green-100' : 'border-red-100'}`}>
-                            <h3 className={`text-lg font-bold flex items-center gap-2 ${confirmAction.actionType === 'approve' ? 'text-green-700' : 'text-red-700'}`}>
-                                {confirmAction.actionType === 'approve' ? (
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                ) : (
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                )}
-                                {confirmAction.actionType === 'approve' ? 'Approve Resident(s)?' : 'Deny Resident(s)?'}
-                            </h3>
-                            <button onClick={() => setConfirmAction({ ...confirmAction, isOpen: false })} className="text-gray-400 hover:text-gray-600 transition-colors">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-                        <div className="p-6">
-                            <p className="text-sm text-gray-600 leading-relaxed mb-6">
-                                {confirmAction.actionType === 'approve' 
-                                    ? `Are you sure you want to approve ${confirmAction.isBulk ? selectedRows.length : 'this'} resident${confirmAction.isBulk && selectedRows.length > 1 ? 's' : ''}? They will be officially added to the directory.`
-                                    : (
-                                        <>
-                                            Are you sure you want to deny {confirmAction.isBulk ? selectedRows.length : 'this'} resident{confirmAction.isBulk && selectedRows.length > 1 ? 's' : ''}? 
-                                            <strong className="text-red-600 block mt-2">This will permanently delete their pending record from the system.</strong>
-                                        </>
-                                    )}
-                            </p>
-                            <div className="flex justify-end gap-3">
-                                <button onClick={() => setConfirmAction({ ...confirmAction, isOpen: false })} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-50 transition-colors">
-                                    Cancel
-                                </button>
-                                <button 
-                                    onClick={executeConfirmAction} 
-                                    disabled={isConfirming} 
-                                    className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${confirmAction.actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
-                                >
-                                    {isConfirming ? (
-                                        <>
-                                            <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                            Processing...
-                                        </>
-                                    ) : (
-                                        confirmAction.actionType === 'approve' ? 'Yes, Approve' : 'Yes, Deny & Delete'
-                                    )}
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             )}

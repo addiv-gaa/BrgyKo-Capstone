@@ -57,20 +57,8 @@ export default function Announcements() {
 
     // 1. Initial Data Fetch & Permission Check
     useEffect(() => {
-        let extractedRole = "";
-        try {
-            const token = localStorage.getItem('access');
-            if (token && token !== "null" && token !== "undefined") {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                extractedRole = payload.role || payload.roles || "";
-            }
-        } catch (e) {
-            console.error("Token decoding failed", e);
-        }
-        if (!extractedRole && auth?.user) {
-            const contextUser = auth.user as any;
-            extractedRole = contextUser.role || contextUser.roles || "";
-        }
+        const contextUser = auth?.user as any;
+        const extractedRole = contextUser?.role || contextUser?.roles || "";
 
         const userRole = (Array.isArray(extractedRole) ? extractedRole[0] : extractedRole).toUpperCase();
         const authorizedRoles = ['ADMIN', 'STAFF', 'SECRETARY', 'CAPTAIN', 'COUNCIL', 'TREASURER', 'SK'];
@@ -81,20 +69,9 @@ export default function Announcements() {
 
     const fetchData = async () => {
         setIsLoading(true);
-        const token = localStorage.getItem('access');
-        
-        // Build headers dynamically. Only add Authorization if a real token exists.
-        const headers: HeadersInit = {
-            'Content-Type': 'application/json'
-        };
-        
-        if (token && token !== "null" && token !== "undefined") {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
         try {
             const res = await fetch(`${API_URL}/api/announcements/`, {
-                headers: headers
+                credentials: 'include'
             });
             if (res.ok) {
                 const data = await res.json();
@@ -143,7 +120,6 @@ export default function Announcements() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        const token = localStorage.getItem('access');
         let createdEventId = null;
 
         try {
@@ -161,9 +137,9 @@ export default function Announcements() {
 
                 const eventRes = await fetch(`${API_URL}/api/events/`, {
                     method: 'POST',
+                    credentials: 'include',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(eventPayload)
                 });
@@ -191,7 +167,7 @@ export default function Announcements() {
 
             const response = await fetch(`${API_URL}/api/announcements/`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }, 
+                credentials: 'include',
                 body: submitData
             });
 

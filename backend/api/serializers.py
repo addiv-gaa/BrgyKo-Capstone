@@ -21,6 +21,7 @@ from .models import (
     ResidentApplication,
     AiQueryStatistic,
     EmergencyContact,
+    BarangayOfficial,
 )
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -148,7 +149,8 @@ class ResidentMiniSerializer(serializers.ModelSerializer):
         model = Resident
         fields = [
             'id', 'first_name', 'last_name', 'sex', 'civil_status', 'relationship_to_head',
-            'is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent'
+            'is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent',
+            'is_indigenous', 'is_ofw', 'is_out_of_school'
         ]
     
 class HouseholdSerializer(GeoFeatureModelSerializer):
@@ -160,6 +162,9 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
     is_senior_citizen = serializers.SerializerMethodField()
     is_pwd = serializers.SerializerMethodField()
     is_solo_parent = serializers.SerializerMethodField()
+    is_indigenous = serializers.SerializerMethodField()
+    is_ofw = serializers.SerializerMethodField()
+    is_out_of_school = serializers.SerializerMethodField()
 
     class Meta:
         model = Household
@@ -167,7 +172,8 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
         fields = [
             'id', 'address', 'housing_status', 'dwelling_type', 
             'head_of_household', 'member_count', 'residents',
-            'is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent'
+            'is_4ps_beneficiary', 'is_senior_citizen', 'is_pwd', 'is_solo_parent',
+            'is_indigenous', 'is_ofw', 'is_out_of_school'
         ]
 
     def get_head_of_household(self, obj):
@@ -190,6 +196,15 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
 
     def get_is_solo_parent(self, obj):
         return obj.residents.filter(is_solo_parent=True).exists()
+
+    def get_is_indigenous(self, obj):
+        return obj.residents.filter(is_indigenous=True).exists()
+
+    def get_is_ofw(self, obj):
+        return obj.residents.filter(is_ofw=True).exists()
+
+    def get_is_out_of_school(self, obj):
+        return obj.residents.filter(is_out_of_school=True).exists()
     
 class FacilitySerializer(serializers.ModelSerializer):
     class Meta:
@@ -279,3 +294,8 @@ class AiQueryStatisticSerializer(serializers.ModelSerializer):
         model = AiQueryStatistic
         # We include 'created_at' as it's required for the chart's monthly buckets
         fields = ['id', 'user', 'prompt', 'response', 'created_at']
+class BarangayOfficialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BarangayOfficial
+        fields = '__all__'
+

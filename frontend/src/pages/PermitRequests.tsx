@@ -46,17 +46,10 @@ function PermitRequests() {
     // --- Fetch Data on Load ---
     useEffect(() => {
         const fetchRequests = async () => {
-            const token = localStorage.getItem('access'); 
-            
-            if (!token) {
-                setIsLoading(false);
-                return; 
-            }
-
             try {
                 // Hitting the MANAGER endpoint for permits
                 const response = await fetch(`${API_URL}/api/manager/permits/`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include'
                 });
 
                 if (response.ok) {
@@ -82,13 +75,12 @@ function PermitRequests() {
     // --- Status Update Handler ---
     const handleStatusChange = async (id: number, newStatus: string) => {
         setUpdatingId(id);
-        const token = localStorage.getItem('access');
 
         try {
             const response = await fetch(`${API_URL}/api/manager/permits/${id}/`, {
                 method: 'PATCH',
+                credentials: 'include',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ status: newStatus })

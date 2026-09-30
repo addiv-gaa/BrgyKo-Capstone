@@ -26,7 +26,8 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.0",
     "react-to-print": "^3.3.0",
-    "recharts": "^3.9.2"
+    "recharts": "^3.9.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

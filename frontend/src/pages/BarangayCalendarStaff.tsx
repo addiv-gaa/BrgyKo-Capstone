@@ -20,10 +20,9 @@ export default function StaffSchedulePage() {
     }, []);
 
     const fetchPendingRequests = async () => {
-        const token = localStorage.getItem('access');
         try {
             const response = await fetch(`${API_URL}/api/reservations/`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
             if (response.ok) {
                 const data = await response.json();
@@ -37,13 +36,12 @@ export default function StaffSchedulePage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const token = localStorage.getItem('access');
         
         await fetch(`${API_URL}/api/events/`, {
             method: 'POST',
+            credentials: 'include',
             headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(formData)
         });
@@ -53,14 +51,12 @@ export default function StaffSchedulePage() {
     };
 
     const handleStatusUpdate = async (id: number, newStatus: string) => {
-        const token = localStorage.getItem('access');
-        
         try {
             const response = await fetch(`${API_URL}/api/reservations/${id}/update_status/`, {
                 method: 'PATCH',
+                credentials: 'include',
                 headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ status: newStatus })
             });

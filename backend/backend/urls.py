@@ -1,12 +1,14 @@
 from django.urls import path, include
 from django.contrib import admin 
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
 from django.conf import settings             # 1. Import settings
 from django.conf.urls.static import static   # 2. Import static
 from api.views import (
     # Authentication & User Management
     CustomTokenObtainPairView,
+    CustomTokenRefreshView,
+    LogoutView,
+    CurrentUserView,
     CreateUserView,
     RegisterWithEmailView,
     VerifyEmailOTPView,
@@ -45,15 +47,15 @@ from api.views import (
     EventViewSet,
     OfficialDocumentViewSet,
     IncidentReportViewSet, # NEW
-    EmergencyContactViewSet,
+    EmergencyContactViewSet, BarangayOfficialViewSet,
     StaffDemographicsAiView,
 
     # Admin Hub & Audit Logs
     AdminAuditLogAPIView,
     StaffManagementAPIView,
     AiQueryStatisticViewSet,
-
 )
+from api.reports import RBIFormCReportView, RBIFormCDownloadView
 
 # --- ViewSet Routers ---
 router = DefaultRouter()
@@ -71,14 +73,17 @@ router.register(r'official-documents', OfficialDocumentViewSet, basename='offici
 router.register(r'incident-reports', IncidentReportViewSet, basename='incident-reports') # NEW
 router.register(r'ai-queries', AiQueryStatisticViewSet, basename='ai-queries')
 router.register(r'emergency-contacts', EmergencyContactViewSet, basename='emergency-contacts')
+router.register(r'barangay-officials', BarangayOfficialViewSet, basename='barangay-officials')
 
 urlpatterns = [
     # --- Authentication & Registration ---
     path('api/auth/register/', RegisterWithEmailView.as_view(), name='register_email'),
     path('api/auth/verify-otp/', VerifyEmailOTPView.as_view(), name='verify_otp'),
     path('api/auth/resend-otp/', ResendOTPView.as_view(), name='resend_otp'),
+    path('api/auth/me/', CurrentUserView.as_view(), name='current_user'),
+    path('api/auth/logout/', LogoutView.as_view(), name='logout'),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/register/', CreateUserView.as_view(), name='register'),
     
     # --- Profile & Identity ---
@@ -103,6 +108,8 @@ urlpatterns = [
     path('api/calendar-feed/', calendar_feed, name='calendar-feed'),
     path('api/system/settings/', SystemSettingsView.as_view(), name='system-settings'),
     path('api/reports/demographics-ai/', StaffDemographicsAiView.as_view(), name='demographics-ai'),
+    path('api/reports/rbi-form-c/', RBIFormCReportView.as_view(), name='rbi-form-c'),
+    path('api/reports/rbi-form-c/download/', RBIFormCDownloadView.as_view(), name='rbi-form-c-download'),
 
     # --- Admin Hub & Audit Logs ---
     path('api/admin/audit-logs/', AdminAuditLogAPIView.as_view(), name='audit-logs'),

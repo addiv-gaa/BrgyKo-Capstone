@@ -15,14 +15,19 @@ class IsAdminUser(BasePermission):
             return False
 
 class IsStaffUser(BasePermission):
-    """Can perform POST, PUT, PATCH, DELETE (must have STAFF or ADMIN role)."""
+    """Can perform POST, PUT, PATCH, DELETE (must have ADMIN role now, STAFF is view-only)."""
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         if request.user.is_superuser:
             return True
         try:
-            return request.user.otp_profile.role in ['ADMIN', 'STAFF']
+            role = request.user.otp_profile.role
+            if role == 'ADMIN':
+                return True
+            if role == 'STAFF' and request.method in SAFE_METHODS:
+                return True
+            return False
         except Exception:
             return False
 
@@ -35,13 +40,14 @@ class IsCaptainUser(BasePermission):
             return True
         try:
             if request.user.otp_profile.role == 'CAPTAIN':
-                return True
+                if request.method in SAFE_METHODS:
+                    return True
             return False
         except Exception:
             return False
 
 class IsInternalUser(BasePermission):
-    """Admin, Staff, or Captain. Handles Captain's read-only logic."""
+    """Admin, Staff, or Captain. Handles Staff and Captain read-only logic."""
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
@@ -49,10 +55,10 @@ class IsInternalUser(BasePermission):
             return True
         try:
             role = request.user.otp_profile.role
-            if role in ['ADMIN', 'STAFF']:
+            if role == 'ADMIN':
                 return True
-            if role == 'CAPTAIN':
-                # Captains can only do safe methods
+            if role in ['STAFF', 'CAPTAIN']:
+                # Staff and Captains can only do safe methods (GET, HEAD, OPTIONS)
                 if request.method in SAFE_METHODS:
                     return True
             return False

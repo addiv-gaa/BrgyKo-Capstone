@@ -11,15 +11,7 @@ const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
 
     useEffect(() => {
         let extractedRole = "";
-        try {
-            const token = localStorage.getItem('access');
-            if (token) {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                extractedRole = payload.role || payload.roles || "";
-            }
-        } catch (error) {}
-
-        if (!extractedRole && auth?.user) {
+        if (auth?.user) {
             const contextUser = auth.user as any;
             extractedRole = contextUser.role || contextUser.roles || "";
         }
@@ -55,7 +47,7 @@ const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
         currentTitle = "My Profile";
     }
 
-    const isLoggedIn = !!auth?.user || !!localStorage.getItem('access');
+    const isLoggedIn = !!auth?.user;
 
     return (
         <header className="h-16 w-full bg-white flex items-center justify-between px-6 sticky top-0 shrink-0 z-50 border-b border-gray-200 shadow-sm">

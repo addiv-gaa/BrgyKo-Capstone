@@ -24,9 +24,13 @@ export interface ResidentProperties {
     household: number | null;
     is_registered_voter: boolean;
     is_4ps_beneficiary: boolean;
-    is_senior_citizen: boolean; // FIXED: Changed from has_ to is_
-    is_pwd: boolean;            // FIXED: Changed from has_ to is_
-    is_solo_parent: boolean;    // FIXED: Changed from has_ to is_
+    is_senior_citizen: boolean;
+    is_pwd: boolean;
+    is_solo_parent: boolean;
+    is_indigenous: boolean;
+    is_ofw: boolean;
+    is_out_of_school: boolean;
+    employment_status: string;
 }
 
 interface ModalProps {
@@ -60,9 +64,13 @@ const DEFAULT_FORM_STATE: ResidentProperties = {
     household: null,
     is_registered_voter: false,
     is_4ps_beneficiary: false,
-    is_senior_citizen: false, // FIXED
-    is_pwd: false,            // FIXED
-    is_solo_parent: false,    // FIXED
+    is_senior_citizen: false,
+    is_pwd: false,
+    is_solo_parent: false,
+    is_indigenous: false,
+    is_ofw: false,
+    is_out_of_school: false,
+    employment_status: 'Not in Labor Force',
 };
 
 export default function ResidentModal({ mode, resident, households, onClose, onSave }: ModalProps) {
@@ -206,6 +214,14 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
                                 <input type="text" name="occupation" value={formData.occupation} onChange={handleChange} disabled={isViewOnly} className={inputClass} />
                             </div>
                             <div>
+                                <label className={labelClass}>Employment Status</label>
+                                <select name="employment_status" value={formData.employment_status} onChange={handleChange} disabled={isViewOnly} className={inputClass}>
+                                    <option value="Employed">Employed</option>
+                                    <option value="Unemployed">Unemployed</option>
+                                    <option value="Not in Labor Force">Not in Labor Force</option>
+                                </select>
+                            </div>
+                            <div>
                                 <label className={labelClass}>Highest Educational Attainment</label>
                                 <input type="text" name="highest_education" value={formData.highest_education} onChange={handleChange} disabled={isViewOnly} className={inputClass} />
                             </div>
@@ -273,6 +289,18 @@ export default function ResidentModal({ mode, resident, households, onClose, onS
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" name="is_solo_parent" checked={formData.is_solo_parent} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-green-600 rounded" />
                                 <span className="text-sm font-medium text-gray-700">Solo Parent</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="is_indigenous" checked={formData.is_indigenous} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-green-600 rounded" />
+                                <span className="text-sm font-medium text-gray-700">Indigenous Person</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="is_ofw" checked={formData.is_ofw} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-green-600 rounded" />
+                                <span className="text-sm font-medium text-gray-700">OFW</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="is_out_of_school" checked={formData.is_out_of_school} onChange={handleChange} disabled={isViewOnly} className="w-4 h-4 text-green-600 rounded" />
+                                <span className="text-sm font-medium text-gray-700">Out of School (OSY/OSC)</span>
                             </label>
                         </div>
 

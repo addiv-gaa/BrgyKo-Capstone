@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import api from '../api';
 import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale';
@@ -18,26 +19,12 @@ export default function BarangayCalendar() {
 
   useEffect(() => {
     const fetchCalendar = async () => {
-      const token = localStorage.getItem('access');
-      
-      // Build headers dynamically. Only add Authorization if a real token exists.
-      const headers: HeadersInit = {
-          'Content-Type': 'application/json'
-      };
-      
-      if (token && token !== "null" && token !== "undefined") {
-          headers['Authorization'] = `Bearer ${token}`;
-      }
-
       try {
-          const response = await fetch(`${API_URL}/api/calendar-feed/`, {
-            headers: headers
-          });
-
-          const data = await response.json();
+          const response = await api.get('/api/calendar-feed/');
+          const data = response.data;
 
           // SAFETY CHECK: Ensure response is OK and data is actually an array
-          if (response.ok && Array.isArray(data)) {
+          if (response.status === 200 && Array.isArray(data)) {
             const formattedData = data.map((item: any) => ({
               ...item,
               start: new Date(item.start),

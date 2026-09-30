@@ -375,6 +375,16 @@ class Resident(models.Model):
     contact_number = models.CharField(max_length=20, blank=True, null=True)
     purok = models.CharField(max_length=50)
     occupation = models.CharField(max_length=100, blank=True, null=True)
+    EMPLOYMENT_STATUS_CHOICES = [
+        ('Employed', 'Employed'),
+        ('Unemployed', 'Unemployed'),
+        ('Not in Labor Force', 'Not in Labor Force'),
+    ]
+    employment_status = models.CharField(max_length=50, choices=EMPLOYMENT_STATUS_CHOICES, blank=True, null=True)
+
+    # --- Approval Queue Logic ---
+    is_approved = models.BooleanField(default=True)
+    submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='submitted_residents')
 
     email_address= models.EmailField(blank=True, null=True)
     highest_education = models.CharField(max_length=100, blank=True, null=True)
@@ -393,6 +403,9 @@ class Resident(models.Model):
     is_senior_citizen = models.BooleanField(default=False)
     is_pwd = models.BooleanField(default=False)
     is_solo_parent = models.BooleanField(default=False)
+    is_indigenous = models.BooleanField(default=False)
+    is_ofw = models.BooleanField(default=False)
+    is_out_of_school = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -490,20 +503,7 @@ class ProfileUpdateRequest(models.Model):
     def __str__(self):
         return f"Update Request for {self.resident} - {self.status}"
 
-class BarangaySettings(models.Model):
-    barangay_name = models.CharField(max_length=255, default="Barangay Magsaysay")
-    captain_name = models.CharField(max_length=255, default="Juan Dela Cruz")
-    emergency_hotline = models.CharField(max_length=50, default="911")
-    police_hotline = models.CharField(max_length=50, default="117")
-    fire_hotline = models.CharField(max_length=50, default="112")
-    ai_chatbot_enabled = models.BooleanField(default=True)
 
-    def save(self, *args, **kwargs):
-        self.pk = 1  # Forces this model to only ever have one row (ID 1)
-        super(BarangaySettings, self).save(*args, **kwargs)
-        
-    def __str__(self):
-        return f"Settings for {self.barangay_name}"
 
 class BarangaySettings(models.Model):
     # Barangay Identity & Metadata
@@ -551,3 +551,16 @@ class EmergencyContact(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.phone}"
+
+class BarangayOfficial(models.Model):
+    name = models.CharField(max_length=255)
+    position = models.CharField(max_length=100)
+    committee = models.CharField(max_length=255, blank=True, null=True)
+    contact_number = models.CharField(max_length=100, blank=True, null=True)
+    image = models.ImageField(upload_to='officials/', blank=True, null=True)
+    order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f'{self.name} - {self.position}'
+

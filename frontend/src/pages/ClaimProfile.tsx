@@ -39,14 +39,13 @@ export default function ClaimProfile() {
         setSuccess("");
         setIsLoading(true);
 
-        const token = localStorage.getItem('access');
-        if (!token) return navigate('/login');
+        if (!auth?.user) return navigate('/login');
 
         try {
             const response = await fetch(`${API_URL}/api/claim-profile/`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -90,7 +89,6 @@ export default function ClaimProfile() {
         }
 
         setIsLoading(true);
-        const token = localStorage.getItem('access');
 
         // CHANGED: Use FormData instead of JSON to support the file upload
         const formData = new FormData();
@@ -106,10 +104,7 @@ export default function ClaimProfile() {
         try {
             const response = await fetch(`${API_URL}/api/submit-resident-application/`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    // Note: Do NOT set 'Content-Type' when sending FormData. The browser sets the multipart boundary automatically.
-                },
+                credentials: 'include',
                 body: formData
             });
 

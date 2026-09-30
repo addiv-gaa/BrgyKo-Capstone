@@ -40,13 +40,12 @@ export default function ReportIncident() {
 
     // --- Data Fetching ---
     const fetchPreviousReports = async () => {
-        const token = localStorage.getItem('access');
-        if (!token) return navigate('/login');
-
         try {
             const response = await fetch(`${API_URL}/api/incident-reports/`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
+
+            if (response.status === 401) return navigate('/login');
 
             if (response.ok) {
                 const data = await response.json();
@@ -95,13 +94,6 @@ export default function ReportIncident() {
         setSuccess("");
         setIsSubmitting(true);
 
-        const token = localStorage.getItem('access');
-        if (!token) {
-            setError("Authentication required.");
-            setIsSubmitting(false);
-            return;
-        }
-
         // Use FormData to handle text + file payload
         const payload = new FormData();
         payload.append('category', formData.category);
@@ -115,9 +107,7 @@ export default function ReportIncident() {
         try {
             const response = await fetch(`${API_URL}/api/incident-reports/`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
+                credentials: 'include',
                 body: payload
             });
 
@@ -134,7 +124,9 @@ export default function ReportIncident() {
                 const errorData = await response.json();
                 console.error("DJANGO VALIDATION ERROR:", errorData);
                 
-                if (response.status === 429) {
+                if (response.status === 401) {
+                    setError("Authentication required. Please log in.");
+                } else if (response.status === 429) {
                     setError("You are submitting reports too quickly. Please wait a moment.");
                 } else if (typeof errorData === 'object' && errorData !== null) {
                     const errorMessages = Object.entries(errorData)

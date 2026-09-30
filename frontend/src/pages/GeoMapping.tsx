@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../components/AuthContext';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import * as L from 'leaflet';
@@ -21,6 +22,9 @@ interface ResidentMini {
     is_senior_citizen: boolean;
     is_pwd: boolean;
     is_solo_parent: boolean;
+    is_indigenous: boolean;
+    is_ofw: boolean;
+    is_out_of_school: boolean;
 }
 
 interface HouseholdProperties {
@@ -34,6 +38,9 @@ interface HouseholdProperties {
     is_senior_citizen: boolean;
     is_pwd: boolean;
     is_solo_parent: boolean;
+    is_indigenous: boolean;
+    is_ofw: boolean;
+    is_out_of_school: boolean;
     residents: ResidentMini[];
 }
 
@@ -50,10 +57,14 @@ interface GeoJSONFeature {
 // --- Marker Styling ---
 const getMarkerColor = (props: HouseholdProperties) => {
     if (!props.member_count || props.member_count === 0) return 'bg-gray-400 border-gray-600';
+    // Use the visually distinct priority palette requested
+    if (props.is_out_of_school) return 'bg-red-600 border-red-800';
     if (props.is_pwd) return 'bg-blue-500 border-blue-700';
     if (props.is_senior_citizen) return 'bg-orange-500 border-orange-700'; 
     if (props.is_solo_parent) return 'bg-pink-500 border-pink-700';            
     if (props.is_4ps_beneficiary) return 'bg-purple-500 border-purple-700';           
+    if (props.is_indigenous) return 'bg-yellow-500 border-yellow-700'; 
+    if (props.is_ofw) return 'bg-cyan-500 border-cyan-700'; 
     return 'bg-emerald-500 border-emerald-700';                                          
 };
 
@@ -106,17 +117,16 @@ export default function MappingPage() {
     const [filterPWD, setFilterPWD] = useState(false);
     const [filter4Ps, setFilter4Ps] = useState(false);
     const [filterSoloParent, setFilterSoloParent] = useState(false);
+    const [filterIndigenous, setFilterIndigenous] = useState(false);
+    const [filterOFW, setFilterOFW] = useState(false);
+    const [filterOSC, setFilterOSC] = useState(false);
 
     const [isResidentEditOpen, setIsResidentEditOpen] = useState(false);
     const [editingResident, setEditingResident] = useState<ResidentProperties | null>(null);
 
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('access'); 
-        return {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        };
-    };
+    const auth = useContext(AuthContext);
+    const userRole = auth?.user?.role || (auth?.user?.roles && auth?.user?.roles[0]) || '';
+    const canEdit = userRole.toUpperCase() === 'ADMIN';
 
     const fetchHouseholds = async (query = '') => {
         try {
@@ -124,7 +134,7 @@ export default function MappingPage() {
                 ? `${API_URL}/api/households/?search=${encodeURIComponent(query)}` 
                 : `${API_URL}/api/households/`;
 
-            const response = await fetch(url, { headers: getAuthHeaders() });
+            const response = await fetch(url, { credentials: 'include' });
             
             if (response.ok) {
                 const data = await response.json();
@@ -151,7 +161,7 @@ export default function MappingPage() {
 
     const handleEditResidentClick = async (residentId: number) => {
         try {
-            const res = await fetch(`${API_URL}/api/residents/${residentId}/`, { headers: getAuthHeaders() });
+            const res = await fetch(`${API_URL}/api/residents/${residentId}/`, { credentials: 'include' });
             if (res.ok) {
                 const data = await res.json();
                 setEditingResident(data);
@@ -168,7 +178,10 @@ export default function MappingPage() {
             const url = `${API_URL}/api/residents/${editingResident.id}/`;
             const response = await fetch(url, {
                 method: 'PUT',
-                headers: getAuthHeaders(),
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify(formData)
             });
             if (response.ok) {
@@ -205,7 +218,10 @@ export default function MappingPage() {
 
             const response = await fetch(url, {
                 method: method,
-                headers: getAuthHeaders(),
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify(payload)
             });
 
@@ -228,7 +244,7 @@ export default function MappingPage() {
         try {
             const response = await fetch(`${API_URL}/api/households/${id}/`, {
                 method: 'DELETE',
-                headers: getAuthHeaders()
+                credentials: 'include'
             });
 
             if (response.ok || response.status === 204) {
@@ -259,6 +275,9 @@ export default function MappingPage() {
         if (filterPWD && !h.properties.is_pwd) return false;
         if (filter4Ps && !h.properties.is_4ps_beneficiary) return false;
         if (filterSoloParent && !h.properties.is_solo_parent) return false;
+        if (filterIndigenous && !h.properties.is_indigenous) return false;
+        if (filterOFW && !h.properties.is_ofw) return false;
+        if (filterOSC && !h.properties.is_out_of_school) return false;
         return true;
     });
 
@@ -283,16 +302,18 @@ export default function MappingPage() {
                                     className="w-full lg:w-64 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm"
                                 />
                                 
-                                <button 
-                                    onClick={() => setIsAddMode(!isAddMode)}
-                                    className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-colors ${
-                                        isAddMode 
-                                        ? 'bg-red-50 text-red-600 border border-red-200' 
-                                        : 'bg-green-600 text-white hover:bg-green-700'
-                                    }`}
-                                >
-                                    {isAddMode ? 'Cancel Adding Marker' : '+ Add Map Marker'}
-                                </button>
+                                {canEdit && (
+                                    <button 
+                                        onClick={() => setIsAddMode(!isAddMode)}
+                                        className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-colors ${
+                                            isAddMode 
+                                            ? 'bg-red-50 text-red-600 border border-red-200' 
+                                            : 'bg-green-600 text-white hover:bg-green-700'
+                                        }`}
+                                    >
+                                        {isAddMode ? 'Cancel Adding Marker' : '+ Add Map Marker'}
+                                    </button>
+                                )}
                             </div>
                         </div>
                         
@@ -313,6 +334,18 @@ export default function MappingPage() {
                             <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1.5 rounded pr-3 border border-transparent hover:border-gray-200 transition-colors">
                                 <input type="checkbox" checked={filterSoloParent} onChange={e => setFilterSoloParent(e.target.checked)} className="rounded text-pink-500 focus:ring-pink-500"/> 
                                 Solo Parent
+                            </label>
+                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1.5 rounded pr-3 border border-transparent hover:border-gray-200 transition-colors">
+                                <input type="checkbox" checked={filterOSC} onChange={e => setFilterOSC(e.target.checked)} className="rounded text-red-600 focus:ring-red-600"/> 
+                                Out of School
+                            </label>
+                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1.5 rounded pr-3 border border-transparent hover:border-gray-200 transition-colors">
+                                <input type="checkbox" checked={filterIndigenous} onChange={e => setFilterIndigenous(e.target.checked)} className="rounded text-yellow-500 focus:ring-yellow-500"/> 
+                                Indigenous (IP)
+                            </label>
+                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1.5 rounded pr-3 border border-transparent hover:border-gray-200 transition-colors">
+                                <input type="checkbox" checked={filterOFW} onChange={e => setFilterOFW(e.target.checked)} className="rounded text-cyan-500 focus:ring-cyan-500"/> 
+                                OFW
                             </label>
                         </div>
                     </div>
@@ -343,10 +376,13 @@ export default function MappingPage() {
                             <div className="absolute bottom-6 left-6 z-[400] bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-gray-200 text-sm">
                                 <h4 className="font-bold text-gray-900 mb-3 text-xs uppercase tracking-wider">Map Legend</h4>
                                 <div className="space-y-2.5">
+                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-red-600 border border-red-800 shadow-sm"></div><span className="text-gray-700 font-medium">Out of School</span></div>
                                     <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-blue-500 border border-blue-700 shadow-sm"></div><span className="text-gray-700 font-medium">PWD Present</span></div>
                                     <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-orange-500 border border-orange-700 shadow-sm"></div><span className="text-gray-700 font-medium">Senior Citizen</span></div>
                                     <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-pink-500 border border-pink-700 shadow-sm"></div><span className="text-gray-700 font-medium">Solo Parent</span></div>
                                     <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-purple-500 border border-purple-700 shadow-sm"></div><span className="text-gray-700 font-medium">4Ps Beneficiary</span></div>
+                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-yellow-500 border border-yellow-700 shadow-sm"></div><span className="text-gray-700 font-medium">Indigenous (IP)</span></div>
+                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-cyan-500 border border-cyan-700 shadow-sm"></div><span className="text-gray-700 font-medium">OFW Present</span></div>
                                     <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-emerald-500 border border-emerald-700 shadow-sm"></div><span className="text-gray-700 font-medium">Standard</span></div>
                                     <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-gray-400 border border-gray-600 shadow-sm"></div><span className="text-gray-700 font-medium">Empty Structure</span></div>
                                 </div>
@@ -369,20 +405,22 @@ export default function MappingPage() {
                                             </div>
                                         </div>
                                         
-                                        <div className="flex flex-wrap gap-2">
-                                            <button onClick={() => setIsAssignModalOpen(true)} className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 rounded-lg text-xs font-semibold transition-colors">
-                                                + Add Resident
-                                            </button>
-                                            <button onClick={() => { setModalMode('edit'); setIsModalOpen(true); }} className="px-3 py-1.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold transition-colors">
-                                                Edit Structure
-                                            </button>
-                                            <button onClick={() => {
-                                                const idToDelete = selectedHousehold.id || selectedHousehold.properties.id;
-                                                if (idToDelete) handleDeleteHousehold(idToDelete as number);
-                                            }} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 rounded-lg text-xs font-semibold transition-colors ml-auto">
-                                                Delete
-                                            </button>
-                                        </div>
+                                        {canEdit && (
+                                            <div className="flex flex-wrap gap-2">
+                                                <button onClick={() => setIsAssignModalOpen(true)} className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 rounded-lg text-xs font-semibold transition-colors">
+                                                    + Add Resident
+                                                </button>
+                                                <button onClick={() => { setModalMode('edit'); setIsModalOpen(true); }} className="px-3 py-1.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold transition-colors">
+                                                    Edit Structure
+                                                </button>
+                                                <button onClick={() => {
+                                                    const idToDelete = selectedHousehold.id || selectedHousehold.properties.id;
+                                                    if (idToDelete) handleDeleteHousehold(idToDelete as number);
+                                                }} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 rounded-lg text-xs font-semibold transition-colors ml-auto">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        )}
                                         
                                         <div className="grid grid-cols-2 gap-3 mt-5">
                                             <div className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
@@ -402,7 +440,10 @@ export default function MappingPage() {
                                                     {selectedHousehold.properties.is_senior_citizen && <span className="bg-orange-50 text-orange-600 border border-orange-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Senior</span>}
                                                     {selectedHousehold.properties.is_pwd && <span className="bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase">PWD</span>}
                                                     {selectedHousehold.properties.is_solo_parent && <span className="bg-pink-50 text-pink-600 border border-pink-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Solo Parent</span>}
-                                                    {!selectedHousehold.properties.is_4ps_beneficiary && !selectedHousehold.properties.is_senior_citizen && !selectedHousehold.properties.is_pwd && !selectedHousehold.properties.is_solo_parent && (
+                                                    {selectedHousehold.properties.is_indigenous && <span className="bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase">IP</span>}
+                                                    {selectedHousehold.properties.is_ofw && <span className="bg-cyan-50 text-cyan-700 border border-cyan-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase">OFW</span>}
+                                                    {selectedHousehold.properties.is_out_of_school && <span className="bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase">OSC/OSY</span>}
+                                                    {!selectedHousehold.properties.is_4ps_beneficiary && !selectedHousehold.properties.is_senior_citizen && !selectedHousehold.properties.is_pwd && !selectedHousehold.properties.is_solo_parent && !selectedHousehold.properties.is_indigenous && !selectedHousehold.properties.is_ofw && !selectedHousehold.properties.is_out_of_school && (
                                                         <span className="text-[10px] text-gray-400 italic">None recorded</span>
                                                     )}
                                                 </div>
@@ -439,12 +480,15 @@ export default function MappingPage() {
                                                             </button>
                                                         </div>
                                                         
-                                                        {(person.is_4ps_beneficiary || person.is_senior_citizen || person.is_pwd || person.is_solo_parent) && (
+                                                        {(person.is_4ps_beneficiary || person.is_senior_citizen || person.is_pwd || person.is_solo_parent || person.is_indigenous || person.is_ofw || person.is_out_of_school) && (
                                                             <div className="flex gap-1.5 flex-wrap mt-3 pt-3 border-t border-gray-50">
                                                                 {person.is_4ps_beneficiary && <span className="text-[9px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">4Ps</span>}
                                                                 {person.is_senior_citizen && <span className="text-[9px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded border border-orange-200 font-bold uppercase tracking-wider">Senior</span>}
                                                                 {person.is_pwd && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-200 font-bold uppercase tracking-wider">PWD</span>}
                                                                 {person.is_solo_parent && <span className="text-[9px] bg-pink-50 text-pink-600 px-1.5 py-0.5 rounded border border-pink-200 font-bold uppercase tracking-wider">Solo Parent</span>}
+                                                                {person.is_indigenous && <span className="text-[9px] bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-200 font-bold uppercase tracking-wider">IP</span>}
+                                                                {person.is_ofw && <span className="text-[9px] bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded border border-cyan-200 font-bold uppercase tracking-wider">OFW</span>}
+                                                                {person.is_out_of_school && <span className="text-[9px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-200 font-bold uppercase tracking-wider">OSC/OSY</span>}
                                                             </div>
                                                         )}
                                                     </div>

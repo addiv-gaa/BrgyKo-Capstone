@@ -30,17 +30,7 @@ export default function Home() {
 
     useEffect(() => {
         let extractedRole = "";
-        try {
-            const token = localStorage.getItem('access');
-            if (token) {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                extractedRole = payload.role || payload.roles || "";
-            }
-        } catch (error) {
-            console.error("Token decoding failed", error);
-        }
-
-        if (!extractedRole && auth?.user) {
+        if (auth?.user) {
             const contextUser = auth.user as any;
             extractedRole = contextUser.role || contextUser.roles || "";
         }
@@ -72,14 +62,9 @@ export default function Home() {
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
 
-    const fetchAnnouncements = useCallback(async (token: string | null) => {
+    const fetchAnnouncements = useCallback(async () => {
         try {
-            const headers: HeadersInit = { 'Content-Type': 'application/json' };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-            
-            const annRes = await fetch(`${API_URL}/api/announcements/`, { headers });
+            const annRes = await fetch(`${API_URL}/api/announcements/`, { credentials: 'include' });
             if (annRes.ok) {
                 const annData = await annRes.json();
                 setAnnouncements(annData.results || annData);
@@ -91,7 +76,7 @@ export default function Home() {
 
     const fetchEmergencyContacts = useCallback(async () => {
         try {
-            const res = await fetch(`${API_URL}/api/emergency-contacts/`);
+            const res = await fetch(`${API_URL}/api/emergency-contacts/`, { credentials: 'include' });
             if (res.ok) {
                 const data = await res.json();
                 setEmergencyContacts(data.results || data);
@@ -103,18 +88,16 @@ export default function Home() {
 
     useEffect(() => {
         const fetchDashboardData = async () => {
-            const token = localStorage.getItem('access');
-            
             // Fetch public data regardless of login status
-            await fetchAnnouncements(token);
+            await fetchAnnouncements();
             await fetchEmergencyContacts();
 
             // If not logged in, we skip fetching private user stats
-            if (!token) return;
+            if (!auth?.user) return;
 
             if (isCaptainOrSecretary) {
                 try {
-                    const response = await fetch(`${API_URL}/api/dashboard-stats/`, { headers: { 'Authorization': `Bearer ${token}` }});
+                    const response = await fetch(`${API_URL}/api/dashboard-stats/`, { credentials: 'include' });
                     if (response.ok) {
                         const data = await response.json();
                         setStats(data);
@@ -124,7 +107,7 @@ export default function Home() {
                     }
 
                     // Fetch actual resident registry to accurately count the welfare statuses if not provided
-                    const resResponse = await fetch(`${API_URL}/api/residents/?paginate=false`, { headers: { 'Authorization': `Bearer ${token}` }});
+                    const resResponse = await fetch(`${API_URL}/api/residents/?paginate=false`, { credentials: 'include' });
                     if (resResponse.ok) {
                         const resData = await resResponse.json();
                         const residentsList = Array.isArray(resData) ? resData : (resData.results || []); 
@@ -145,9 +128,9 @@ export default function Home() {
             } else if (isResident) {
                 try {
                     const [certRes, permitRes, resRes] = await Promise.all([
-                        fetch(`${API_URL}/api/certificates/`, { headers: { 'Authorization': `Bearer ${token}` }}),
-                        fetch(`${API_URL}/api/permits/`, { headers: { 'Authorization': `Bearer ${token}` }}),
-                        fetch(`${API_URL}/api/reservations/`, { headers: { 'Authorization': `Bearer ${token}` }})
+                        fetch(`${API_URL}/api/certificates/`, { credentials: 'include' }),
+                        fetch(`${API_URL}/api/permits/`, { credentials: 'include' }),
+                        fetch(`${API_URL}/api/reservations/`, { credentials: 'include' })
                     ]);
                     
                     if (certRes.ok) {

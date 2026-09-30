@@ -48,9 +48,6 @@ export default function Documents() {
     }, [searchQuery, filterType, showArchived, page, sortField, sortOrder]);
 
     const fetchDocuments = async () => {
-        const token = localStorage.getItem('access');
-        if (!token) return;
-
         const ordering = sortOrder === 'desc' ? `-${sortField}` : sortField;
         let url = `${API_URL}/api/official-documents/?page=${page}&ordering=${ordering}&is_archived=${showArchived ? 'True' : 'False'}`;
         
@@ -58,7 +55,7 @@ export default function Documents() {
         if (filterType) url += `&document_type=${filterType}`;
 
         try {
-            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` }});
+            const response = await fetch(url, { credentials: 'include' });
             if (response.ok) {
                 const data = await response.json();
                 // DRF Paginator returns an object with 'results' and 'count'
@@ -123,7 +120,6 @@ export default function Documents() {
         }
 
         setIsSaving(true);
-        const token = localStorage.getItem('access');
         
         const formData = new FormData();
         formData.append('title', formState.title);
@@ -136,7 +132,7 @@ export default function Documents() {
             : `${API_URL}/api/official-documents/`;
 
         try {
-            const response = await fetch(url, { method, headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+            const response = await fetch(url, { method, credentials: 'include', body: formData });
             if (response.ok) {
                 setIsFormModalOpen(false);
                 setFormState({ title: "", type: "Memo", file: null });
@@ -151,10 +147,10 @@ export default function Documents() {
 
     // --- Archive & Delete Actions ---
     const handleToggleArchive = async (id: number, currentStatus: boolean) => {
-        const token = localStorage.getItem('access');
         await fetch(`${API_URL}/api/official-documents/${id}/`, {
             method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ is_archived: !currentStatus })
         });
         fetchDocuments();
@@ -164,10 +160,10 @@ export default function Documents() {
         if (selectedIds.length === 0) return;
         if (!window.confirm(`Are you sure you want to ${action} ${selectedIds.length} items?`)) return;
 
-        const token = localStorage.getItem('access');
         await fetch(`${API_URL}/api/official-documents/bulk_${action}/`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: selectedIds })
         });
         fetchDocuments();

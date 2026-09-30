@@ -1,7 +1,6 @@
 import React, { useState, useContext, useEffect } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
-import { ACCESS_TOKEN, REFRESH_TOKEN } from "../constants";
 import usericon from "../images/usericon.png";
 import { AuthContext } from "./AuthContext";
 
@@ -61,9 +60,9 @@ function Form({ route, method }: FormProps) {
         try {
             if (method === "login") {
                 const res = await api.post(route, { username, password });
-                localStorage.setItem(ACCESS_TOKEN, res.data.access);
-                localStorage.setItem(REFRESH_TOKEN, res.data.refresh);
-                if (auth) auth.login(res.data.access);
+                // Cookies are set automatically by the backend response.
+                // Just update the React auth state with the user info from the response body.
+                if (auth) auth.login(res.data.user);
                 navigate("/");
             } else {
                 const res = await api.post('/api/auth/register/', { username, email, password });

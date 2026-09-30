@@ -1,17 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../components/AuthContext';
-import { jwtDecode } from 'jwt-decode';
 import { Building, Heart, Shield, AlertTriangle, Users, Info, PhoneCall, Plus, Pencil, Trash2, X, Activity } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL;
-
-interface CustomJwtPayload {
-    exp?: number;
-    roles?: string[];
-    role?: string;
-    first_name?: string;
-    username?: string;
-}
 
 interface EmergencyContact {
     id: number;
@@ -38,20 +29,9 @@ export default function EmergencyContacts() {
     const auth = useContext(AuthContext);
     
     // Check if the user is a staff member
-    const token = localStorage.getItem('access');
-    let userRole = '';
+    const userRole = auth?.user?.role || (auth?.user?.roles && auth?.user?.roles[0]) || '';
     
-    if (token) {
-        try {
-            const decoded = jwtDecode<CustomJwtPayload>(token);
-            userRole = decoded.role || (decoded.roles && decoded.roles[0]) || '';
-        } catch (e) {
-            console.error("Error parsing token", e);
-        }
-    }
-    
-    // Any role other than RESIDENT is considered staff
-    const isStaff = userRole && userRole.toUpperCase() !== 'RESIDENT';
+    const canEdit = userRole.toUpperCase() === 'ADMIN';
 
     const [contacts, setContacts] = useState<EmergencyContact[]>([]);
     const [loading, setLoading] = useState(true);
@@ -62,7 +42,9 @@ export default function EmergencyContacts() {
 
     const fetchContacts = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/emergency-contacts/`);
+            const res = await fetch(`${API_URL}/api/emergency-contacts/`, {
+                credentials: 'include'
+            });
             if (res.ok) {
                 const data = await res.json();
                 setContacts(data.results || data);
@@ -100,7 +82,6 @@ export default function EmergencyContacts() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!token) return;
 
         const method = editingContact ? 'PUT' : 'POST';
         const url = editingContact 
@@ -110,9 +91,9 @@ export default function EmergencyContacts() {
         try {
             const res = await fetch(url, {
                 method,
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify(formData)
             });
@@ -129,14 +110,12 @@ export default function EmergencyContacts() {
     };
 
     const handleDelete = async (id: number) => {
-        if (!token || !confirm("Are you sure you want to delete this contact?")) return;
+        if (!confirm("Are you sure you want to delete this contact?")) return;
 
         try {
             const res = await fetch(`${API_URL}/api/emergency-contacts/${id}/`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                credentials: 'include'
             });
 
             if (res.ok) {
@@ -179,7 +158,7 @@ export default function EmergencyContacts() {
                     {c.phone}
                 </div>
                 
-                {isStaff && (
+                {canEdit && (
                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-md shadow-sm border border-gray-200 p-1 flex gap-1">
                         <button onClick={() => openModal(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
@@ -202,7 +181,7 @@ export default function EmergencyContacts() {
                         <h1 className="text-2xl font-bold text-gray-900 mb-1">Emergency Contacts</h1>
                         <p className="text-gray-600 text-sm">Barangay, municipal, and national emergency hotlines</p>
                     </div>
-                    {isStaff && (
+                    {canEdit && (
                         <button 
                             onClick={() => openModal()} 
                             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"

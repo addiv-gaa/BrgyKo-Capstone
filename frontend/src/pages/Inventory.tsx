@@ -40,11 +40,10 @@ export default function EquipmentFacilitiesPage() {
 
     const fetchData = async () => {
         setIsLoading(true);
-        const token = localStorage.getItem('access');
         try {
             const [eqRes, facRes] = await Promise.all([
-                fetch(`${API_URL}/api/equipment/`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${API_URL}/api/facilities/`, { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch(`${API_URL}/api/equipment/`, { credentials: 'include' }),
+                fetch(`${API_URL}/api/facilities/`, { credentials: 'include' })
             ]);
 
             if (eqRes.ok) setEquipmentList(await eqRes.json());
@@ -79,13 +78,12 @@ export default function EquipmentFacilitiesPage() {
         
         if (!confirmDelete) return;
 
-        const token = localStorage.getItem('access');
         const endpoint = activeTab === 'equipment' ? 'equipment' : 'facilities';
 
         try {
             const response = await fetch(`${API_URL}/api/${endpoint}/${id}/`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
 
             if (response.ok) {
@@ -110,7 +108,6 @@ export default function EquipmentFacilitiesPage() {
         if (!formData.name.trim()) return alert("Name is required.");
 
         setIsSubmitting(true);
-        const token = localStorage.getItem('access');
         
         const endpoint = activeTab === 'equipment' ? 'equipment' : 'facilities';
         const url = editingItemId 
@@ -127,9 +124,9 @@ export default function EquipmentFacilitiesPage() {
         try {
             const response = await fetch(url, {
                 method: method,
+                credentials: 'include',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(payload)
             });
