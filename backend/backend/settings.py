@@ -166,6 +166,10 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://puzzle-treo-fun-currently.trycloudflare.com"
+]
+CSRF_TRUSTED_ORIGINS = [
+    "https://puzzle-treo-fun-currently.trycloudflare.com"
 ]
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")

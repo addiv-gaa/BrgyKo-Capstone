@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext } from 'react';
+import { AlertTriangle, Save, Home, UserMinus } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, LayersControl } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -120,9 +121,18 @@ export default function MappingPage() {
     const [filterIndigenous, setFilterIndigenous] = useState(false);
     const [filterOFW, setFilterOFW] = useState(false);
     const [filterOSC, setFilterOSC] = useState(false);
+    const [isLegendOpen, setIsLegendOpen] = useState(window.innerWidth >= 768);
 
     const [isResidentEditOpen, setIsResidentEditOpen] = useState(false);
     const [editingResident, setEditingResident] = useState<ResidentProperties | null>(null);
+
+    // Confirmation States
+    const [pendingHouseholdData, setPendingHouseholdData] = useState<any>(null);
+    const [isConfirmingSave, setIsConfirmingSave] = useState(false);
+    const [householdToDelete, setHouseholdToDelete] = useState<number | null>(null);
+    const [residentToRemove, setResidentToRemove] = useState<any>(null);
+    const [pendingResidentData, setPendingResidentData] = useState<any>(null);
+    const [isConfirmingResidentSave, setIsConfirmingResidentSave] = useState(false);
 
     const auth = useContext(AuthContext);
     const userRole = auth?.user?.role || (auth?.user?.roles && auth?.user?.roles[0]) || '';
@@ -172,8 +182,8 @@ export default function MappingPage() {
         }
     };
 
-    const handleSaveResidentInfo = async (formData: Partial<ResidentProperties>) => {
-        if (!editingResident) return;
+    const executeSaveResidentInfo = async () => {
+        if (!editingResident || !pendingResidentData) return;
         try {
             const url = `${API_URL}/api/residents/${editingResident.id}/`;
             const response = await fetch(url, {
@@ -182,21 +192,27 @@ export default function MappingPage() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(pendingResidentData)
             });
             if (response.ok) {
                 setIsResidentEditOpen(false);
+                setIsConfirmingResidentSave(false);
                 setEditingResident(null);
+                setPendingResidentData(null);
                 fetchHouseholds(searchQuery); 
             } else {
-                alert("Failed to save resident updates.");
+                alert("Failed to save resident updates: " + await response.text());
+                setIsConfirmingResidentSave(false);
             }
         } catch (error) {
             console.error("Failed to save resident", error);
+            setIsConfirmingResidentSave(false);
         }
     };
 
-    const handleSaveHousehold = async (formData: Partial<HouseholdSaveData>) => {
+    const executeSaveHousehold = async () => {
+        if (!pendingHouseholdData) return;
+        const formData = pendingHouseholdData;
         try {
             const method = modalMode === 'edit' ? 'PUT' : 'POST';
             const householdId = selectedHousehold?.id || selectedHousehold?.properties?.id;
@@ -227,32 +243,74 @@ export default function MappingPage() {
 
             if (response.ok) {
                 setIsModalOpen(false);
+                setIsConfirmingSave(false);
+                setPendingHouseholdData(null);
                 setPendingCoords(null);
                 if (modalMode === 'add') setSelectedHousehold(null);
                 fetchHouseholds(searchQuery); 
             } else {
-                alert("Failed to save household.");
+                alert("Failed to save household: " + await response.text());
+                setIsConfirmingSave(false);
             }
         } catch (error) {
             console.error("Network error saving household:", error);
+            setIsConfirmingSave(false);
         }
     };
 
-    const handleDeleteHousehold = async (id: number) => {
-        if (!window.confirm("Delete this physical structure? All residents inside will be marked as unmapped.")) return; 
-
+    const executeDeleteHousehold = async () => {
+        if (!householdToDelete) return;
         try {
-            const response = await fetch(`${API_URL}/api/households/${id}/`, {
+            const response = await fetch(`${API_URL}/api/households/${householdToDelete}/`, {
                 method: 'DELETE',
                 credentials: 'include'
             });
 
             if (response.ok || response.status === 204) {
                 setSelectedHousehold(null);
+                setHouseholdToDelete(null);
                 fetchHouseholds(searchQuery);
+            } else {
+                alert("Failed to delete structure: " + await response.text());
+                setHouseholdToDelete(null);
             }
         } catch (error) {
-            console.error("Network error deleting household:", error);
+            console.error("Error deleting structure:", error);
+            setHouseholdToDelete(null);
+        }
+    };
+
+    const executeRemoveResident = async () => {
+        if (!residentToRemove) return;
+        try {
+            const response = await fetch(`${API_URL}/api/residents/${residentToRemove.id}/`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ household: null })
+            });
+
+            if (response.ok) {
+                setResidentToRemove(null);
+                fetchHouseholds(searchQuery);
+                if (selectedHousehold) {
+                    const updatedResidents = selectedHousehold.properties.residents.filter((r: any) => r.id !== residentToRemove.id);
+                    setSelectedHousehold({
+                        ...selectedHousehold,
+                        properties: {
+                            ...selectedHousehold.properties,
+                            residents: updatedResidents,
+                            member_count: selectedHousehold.properties.member_count - 1
+                        }
+                    });
+                }
+            } else {
+                alert("Failed to remove resident: " + await response.text());
+                setResidentToRemove(null);
+            }
+        } catch (error) {
+            console.error("Error removing resident:", error);
+            setResidentToRemove(null);
         }
     };
 
@@ -354,7 +412,20 @@ export default function MappingPage() {
                         {/* MAP AREA */}
                         <div className={`flex-1 relative transition-all duration-300 bg-gray-100 ${isAddMode ? 'cursor-crosshair' : ''}`}>
                             <MapContainer center={[14.282, 120.952]} zoom={15} className="h-full w-full z-0 relative">
-                                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                <LayersControl position="topright">
+                                    <LayersControl.BaseLayer checked name="Street View">
+                                        <TileLayer 
+                                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                                            attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors"
+                                        />
+                                    </LayersControl.BaseLayer>
+                                    <LayersControl.BaseLayer name="Satellite View">
+                                        <TileLayer 
+                                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                                            attribution="Tiles &copy; Esri"
+                                        />
+                                    </LayersControl.BaseLayer>
+                                </LayersControl>
                                 <MapClickHandler />
                                 
                                 <MarkerClusterGroup chunkedLoading maxClusterRadius={60} iconCreateFunction={createClusterCustomIcon}>
@@ -373,32 +444,55 @@ export default function MappingPage() {
                             </MapContainer>
                             
                             {/* MAP LEGEND */}
-                            <div className="absolute bottom-6 left-6 z-[400] bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-gray-200 text-sm">
-                                <h4 className="font-bold text-gray-900 mb-3 text-xs uppercase tracking-wider">Map Legend</h4>
-                                <div className="space-y-2.5">
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-red-600 border border-red-800 shadow-sm"></div><span className="text-gray-700 font-medium">Out of School</span></div>
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-blue-500 border border-blue-700 shadow-sm"></div><span className="text-gray-700 font-medium">PWD Present</span></div>
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-orange-500 border border-orange-700 shadow-sm"></div><span className="text-gray-700 font-medium">Senior Citizen</span></div>
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-pink-500 border border-pink-700 shadow-sm"></div><span className="text-gray-700 font-medium">Solo Parent</span></div>
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-purple-500 border border-purple-700 shadow-sm"></div><span className="text-gray-700 font-medium">4Ps Beneficiary</span></div>
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-yellow-500 border border-yellow-700 shadow-sm"></div><span className="text-gray-700 font-medium">Indigenous (IP)</span></div>
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-cyan-500 border border-cyan-700 shadow-sm"></div><span className="text-gray-700 font-medium">OFW Present</span></div>
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-emerald-500 border border-emerald-700 shadow-sm"></div><span className="text-gray-700 font-medium">Standard</span></div>
-                                    <div className="flex items-center gap-3"><div className="w-3.5 h-3.5 rounded-full bg-gray-400 border border-gray-600 shadow-sm"></div><span className="text-gray-700 font-medium">Empty Structure</span></div>
-                                </div>
+                            <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 z-[400] flex flex-col items-start">
+                                {!isLegendOpen ? (
+                                    <button 
+                                        onClick={() => setIsLegendOpen(true)}
+                                        className="bg-white/95 backdrop-blur-sm p-2.5 sm:p-3 rounded-lg sm:rounded-full shadow-lg border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2 font-bold text-xs uppercase tracking-wider transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                                        <span className="hidden sm:inline">Legend</span>
+                                    </button>
+                                ) : (
+                                    <div className="bg-white/95 backdrop-blur-sm p-3 sm:p-4 rounded-xl shadow-lg border border-gray-200 max-w-[160px] sm:max-w-none">
+                                        <div className="flex justify-between items-center mb-2 sm:mb-3">
+                                            <h4 className="font-bold text-gray-900 text-[10px] sm:text-xs uppercase tracking-wider">Map Legend</h4>
+                                            <button onClick={() => setIsLegendOpen(false)} className="text-gray-400 hover:text-gray-700 p-1 -mr-1 rounded hover:bg-gray-200 transition-colors">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                        </div>
+                                        <div className="space-y-1.5 sm:space-y-2.5">
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-red-600 border border-red-800 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">Out of School</span></div>
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-blue-500 border border-blue-700 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">PWD Present</span></div>
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-orange-500 border border-orange-700 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">Senior Citizen</span></div>
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-pink-500 border border-pink-700 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">Solo Parent</span></div>
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-purple-500 border border-purple-700 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">4Ps Beneficiary</span></div>
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-yellow-500 border border-yellow-700 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">Indigenous (IP)</span></div>
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-cyan-500 border border-cyan-700 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">OFW Present</span></div>
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-emerald-500 border border-emerald-700 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">Standard</span></div>
+                                            <div className="flex items-center gap-2 sm:gap-3"><div className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 rounded-full bg-gray-400 border border-gray-600 shadow-sm"></div><span className="text-gray-700 font-medium text-[10px] sm:text-sm leading-tight">Empty Structure</span></div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         {/* SLIDING DETAILS PANEL */}
                         <div className={`absolute top-0 right-0 h-full w-full md:w-[500px] bg-white border-l border-gray-200 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] transform transition-transform duration-300 ease-in-out z-[500] flex flex-col ${selectedHousehold ? 'translate-x-0' : 'translate-x-full'}`}>
+                            {/* FIXED CLOSE BUTTON */}
                             {selectedHousehold && (
-                                <div className="flex flex-col h-full overflow-hidden">
-                                    <div className="p-6 shrink-0 border-b border-gray-100 relative bg-gray-50/50">
-                                        <button onClick={() => setSelectedHousehold(null)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                        </button>
+                                <button 
+                                    onClick={() => setSelectedHousehold(null)} 
+                                    className="absolute top-4 right-4 p-2 z-[600] text-gray-500 bg-white/80 backdrop-blur-sm hover:text-gray-800 hover:bg-gray-200 rounded-full transition-colors shadow-sm border border-gray-200"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            )}
 
-                                        <div className="flex justify-between items-start mb-4 pr-8">
+                            {selectedHousehold && (
+                                <div className="flex flex-col h-full overflow-y-auto">
+                                    <div className="p-6 shrink-0 border-b border-gray-100 relative bg-gray-50/50 pt-10">
+                                        <div className="flex justify-between items-start mb-4 pr-10">
                                             <div>
                                                 <h2 className="text-xl font-bold text-gray-900">{selectedHousehold.properties.head_of_household}</h2>
                                                 <p className="text-gray-500 text-sm mt-0.5">{selectedHousehold.properties.address}</p>
@@ -415,7 +509,7 @@ export default function MappingPage() {
                                                 </button>
                                                 <button onClick={() => {
                                                     const idToDelete = selectedHousehold.id || selectedHousehold.properties.id;
-                                                    if (idToDelete) handleDeleteHousehold(idToDelete as number);
+                                                    if (idToDelete) setHouseholdToDelete(idToDelete as number);
                                                 }} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 rounded-lg text-xs font-semibold transition-colors ml-auto">
                                                     Delete
                                                 </button>
@@ -452,7 +546,7 @@ export default function MappingPage() {
                                     </div>
 
                                     {/* THE NESTED RESIDENT TABLE */}
-                                    <div className="flex-1 overflow-y-auto p-6">
+                                    <div className="flex-1 p-6">
                                         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
                                             Residents ({selectedHousehold.properties.member_count})
                                         </h3>
@@ -471,13 +565,22 @@ export default function MappingPage() {
                                                                 </div>
                                                                 <p className="text-xs text-gray-500 mt-1">{person.sex} • {person.civil_status} • {person.relationship_to_head !== 'Head' ? person.relationship_to_head : 'Household Head'}</p>
                                                             </div>
-                                                            <button 
-                                                                onClick={() => handleEditResidentClick(person.id)}
-                                                                className="p-1.5 border border-gray-200 rounded text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors bg-white opacity-0 group-hover:opacity-100" 
-                                                                title="Edit Details"
-                                                            >
-                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                                            </button>
+                                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button 
+                                                                    onClick={() => handleEditResidentClick(person.id)}
+                                                                    className="p-1.5 border border-gray-200 rounded text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors bg-white" 
+                                                                    title="Edit Details"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => setResidentToRemove(person)}
+                                                                    className="p-1.5 border border-gray-200 rounded text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors bg-white" 
+                                                                    title="Remove from Household"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                         
                                                         {(person.is_4ps_beneficiary || person.is_senior_citizen || person.is_pwd || person.is_solo_parent || person.is_indigenous || person.is_ofw || person.is_out_of_school) && (
@@ -516,8 +619,13 @@ export default function MappingPage() {
                     onClose={() => {
                         setIsModalOpen(false);
                         setPendingCoords(null);
+                        setIsConfirmingSave(false);
+                        setPendingHouseholdData(null);
                     }}
-                    onSave={handleSaveHousehold}
+                    onSave={(formData) => {
+                        setPendingHouseholdData(formData);
+                        setIsConfirmingSave(true);
+                    }}
                 />
             )}
             {isAssignModalOpen && selectedHousehold && (
@@ -530,6 +638,103 @@ export default function MappingPage() {
                     }}
                 />
             )}
+            {/* Modals for Confirmation */}
+            {isConfirmingSave && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-green-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-4">
+                                <Save className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Save Structure?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to {modalMode === 'edit' ? 'update this structure' : 'create this new structure'}?
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsConfirmingSave(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeSaveHousehold} className="flex-1 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors">
+                                    Yes, Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {householdToDelete && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-red-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                                <AlertTriangle className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Structure?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to permanently delete this structure? Any residents inside will be marked as unmapped. This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setHouseholdToDelete(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeDeleteHousehold} className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors">
+                                    Yes, Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {residentToRemove && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-red-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                                <UserMinus className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Remove Resident?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to remove <strong>{residentToRemove.first_name} {residentToRemove.last_name}</strong> from this household? They will be unmapped but not deleted from the registry.
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setResidentToRemove(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeRemoveResident} className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors">
+                                    Yes, Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+                        {isConfirmingResidentSave && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-blue-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                                <Save className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Save Resident Changes?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to update the details for <strong>{editingResident?.first_name} {editingResident?.last_name}</strong>?
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsConfirmingResidentSave(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeSaveResidentInfo} className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+                                    Yes, Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {isResidentEditOpen && editingResident && (
                 <ResidentModal 
                     mode="edit"
@@ -541,8 +746,13 @@ export default function MappingPage() {
                     onClose={() => {
                         setIsResidentEditOpen(false);
                         setEditingResident(null);
+                        setIsConfirmingResidentSave(false);
+                        setPendingResidentData(null);
                     }}
-                    onSave={handleSaveResidentInfo}
+                    onSave={(formData) => {
+                        setPendingResidentData(formData);
+                        setIsConfirmingResidentSave(true);
+                    }}
                 />
             )}
         </div>

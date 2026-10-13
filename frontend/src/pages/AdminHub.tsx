@@ -1,12 +1,14 @@
 import api from '../api';
 import { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../components/AuthContext";
+import { Database } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 interface AuditLog {
     id: number;
     model: string;
+    target: string;
     action: string;
     user: string;
     date: string;
@@ -38,6 +40,17 @@ interface SystemSettings {
     maintenance_mode: boolean;
     max_pending_requests_per_user: number;
     reservation_lead_time_days: number;
+    captain_message?: string;
+    barangay_classification?: string;
+    barangay_city?: string;
+    barangay_province?: string;
+    barangay_region?: string;
+    number_of_puroks?: string;
+    history_text?: string;
+    location_geography_text?: string;
+    community_culture_text?: string;
+    services_facilities_text?: string;
+    captain_image?: File | string | null;
 }
 
 export default function AdminHub() {
@@ -59,6 +72,15 @@ export default function AdminHub() {
 
     // Form States
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    const [actionFeedback, setActionFeedback] = useState<{ title: string; message: string; type: 'success' | 'error' | 'warning'; } | null>(null);
+    const [staffActionModal, setStaffActionModal] = useState<{
+        type: 'toggle_status' | 'delete_account' | 'reset_password' | 'change_role' | 'create_account';
+        userId?: number;
+        username: string;
+        newRole?: string;
+    } | null>(null);
+    const [resetPasswordInput, setResetPasswordInput] = useState("");
+    const [resetPasswordConfirmInput, setResetPasswordConfirmInput] = useState("");
     const [staffForm, setStaffForm] = useState({ username: "", email: "", password: "", role: "TANOD" });
     const [settingsForm, setSettingsForm] = useState<SystemSettings>({
         barangay_name: "", 
@@ -75,11 +97,27 @@ export default function AdminHub() {
         accept_reservations: true,
         maintenance_mode: false,
         max_pending_requests_per_user: 3,
-        reservation_lead_time_days: 2
+        reservation_lead_time_days: 2,
+        captain_message: "",
+        barangay_classification: "",
+        barangay_city: "",
+        barangay_province: "",
+        barangay_region: "",
+        number_of_puroks: "",
+        history_text: "",
+        location_geography_text: "",
+        community_culture_text: "",
+        services_facilities_text: "",
+        captain_image: null
     });
 
     const STAFF_ROLES = [
         { value: 'ADMIN', label: 'Admin' },
+        { value: 'STAFF', label: 'Staff' },
+        { value: 'CAPTAIN', label: 'Captain' },
+    ];
+    
+    const CREATABLE_ROLES = [
         { value: 'STAFF', label: 'Staff' },
         { value: 'CAPTAIN', label: 'Captain' },
     ];
@@ -142,68 +180,97 @@ export default function AdminHub() {
 
     const handleStaffSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsSubmitting(true);
-        try {
-            const res = await api.post(`/api/admin/staff-management/`, staffForm);
-            const data = res.data;
-            if ((res.status >= 200 && res.status < 300)) {
-                alert(data.message);
-                setStaffForm({ username: "", email: "", password: "", role: "TANOD" });
-                fetchData(); 
-            } else { alert(`Error: ${data.error || JSON.stringify(data)}`); }
-        } catch (error) { alert("Failed to create staff account."); } 
-        finally { setIsSubmitting(false); }
+        setStaffActionModal({ type: 'create_account', username: staffForm.username, newRole: staffForm.role });
     };
 
-    const handleToggleStatus = async (userId: number) => {
-        if (!window.confirm("Change this account's access status?")) return;
-        try {
-            const res = await api.patch(`/api/admin/staff-management/`, { user_id: userId, action_type: 'toggle_status' });
-            if ((res.status >= 200 && res.status < 300)) fetchData();
-            else alert((res.data).error);
-        } catch (error) { console.error(error); }
+    const handleToggleStatus = (userId: number, username: string) => {
+        setStaffActionModal({ type: 'toggle_status', userId, username });
     };
 
-    const handleDeleteAccount = async (userId: number) => {
-        if (!window.confirm("Are you sure you want to PERMANENTLY DELETE this account? This cannot be undone.")) return;
+    const handleDeleteAccount = (userId: number, username: string) => {
+        setStaffActionModal({ type: 'delete_account', userId, username });
+    };
+
+    const handleResetPassword = (userId: number, username: string) => {
+        setResetPasswordInput("");
+        setResetPasswordConfirmInput("");
+        setStaffActionModal({ type: 'reset_password', userId, username });
+    };
+
+    const handleChangeRole = (userId: number, username: string, newRole: string) => {
+        setStaffActionModal({ type: 'change_role', userId, username, newRole });
+    };
+
+    const executeStaffAction = async () => {
+        if (!staffActionModal) return;
+        const { type, userId, newRole } = staffActionModal;
+        
+        if (type === 'create_account') {
+            setIsSubmitting(true);
+            try {
+                const res = await api.post(`/api/admin/staff-management/`, staffForm);
+                if (res.status >= 200 && res.status < 300) {
+                    setActionFeedback({ title: "Success", message: "Account created successfully.", type: "success" });
+                    setStaffForm({ username: "", email: "", password: "", role: "STAFF" });
+                    fetchData();
+                } else {
+                    setActionFeedback({ title: "Error", message: res.data.error || "An error occurred.", type: "error" });
+                }
+            } catch (error) {
+                setActionFeedback({ title: "Error", message: "Failed to create staff account.", type: "error" });
+            } finally {
+                setIsSubmitting(false);
+                setStaffActionModal(null);
+            }
+            return;
+        }
+
         try {
-            const res = await api.patch(`/api/admin/staff-management/`, { user_id: userId, action_type: 'delete_account' });
-            if ((res.status >= 200 && res.status < 300)) {
-                alert("Account deleted successfully.");
+            let payload: any = { user_id: userId, action_type: type };
+            if (type === 'reset_password') {
+                if (!resetPasswordInput) return setActionFeedback({ title: "Warning", message: "Password is required", type: "warning" });
+                if (resetPasswordInput !== resetPasswordConfirmInput) return setActionFeedback({ title: "Warning", message: "Passwords do not match", type: "warning" });
+                payload.new_password = resetPasswordInput;
+            }
+            if (type === 'change_role') {
+                payload.new_role = newRole;
+            }
+
+            const res = await api.patch(`/api/admin/staff-management/`, payload);
+            if (res.status >= 200 && res.status < 300) {
+                if (type === 'reset_password') {
+                    setActionFeedback({ title: "Success", message: res.data.message || "Password reset successfully.", type: "success" });
+                } else if (type === 'delete_account') {
+                    setActionFeedback({ title: "Success", message: "Account deleted successfully.", type: "success" });
+                }
                 fetchData();
-            } else alert((res.data).error);
-        } catch (error) { console.error(error); }
-    };
-
-    const handleResetPassword = async (userId: number) => {
-        const newPassword = window.prompt("Enter the new temporary password:");
-        if (!newPassword) return;
-        try {
-            const res = await api.patch(`/api/admin/staff-management/`, { user_id: userId, action_type: 'reset_password', new_password: newPassword });
-            const data = res.data;
-            alert(data.message || data.error);
-        } catch (error) { console.error(error); }
-    };
-
-    const handleChangeRole = async (userId: number, newRole: string) => {
-        if (!window.confirm(`Change this user's role to ${newRole}?`)) return;
-        try {
-            const res = await api.patch(`/api/admin/staff-management/`, { user_id: userId, action_type: 'change_role', new_role: newRole });
-            const data = res.data;
-            if ((res.status >= 200 && res.status < 300)) fetchData();
-            else alert(data.error);
-        } catch (error) { console.error(error); }
+            } else {
+                setActionFeedback({ title: "Error", message: res.data.error || "An error occurred.", type: "error" });
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setStaffActionModal(null);
+        }
     };
 
     const handleSettingsSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            const res = await api.post(`/api/system/settings/`, settingsForm);
+            const formData = new FormData();
+            Object.entries(settingsForm).forEach(([key, value]) => {
+                if (key === 'captain_image' && value instanceof File) {
+                    formData.append(key, value);
+                } else if (key !== 'captain_image') {
+                    formData.append(key, String(value));
+                }
+            });
+            const res = await api.post(`/api/system/settings/`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             const data = res.data;
-            if ((res.status >= 200 && res.status < 300)) { alert(data.message); fetchData(); } 
-            else { alert(`Error: ${data.error || JSON.stringify(data)}`); }
-        } catch (error) { alert("Failed to update settings."); } 
+            if ((res.status >= 200 && res.status < 300)) { setActionFeedback({ title: "Success", message: data.message, type: "success" }); fetchData(); } 
+            else { setActionFeedback({ title: "Error", message: data.error || JSON.stringify(data), type: "error" }); }
+        } catch (error) { setActionFeedback({ title: "Error", message: "Failed to update settings.", type: "error" }); } 
         finally { setIsSubmitting(false); }
     };
 
@@ -268,7 +335,7 @@ export default function AdminHub() {
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Role Assignment</label>
                                                 <select value={staffForm.role} onChange={(e) => setStaffForm({...staffForm, role: e.target.value})} className={inputClass}>
-                                                    {STAFF_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                                    {CREATABLE_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                                 </select>
                                             </div>
                                             <div>
@@ -313,19 +380,7 @@ export default function AdminHub() {
                                                             <div className="text-xs text-gray-500 mt-0.5">{staff.email}</div>
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            {staff.role === 'CAPTAIN' || staff.role === 'SECRETARY' ? (
-                                                                <span className="font-bold text-blue-700 text-xs tracking-wide">{staff.role}</span>
-                                                            ) : (
-                                                                <select 
-                                                                    value={staff.role}
-                                                                    onChange={(e) => handleChangeRole(staff.id, e.target.value)}
-                                                                    className="bg-transparent border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-semibold rounded-md focus:ring-0 focus:border-blue-500 block w-full py-1.5 px-2 cursor-pointer transition-colors"
-                                                                >
-                                                                    {STAFF_ROLES.map(r => (
-                                                                        <option key={r.value} value={r.value}>{r.label}</option>
-                                                                    ))}
-                                                                </select>
-                                                            )}
+                                                            <span className="font-bold text-gray-700 text-xs tracking-wide uppercase">{staff.role}</span>
                                                         </td>
                                                         <td className="px-6 py-4">
                                                             <span className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md ${staff.is_active ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
@@ -333,14 +388,18 @@ export default function AdminHub() {
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-4 text-right space-x-2">
-                                                            <button onClick={() => handleDeleteAccount(staff.id)} className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-md transition-colors shadow-sm">
-                                                                Delete
-                                                            </button>
-                                                            <button onClick={() => handleResetPassword(staff.id)} className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-md transition-colors shadow-sm">
-                                                                Reset Pw
-                                                            </button>
-                                                            {!(staff.role === 'CAPTAIN' || staff.role === 'SECRETARY') && (
-                                                                <button onClick={() => handleToggleStatus(staff.id)} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors shadow-sm ${staff.is_active ? 'text-red-700 bg-white border border-red-200 hover:bg-red-50' : 'text-green-700 bg-white border border-green-200 hover:bg-green-50'}`}>
+                                                            {staff.role.toUpperCase() !== 'ADMIN' && (
+                                                                <>
+                                                                    <button onClick={() => handleDeleteAccount(staff.id, staff.username)} className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-md transition-colors shadow-sm">
+                                                                        Delete
+                                                                    </button>
+                                                                    <button onClick={() => handleResetPassword(staff.id, staff.username)} className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-md transition-colors shadow-sm">
+                                                                        Reset Pw
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            {!(staff.role.toUpperCase() === 'ADMIN' || staff.role.toUpperCase() === 'CAPTAIN' || staff.role.toUpperCase() === 'SECRETARY') && (
+                                                                <button onClick={() => handleToggleStatus(staff.id, staff.username)} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors shadow-sm ${staff.is_active ? 'text-red-700 bg-white border border-red-200 hover:bg-red-50' : 'text-green-700 bg-white border border-green-200 hover:bg-green-50'}`}>
                                                                     {staff.is_active ? 'Revoke' : 'Restore'}
                                                                 </button>
                                                             )}
@@ -380,6 +439,15 @@ export default function AdminHub() {
                                             <option value="">All Modules</option>
                                             <option value="Resident">Residents</option>
                                             <option value="UserProfile">User Profiles</option>
+                                            <option value="BarangayOfficial">Barangay Council</option>
+                                            <option value="EmergencyContact">Emergency Contacts</option>
+                                            <option value="BarangaySettings">System Settings</option>
+                                            <option value="Announcement">Announcements</option>
+                                            <option value="Event">Calendar Events</option>
+                                            <option value="Reservation">Facility Reservations</option>
+                                            <option value="OfficialDocument">Documents & Records</option>
+                                            <option value="Household">Geomapping & Households</option>
+                                            <option value="SessionLog">Login Sessions</option>
                                         </select>
                                     </div>
                                     <div className="flex items-center gap-2 flex-1">
@@ -403,11 +471,11 @@ export default function AdminHub() {
                                                     <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{new Date(log.date).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})}</td>
                                                     <td className="px-6 py-4 font-semibold text-gray-900">{log.user}</td>
                                                     <td className="px-6 py-4">
-                                                        <span className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md border ${log.action === 'Created' ? 'text-green-700 bg-green-50 border-green-200/60' : log.action === 'Updated' ? 'text-blue-700 bg-blue-50 border-blue-200/60' : 'text-red-700 bg-red-50 border-red-200/60'}`}>
+                                                        <span className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md border ${log.action === 'Created' ? 'text-green-700 bg-green-50 border-green-200/60' : log.action === 'Updated' ? 'text-blue-700 bg-blue-50 border-blue-200/60' : log.action === 'Session Event' ? 'text-purple-700 bg-purple-50 border-purple-200/60' : 'text-red-700 bg-red-50 border-red-200/60'}`}>
                                                             {log.action}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-4 text-gray-700 font-medium whitespace-nowrap">{log.model} <span className="text-gray-400 text-xs font-normal">({log.id})</span></td>
+                                                    <td className="px-6 py-4 text-gray-700 font-medium"><div className="font-semibold text-gray-900">{log.target}</div><div className="text-gray-400 text-xs font-normal">{log.model}</div></td>
                                                     <td className="px-6 py-4 text-xs font-mono text-gray-500 max-w-sm truncate hover:whitespace-normal hover:break-words cursor-help" title={log.details}>
                                                         {log.details}
                                                     </td>
@@ -508,18 +576,168 @@ export default function AdminHub() {
                                             </div>
                                         </div>
 
+                                        {/* Homepage Content Group */}
+                                        <div className="space-y-5 bg-gray-50/50 p-6 rounded-xl border border-gray-100">
+                                            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                Resident Homepage Content
+                                            </h4>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                                <div className="col-span-2 md:col-span-1">
+                                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Captain's Profile Photo</label>
+                                                    <input type="file" accept="image/*" onChange={(e) => {
+                                                        if(e.target.files && e.target.files[0]) {
+                                                            setSettingsForm({...settingsForm, captain_image: e.target.files[0]})
+                                                        }
+                                                    }} className={inputClass} />
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Message from the Punong Barangay</label>
+                                                    <textarea value={settingsForm.captain_message || ""} onChange={(e) => setSettingsForm({...settingsForm, captain_message: e.target.value})} className={`${inputClass} min-h-[80px]`} placeholder="Mabuhay at maligayang pagdating..."></textarea>
+                                                </div>
+                                                
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Barangay Classification</label><input type="text" value={settingsForm.barangay_classification || ""} onChange={(e) => setSettingsForm({...settingsForm, barangay_classification: e.target.value})} className={inputClass} placeholder="Urban Barangay" /></div>
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">City</label><input type="text" value={settingsForm.barangay_city || ""} onChange={(e) => setSettingsForm({...settingsForm, barangay_city: e.target.value})} className={inputClass} placeholder="City of General Trias" /></div>
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Province</label><input type="text" value={settingsForm.barangay_province || ""} onChange={(e) => setSettingsForm({...settingsForm, barangay_province: e.target.value})} className={inputClass} placeholder="Cavite" /></div>
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Region</label><input type="text" value={settingsForm.barangay_region || ""} onChange={(e) => setSettingsForm({...settingsForm, barangay_region: e.target.value})} className={inputClass} placeholder="IV-A CALABARZON" /></div>
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Number of Puroks</label><input type="text" value={settingsForm.number_of_puroks || ""} onChange={(e) => setSettingsForm({...settingsForm, number_of_puroks: e.target.value})} className={inputClass} placeholder="4 Puroks" /></div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-6">
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">History</label><textarea value={settingsForm.history_text || ""} onChange={(e) => setSettingsForm({...settingsForm, history_text: e.target.value})} className={`${inputClass} min-h-[100px]`} /></div>
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Location & Geography</label><textarea value={settingsForm.location_geography_text || ""} onChange={(e) => setSettingsForm({...settingsForm, location_geography_text: e.target.value})} className={`${inputClass} min-h-[100px]`} /></div>
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Community & Culture</label><textarea value={settingsForm.community_culture_text || ""} onChange={(e) => setSettingsForm({...settingsForm, community_culture_text: e.target.value})} className={`${inputClass} min-h-[100px]`} /></div>
+                                                <div><label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Services & Facilities</label><textarea value={settingsForm.services_facilities_text || ""} onChange={(e) => setSettingsForm({...settingsForm, services_facilities_text: e.target.value})} className={`${inputClass} min-h-[100px]`} /></div>
+                                            </div>
+                                        </div>
                                         <div className="pt-2 flex justify-end">
                                             <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md">
                                                 {isSubmitting ? "Saving..." : "Save Configuration"}
                                             </button>
                                         </div>
-
                                     </form>
+                                    
+                                    {/* Database Tools */}
+                                    <div className="mt-12 pt-12 border-t-2 border-gray-100 border-dashed">
+                                        <div className="bg-white border border-gray-200 rounded-xl p-6 md:p-8 shadow-sm">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
+                                                <Database className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-bold text-gray-900">Database Tools</h3>
+                                                <p className="text-sm text-gray-500">Run manual system routines.</p>
+                                            </div>
+                                        </div>
+                                        <div className="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-center justify-between">
+                                            <div>
+                                                <h4 className="font-bold text-gray-900 text-sm">Force Demographic Snapshot</h4>
+                                                <p className="text-xs text-gray-500 mt-1 max-w-md">Manually capture and save the current live census data into the historical tracking database (for Capstone Defense demonstration).</p>
+                                            </div>
+                                            <button 
+                                                onClick={async () => {
+                                                    if(confirm("Generate a demographic snapshot now?")) {
+                                                        const res = await api.post('/api/admin/force-snapshot/');
+                                                        if(res.status === 200) setActionFeedback({ title: "Success", message: "Snapshot generated successfully!", type: "success" });
+                                                        else setActionFeedback({ title: "Error", message: "Error generating snapshot.", type: "error" });
+                                                    }
+                                                }}
+                                                className="mt-4 sm:mt-0 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors"
+                                            >
+                                                Generate Snapshot
+                                            </button>
+                                        </div>
+                                        </div>
+                                    </div>
+
                                 </div>
                             </div>
                         )}
 
                     </div>
+
+            {/* Staff Action Modal */}
+            {staffActionModal && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 animate-scale-in">
+                        <div className={`px-6 py-4 border-b flex justify-between items-center ${staffActionModal.type === 'delete_account' ? 'border-red-100 bg-red-50' : 'border-gray-100 bg-gray-50'}`}>
+                            <h3 className={`text-lg font-bold flex items-center gap-2 ${staffActionModal.type === 'delete_account' ? 'text-red-700' : 'text-gray-900'}`}>
+                                {staffActionModal.type === 'toggle_status' && 'Confirm Status Change'}
+                                {staffActionModal.type === 'delete_account' && 'Confirm Account Deletion'}
+                                {staffActionModal.type === 'reset_password' && 'Reset Account Password'}
+                                {staffActionModal.type === 'change_role' && 'Confirm Role Change'}
+                                {staffActionModal.type === 'create_account' && 'Confirm Account Creation'}
+                            </h3>
+                            <button onClick={() => setStaffActionModal(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            {staffActionModal.type === 'toggle_status' && (
+                                <p className="text-sm text-gray-600 mb-4">Are you sure you want to toggle the active status for the account <strong>{staffActionModal.username}</strong>?</p>
+                            )}
+                            {staffActionModal.type === 'delete_account' && (
+                                <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                    <p className="text-sm text-red-800"><strong>Warning:</strong> You are about to permanently delete <strong>{staffActionModal.username}</strong>. This action cannot be undone.</p>
+                                </div>
+                            )}
+                            {staffActionModal.type === 'change_role' && (
+                                <p className="text-sm text-gray-600 mb-4">Are you sure you want to change the role of <strong>{staffActionModal.username}</strong> to <strong>{staffActionModal.newRole}</strong>?</p>
+                            )}
+                            {staffActionModal.type === 'create_account' && (
+                                <p className="text-sm text-gray-600 mb-4">Are you sure you want to create a new <strong>{staffActionModal.newRole}</strong> account for <strong>{staffActionModal.username}</strong>?</p>
+                            )}
+                            {staffActionModal.type === 'reset_password' && (
+                                <div className="mb-4">
+                                    <p className="text-sm text-gray-600 mb-3">Please enter the new temporary password for <strong>{staffActionModal.username}</strong>:</p>
+                                    <input 
+                                        type="password"
+                                        value={resetPasswordInput}
+                                        onChange={(e) => setResetPasswordInput(e.target.value)}
+                                        className="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 mb-3"
+                                        placeholder="New Password"
+                                        autoFocus
+                                    />
+                                    <input 
+                                        type="password"
+                                        value={resetPasswordConfirmInput}
+                                        onChange={(e) => setResetPasswordConfirmInput(e.target.value)}
+                                        className="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="Confirm New Password"
+                                    />
+                                </div>
+                            )}
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button onClick={() => setStaffActionModal(null)} className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeStaffAction} className={`px-4 py-2 text-sm font-semibold text-white rounded-lg transition-colors ${staffActionModal.type === 'delete_account' ? 'bg-red-600 hover:bg-red-700 shadow-sm' : 'bg-blue-600 hover:bg-blue-700 shadow-sm'}`}>
+                                    {staffActionModal.type === 'delete_account' ? 'Yes, Delete' : 'Confirm Action'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Feedback Modal */}
+            {actionFeedback && (
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100 animate-scale-in text-center p-6">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${actionFeedback.type === 'success' ? 'bg-green-100 text-green-600' : actionFeedback.type === 'error' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                            {actionFeedback.type === 'success' && <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
+                            {actionFeedback.type === 'error' && <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>}
+                            {actionFeedback.type === 'warning' && <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">{actionFeedback.title}</h3>
+                        <p className="text-sm text-gray-600 mb-6">{actionFeedback.message}</p>
+                        <button onClick={() => setActionFeedback(null)} className="w-full px-4 py-2 text-sm font-bold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors shadow-sm">
+                            OK
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

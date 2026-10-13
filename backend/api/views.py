@@ -114,8 +114,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             key='access_token',
             value=access_token,
             httponly=True,
-            secure=not settings.DEBUG,   # True in production (HTTPS), False in dev
-            samesite='Lax',
+            secure=True,   # True in production (HTTPS), False in dev
+            samesite='None',
             max_age=30 * 60,             # 30 minutes (matches SIMPLE_JWT setting)
             path='/',
         )
@@ -125,8 +125,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             key='refresh_token',
             value=refresh_token,
             httponly=True,
-            secure=not settings.DEBUG,
-            samesite='Lax',
+            secure=True,
+            samesite='None',
             max_age=24 * 60 * 60,        # 1 day (matches SIMPLE_JWT setting)
             path='/',
         )
@@ -146,6 +146,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             }
         }
         response.status_code = 200
+
+        from .models import SessionLog
+        SessionLog.objects.create(user=user, action="Logged In")
 
         return response
 
@@ -169,34 +172,127 @@ class CustomTokenRefreshView(APIView):
                 key='access_token',
                 value=new_access_token,
                 httponly=True,
-                secure=not settings.DEBUG,
-                samesite='Lax',
+                secure=True,
+                samesite='None',
                 max_age=30 * 60,
                 path='/',
             )
             return response
         except Exception:
             response = Response({'error': 'Invalid or expired refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
-            response.delete_cookie('access_token', path='/', samesite='Lax')
-            response.delete_cookie('refresh_token', path='/', samesite='Lax')
+            response.delete_cookie('access_token', path='/', samesite='None')
+            response.delete_cookie('refresh_token', path='/', samesite='None')
             return response
 
+
+
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=400)
+            
+        from django.contrib.auth.models import User
+        user = User.objects.filter(email=email).first()
+        if not user:
+            # SECURITY: Return a generic success to prevent email enumeration
+            import time
+            time.sleep(0.5) # Simulate email sending delay
+            return Response({
+                "message": "If an account exists with this email, an OTP has been sent.", 
+                "user_id": -1 # Dummy ID
+            }, status=200)
+            
+        import random
+        from django.utils import timezone
+        from django.core.mail import send_mail
+        from .models import UserProfile
+        
+        otp = str(random.randint(100000, 999999))
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.email_otp = otp
+        profile.otp_created_at = timezone.now()
+        profile.otp_attempts = 0
+        profile.save()
+        
+        print(f"\n{'='*40}\nPASSWORD RESET OTP FOR {user.email}: {otp}\n{'='*40}\n")
+        
+        try:
+            send_mail(
+                'Password Reset Verification Code',
+                f'Your 6-digit verification code is: {otp}',
+                'no-reply@barangay.gov',
+                [user.email],
+                fail_silently=True, 
+            )
+        except Exception:
+            pass
+            
+        return Response({"message": "If an account exists with this email, an OTP has been sent.", "user_id": user.id})
+
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        otp = request.data.get('otp')
+        new_password = request.data.get('new_password')
+        
+        if not all([user_id, otp, new_password]):
+            return Response({"error": "Missing required fields."}, status=400)
+            
+        from django.contrib.auth.models import User
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return Response({"error": "Invalid OTP."}, status=400)
+            
+        from .models import UserProfile
+        profile = getattr(user, 'otp_profile', None)
+        if not profile or profile.email_otp != otp:
+            if profile:
+                profile.otp_attempts += 1
+                profile.save()
+            return Response({"error": "Invalid OTP."}, status=400)
+            
+        # Verify age of OTP (e.g. 10 mins)
+        from django.utils import timezone
+        import datetime
+        if not profile.otp_created_at or timezone.now() - profile.otp_created_at > datetime.timedelta(minutes=10):
+            return Response({"error": "OTP has expired."}, status=400)
+            
+        user.set_password(new_password)
+        user.save()
+        
+        # Clear OTP
+        profile.email_otp = ''
+        profile.save()
+        
+        # Log the password reset
+        from .models import SessionLog
+        SessionLog.objects.create(user=user, action="Password Reset")
+        
+        return Response({"message": "Password reset successfully."})
 
 class LogoutView(APIView):
     """Clears the HttpOnly auth cookies."""
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        if request.user and request.user.is_authenticated:
+            from .models import SessionLog
+            SessionLog.objects.create(user=request.user, action='Logged Out')
         response = Response({'detail': 'Logged out successfully.'})
         response.delete_cookie(
             'access_token', 
             path='/',
-            samesite='Lax'
+            samesite='None'
         )
         response.delete_cookie(
             'refresh_token', 
             path='/',
-            samesite='Lax'
+            samesite='None'
         )
         return response
 
@@ -495,6 +591,9 @@ class CreateProfileUpdateRequestView(generics.CreateAPIView):
     serializer_class = ProfileUpdateRequestSerializer
     permission_classes = [IsAuthenticated]
 
+
+
+
     def perform_create(self, serializer):
         try:
             resident = self.request.user.resident_profile
@@ -555,6 +654,9 @@ class CertificateRequestView(generics.ListCreateAPIView):
     def get_queryset(self):
         return CertificateRequest.objects.filter(user=self.request.user)
 
+
+
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
@@ -565,6 +667,9 @@ class PermitRequestView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return PermitRequest.objects.filter(user=self.request.user)
+
+
+
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -587,6 +692,9 @@ class IncidentReportViewSet(viewsets.ModelViewSet):
         if role in ['TANOD', 'SECRETARY', 'CAPTAIN']:
             return IncidentReport.objects.all().order_by('-created_at')
         return IncidentReport.objects.filter(user=user).order_by('-created_at')
+
+
+
 
     def perform_create(self, serializer):
         # Automatically attaches the logged-in user so they can't spoof being someone else
@@ -733,6 +841,9 @@ class ResidentViewSet(viewsets.ModelViewSet):
     ordering_fields = ['first_name', 'last_name', 'purok', 'birth_date', 'id']
     ordering = ['-id']
 
+
+
+
     def perform_create(self, serializer):
         # All manually created residents go to the approval queue
         serializer.save(is_approved=False, submitted_by=self.request.user if self.request.user.is_authenticated else None)
@@ -774,6 +885,15 @@ class ResidentViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('is_4ps_beneficiary') in ['True', 'true', '1']:
             welfare_q |= Q(is_4ps_beneficiary=True)
             has_welfare = True
+        if self.request.query_params.get('is_indigenous') in ['True', 'true', '1']:
+            welfare_q |= Q(is_indigenous=True)
+            has_welfare = True
+        if self.request.query_params.get('is_ofw') in ['True', 'true', '1']:
+            welfare_q |= Q(is_ofw=True)
+            has_welfare = True
+        if self.request.query_params.get('is_out_of_school') in ['True', 'true', '1']:
+            welfare_q |= Q(is_out_of_school=True)
+            has_welfare = True
             
         if has_welfare:
             qs = qs.filter(welfare_q)
@@ -785,15 +905,22 @@ class ResidentViewSet(viewsets.ModelViewSet):
         if not hasattr(request.user, 'otp_profile') or request.user.otp_profile.role != 'CAPTAIN':
             return Response({"error": "Only the Captain can approve residents."}, status=status.HTTP_403_FORBIDDEN)
         ids = request.data.get('ids', [])
-        Resident.objects.filter(id__in=ids, is_approved=False).update(is_approved=True)
+        residents = Resident.objects.filter(id__in=ids, is_approved=False)
+        for resident in residents:
+            resident.is_approved = True
+            resident._change_reason = "Approved from Queue"
+            resident.save()
         return Response({"message": f"{len(ids)} residents approved successfully."}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['post'], url_path='bulk-deny')
+    @action(detail=False, methods=['post', 'delete'], url_path='bulk-deny')
     def bulk_deny(self, request):
         if not hasattr(request.user, 'otp_profile') or request.user.otp_profile.role != 'CAPTAIN':
             return Response({"error": "Only the Captain can deny residents."}, status=status.HTTP_403_FORBIDDEN)
         ids = request.data.get('ids', [])
-        Resident.objects.filter(id__in=ids, is_approved=False).delete()
+        residents = Resident.objects.filter(id__in=ids, is_approved=False)
+        for resident in residents:
+            resident._change_reason = "Denied from Queue"
+            resident.delete()
         return Response({"message": f"{len(ids)} residents denied and removed."}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='import-excel')
@@ -952,7 +1079,7 @@ class ResidentViewSet(viewsets.ModelViewSet):
             cell.font = openpyxl.styles.Font(bold=True)
 
         # Fetch all residents and map them to the 17 columns
-        residents = Resident.objects.all().order_by('last_name', 'first_name')
+        residents = Resident.objects.filter(is_approved=True).order_by('last_name', 'first_name')
         
         for res in residents:
             birthdate_str = res.birth_date.strftime('%Y-%m-%d') if res.birth_date else ""
@@ -1142,6 +1269,9 @@ class ReservationViewSet(viewsets.ModelViewSet):
         reservation.save()
         return Response({"message": f"Reservation successfully {new_status.lower()}."})
 
+
+
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
     
@@ -1169,6 +1299,8 @@ class EventViewSet(viewsets.ModelViewSet):
             return [IsInternalUser()] 
         return super().get_permissions()
 
+
+
     def perform_create(self, serializer):
         serializer.save(organizer=self.request.user)
 
@@ -1181,12 +1313,26 @@ from rest_framework.response import Response
 @permission_classes([AllowAny])  # <--- NEW: This explicitly opens the endpoint to the public
 def calendar_feed(request):
     events = Event.objects.all()
+    
+    # Filter out AGENDA for residents (only STAFF and above can see)
+    if not request.user.is_authenticated:
+        events = events.exclude(event_type='AGENDA')
+    else:
+        try:
+            role = request.user.otp_profile.role.upper()
+            if role not in ['ADMIN', 'STAFF', 'SECRETARY', 'CAPTAIN']:
+                events = events.exclude(event_type='AGENDA')
+        except Exception:
+            events = events.exclude(event_type='AGENDA')
+            
     calendar_data = []
     
     for event in events:
         calendar_data.append({
             'id': f"event_{event.id}",
+            'raw_id': event.id,
             'title': event.title,
+            'description': event.description,
             'start': event.start_time,
             'end': event.end_time,
             'type': event.event_type 
@@ -1209,6 +1355,33 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         
         # Keep staff-only restriction for creating, updating, or deleting
         return [IsInternalUser()]
+
+    def get_queryset(self):
+        qs = Announcement.objects.all().order_by('-created_at')
+        
+        # When unarchiving, we need to be able to find the archived object!
+        if self.action == 'unarchive':
+            return qs
+            
+        if self.request.query_params.get('archived') == 'true':
+            return qs.filter(is_archived=True)
+        return qs.filter(is_archived=False)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsInternalUser])
+    def archive(self, request, pk=None):
+        announcement = self.get_object()
+        announcement.is_archived = True
+        announcement.save()
+        return Response({'status': 'archived'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsInternalUser])
+    def unarchive(self, request, pk=None):
+        announcement = self.get_object()
+        announcement.is_archived = False
+        announcement.save()
+        return Response({'status': 'unarchived'})
+
+
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -1243,7 +1416,7 @@ class DashboardStatsView(APIView):
         age_60_date = sub_years(today, 60)
 
         # 1. Base Querysets
-        residents = Resident.objects.all()
+        residents = Resident.objects.filter(is_approved=True)
         households = Household.objects.all()
 
         total_residents = residents.count()
@@ -1277,6 +1450,9 @@ class DashboardStatsView(APIView):
             {"name": "PWD", "value": residents.filter(is_pwd=True).count()},
             {"name": "Solo Parent", "value": residents.filter(is_solo_parent=True).count()},
             {"name": "Senior", "value": residents.filter(is_senior_citizen=True).count()},
+            {"name": "Indigenous", "value": residents.filter(is_indigenous=True).count()},
+            {"name": "OFW", "value": residents.filter(is_ofw=True).count()},
+            {"name": "Out of School", "value": residents.filter(is_out_of_school=True).count()},
         ]
 
         # Voter
@@ -1363,33 +1539,37 @@ class DashboardStatsView(APIView):
         return Response(stats)
 
 def get_demographics_snapshot():
-    total_residents = Resident.objects.count()
+    total_residents = Resident.objects.filter(is_approved=True).count()
     if total_residents == 0:
         return "No residents currently registered in the database."
 
     # Sex distribution
-    sex_counts = dict(Resident.objects.values_list('sex').annotate(count=Count('id')))
+    sex_counts = dict(Resident.objects.filter(is_approved=True).values_list('sex').annotate(count=Count('id')))
 
     # Purok distribution
-    purok_counts = dict(Resident.objects.values_list('purok').annotate(count=Count('id')))
+    purok_counts = dict(Resident.objects.filter(is_approved=True).values_list('purok').annotate(count=Count('id')))
 
-    # Welfare statistics
-    welfare_stats = Resident.objects.aggregate(
+    # Welfare and Status statistics
+    status_stats = Resident.objects.filter(is_approved=True).aggregate(
         four_ps=Count('id', filter=Q(is_4ps_beneficiary=True)),
         seniors=Count('id', filter=Q(is_senior_citizen=True)),
         pwd=Count('id', filter=Q(is_pwd=True)),
         solo_parents=Count('id', filter=Q(is_solo_parent=True)),
+        indigenous=Count('id', filter=Q(is_indigenous=True)),
+        ofw=Count('id', filter=Q(is_ofw=True)),
+        out_of_school=Count('id', filter=Q(is_out_of_school=True)),
+        registered_voter=Count('id', filter=Q(is_registered_voter=True)),
     )
 
     # Age brackets
     today = date.today()
     # Age calculation approximations based on birth_date
-    children = Resident.objects.filter(birth_date__gt=today.replace(year=today.year - 15)).count()
+    children = Resident.objects.filter(is_approved=True, birth_date__gt=today.replace(year=today.year - 15)).count()
     youth = Resident.objects.filter(
         birth_date__lte=today.replace(year=today.year - 15),
         birth_date__gt=today.replace(year=today.year - 31)
     ).count()
-    seniors_age = Resident.objects.filter(birth_date__lte=today.replace(year=today.year - 60)).count()
+    seniors_age = Resident.objects.filter(is_approved=True, birth_date__lte=today.replace(year=today.year - 60)).count()
     adults = total_residents - (children + youth + seniors_age)
 
     return f"""
@@ -1403,10 +1583,15 @@ def get_demographics_snapshot():
         * Working-age Adults (31-59): {max(adults, 0)}
         * Senior Citizens (60+): {seniors_age}
     - Social Welfare Programs & Vulnerabilities:
-        * 4Ps Beneficiaries: {welfare_stats['four_ps']}
-        * PWD (Persons with Disabilities): {welfare_stats['pwd']}
-        * Solo Parents: {welfare_stats['solo_parents']}
-        * Tagged Senior Citizens: {welfare_stats['seniors']}
+        * 4Ps Beneficiaries: {status_stats['four_ps']}
+        * PWD (Persons with Disabilities): {status_stats['pwd']}
+        * Solo Parents: {status_stats['solo_parents']}
+        * Tagged Senior Citizens: {status_stats['seniors']}
+        * Indigenous Peoples (IP): {status_stats['indigenous']}
+        * Overseas Filipino Workers (OFW): {status_stats['ofw']}
+        * Out of School Youth (OSY): {status_stats['out_of_school']}
+    - Civic Status:
+        * Registered Voters: {status_stats['registered_voter']}
     """
 
 class StaffDemographicsAiView(APIView):
@@ -1431,20 +1616,38 @@ class StaffDemographicsAiView(APIView):
             return Response({"error": "Prompt is required."}, status=400)
 
         try:
-            # Generate the live context
+            from .models import DemographicSnapshot
             demographics_data = get_demographics_snapshot()
+
+            snapshots = DemographicSnapshot.objects.all().order_by('snapshot_date')
+            historical_context = "HISTORICAL MONTHLY SNAPSHOTS (Use this for trend and comparison questions):\\n"
+            for s in snapshots:
+                month_name = s.snapshot_date.strftime("%B %Y")
+                historical_context += f"""
+[{month_name} Snapshot - As of {s.snapshot_date}]
+Total Residents: {s.total_residents}
+Age Groups: Children={s.children}, Youth={s.youth}, Adults={s.adults}, Seniors={s.seniors}
+Sectors: 4Ps={s.four_ps}, PWD={s.pwd}, Solo Parents={s.solo_parents}, OFW={s.ofw}, OSY={s.out_of_school}
+Registered Voters: {s.registered_voters}
+Gender: Male={s.male}, Female={s.female}
+"""
 
             system_instruction = f"""
             You are the Barangay Executive Data Analyst for Barangay officials (Captains and Secretaries).
             Your purpose is to answer analytical, statistical, and operational questions based strictly on the barangay census data provided.
 
+            Here is the CURRENT LIVE resident census data (use this for "current" or "now" questions):
             {demographics_data}
+            
+            {historical_context}
 
-            Guidelines:
-            1. Calculate ratios, percentages, and comparisons accurately based on the snapshot.
-            2. Offer actionable community planning insights when requested (e.g., resource allocation per Purok, healthcare drives for seniors).
-            3. Maintain a formal, executive, objective tone.
-            4. If asked about specific personal details of individuals, state that individual PII is strictly protected and cannot be retrieved.
+            CRITICAL Guidelines:
+            - Answer the questions accurately based ONLY on the provided demographic snapshots.
+            - If asked for yearly demographic figures (e.g. "population for 2026"), ALWAYS use the December snapshot of that year. Do NOT sum the months together.
+            - If asked for trends or changes (e.g. "from January to June"), compare the data between those specific monthly snapshots.
+            - Offer actionable community planning insights when requested.
+            - Maintain a formal, executive, objective tone.
+            - If asked about individuals, state that individual PII is strictly protected and cannot be retrieved.
             """
 
             model = genai.GenerativeModel(
@@ -1472,17 +1675,59 @@ class AiAssistantView(APIView):
             return Response({"error": "Prompt is required"}, status=400)
 
         try:
-            system_instruction = """
-            You are the official AI Assistant for BarangayKo. 
-            Your job is to help residents with local government services.
-            You can answer questions about:
-            - Certificate requirements (Clearance, Residency, Indigency).
-            - Permit procedures and fees.
-            - Standard office hours (Monday to Friday, 8 AM to 5 PM).
-            - Welfare programs.
-            Keep your answers concise, friendly, and professional. 
-            If someone asks a question completely unrelated to the barangay or local government, politely decline to answer and redirect them to barangay services.
+            from .models import BarangaySettings, EmergencyContact, BarangayOfficial
+            
+            # 1. Fetch live context from the database
+            settings = BarangaySettings.objects.first()
+            contacts = EmergencyContact.objects.all()
+            officials = BarangayOfficial.objects.all().order_by('order')
+
+            # 2. Build Context Strings
+            b_name = settings.barangay_name if settings else "the Barangay"
+            
+            settings_context = ""
+            if settings:
+                settings_context = f"""
+                Barangay Name: {settings.barangay_name}
+                Address: {settings.barangay_hall_address}
+                Contact Number: {settings.official_contact_number}
+                Contact Email: {settings.official_contact_email}
+                Classification: {settings.barangay_classification}, {settings.barangay_city}, {settings.barangay_province}, {settings.barangay_region}
+                Puroks: {settings.number_of_puroks}
+                
+                History: {settings.history_text}
+                Location & Geography: {settings.location_geography_text}
+                Community & Culture: {settings.community_culture_text}
+                Services & Facilities: {settings.services_facilities_text}
+                """
+                
+            contacts_context = "\\n".join([f"- {c.name} ({c.category}): {c.phone} - {c.description}" for c in contacts])
+            officials_context = "\\n".join([f"- {o.name} (Position: {o.position}, Committee: {o.committee})" for o in officials])
+
+            # 3. Construct System Instruction
+            system_instruction = f"""
+            You are the official AI Assistant for {b_name}. 
+            Your job is to help residents with local government services, inquiries, and information.
+            
+            Here is the official, live data for your barangay. You MUST use this data to answer questions accurately. Do not invent information.
+            
+            [BARANGAY DETAILS]
+            {settings_context}
+            
+            [EMERGENCY CONTACTS]
+            {contacts_context}
+            
+            [BARANGAY OFFICIALS & COUNCIL]
+            {officials_context}
+            
+            Guidelines:
+            - Answer questions accurately using the context provided above.
+            - If asked about contact numbers, provide the specific hotlines from the Emergency Contacts list.
+            - If asked about who is in charge of something, check the Barangay Officials list and their committees.
+            - Keep your answers concise, friendly, and professional. Use formatting (bullet points, bold text) to make it easy to read.
+            - If someone asks a question completely unrelated to the barangay or local government, politely decline to answer and redirect them to barangay services.
             """
+
             model = genai.GenerativeModel(
                 model_name="gemini-3.1-flash-lite",
                 system_instruction=system_instruction
@@ -1525,6 +1770,20 @@ class OfficialDocumentViewSet(viewsets.ModelViewSet):
     ordering_fields = ['title', 'document_type', 'uploaded_at']
     ordering = ['-uploaded_at'] 
 
+
+
+
+    
+    def get_queryset(self):
+        return OfficialDocument.objects.all().order_by('-uploaded_at')
+
+    @action(detail=True, methods=['post'], permission_classes=[IsInternalUser])
+    def archive(self, request, pk=None):
+        document = self.get_object()
+        document.is_archived = True
+        document.save()
+        return Response({'status': 'archived'})
+
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)
 
@@ -1563,7 +1822,7 @@ class AdminAuditLogAPIView(APIView):
         # Action mapping to simple-history types
         action_map_reverse = {'Created': '+', 'Updated': '~', 'Deleted': '-'}
 
-        def apply_filters(queryset):
+        def apply_filters(queryset, is_session_log=False):
             if start_date:
                 queryset = queryset.filter(history_date__gte=start_date)
             if end_date:
@@ -1574,9 +1833,15 @@ class AdminAuditLogAPIView(APIView):
                 except ValueError:
                     pass
             if action_filter and action_filter in action_map_reverse:
-                queryset = queryset.filter(history_type=action_map_reverse[action_filter])
+                if is_session_log:
+                    return queryset.none()
+                else:
+                    queryset = queryset.filter(history_type=action_map_reverse[action_filter])
             if user_filter:
-                queryset = queryset.filter(history_user__username__icontains=user_filter)
+                if is_session_log:
+                    queryset = queryset.filter(user__username__icontains=user_filter)
+                else:
+                    queryset = queryset.filter(history_user__username__icontains=user_filter)
             return queryset
 
         # 1. Fetch the logs from all tracked models based on model_filter
@@ -1589,6 +1854,25 @@ class AdminAuditLogAPIView(APIView):
             querysets.append(apply_filters(IncidentReport.history.all()))
         if not model_filter or model_filter == 'UserProfile':
             querysets.append(apply_filters(UserProfile.history.all()))
+        if not model_filter or model_filter == 'BarangayOfficial':
+            querysets.append(apply_filters(BarangayOfficial.history.all()))
+        if not model_filter or model_filter == 'BarangaySettings':
+            querysets.append(apply_filters(BarangaySettings.history.all()))
+        if not model_filter or model_filter == 'EmergencyContact':
+            querysets.append(apply_filters(EmergencyContact.history.all()))
+        if not model_filter or model_filter == 'Announcement':
+            querysets.append(apply_filters(Announcement.history.all()))
+        if not model_filter or model_filter == 'Event':
+            querysets.append(apply_filters(Event.history.all()))
+        if not model_filter or model_filter == 'Reservation':
+            querysets.append(apply_filters(Reservation.history.all()))
+        if not model_filter or model_filter == 'OfficialDocument':
+            querysets.append(apply_filters(OfficialDocument.history.all()))
+        if not model_filter or model_filter == 'Household':
+            querysets.append(apply_filters(Household.history.all()))
+        if not model_filter or model_filter == 'SessionLog':
+            from .models import SessionLog
+            querysets.append(apply_filters(SessionLog.objects.all(), is_session_log=True))
 
         # 2. Combine and sort
         combined_logs = sorted(
@@ -1611,9 +1895,22 @@ class AdminAuditLogAPIView(APIView):
 
         log_data = []
         for record in paginated_logs:
-            action_map = {'+': 'Created', '~': 'Updated', '-': 'Deleted'}
+            action_map = {'+': 'Created', '~': 'Updated', '-': 'Deleted', '*': 'Session Event'}
             model_name = record.__class__.__name__.replace('Historical', '')
             
+            if model_name == 'SessionLog':
+                action_user = record.user.username if record.user else "Deleted User"
+                log_data.append({
+                    "id": record.history_id,
+                    "model": "Session",
+                    "action": "Session Event",
+                    "user": action_user,
+                    "target": "Authentication",
+                    "date": record.history_date.isoformat(),
+                    "details": record.action,
+                })
+                continue
+
             # Detail Calculation
             details = ""
             if record.history_type == '~':
@@ -1631,12 +1928,31 @@ class AdminAuditLogAPIView(APIView):
             elif record.history_type == '-':
                 details = "Record deleted permanently"
 
-            target_info = f"({record.history_id})"
-            if model_name == "UserProfile":
-                try:
-                    target_info = f"({record.user.username})"
-                except Exception:
-                    target_info = f"(User ID: {getattr(record, 'user_id', 'Unknown')} - Deleted)"
+            # Dynamic Target Extraction
+            target_info = f"ID: {getattr(record, 'id', record.history_id)}"
+            
+            try:
+                if model_name == "UserProfile":
+                    target_info = record.user.username if record.user else f"User ID {getattr(record, 'user_id', '?')}"
+                elif model_name == "Resident":
+                    target_info = f"{getattr(record, 'first_name', '')} {getattr(record, 'last_name', '')}".strip()
+                elif model_name == "Household":
+                    target_info = f"Household at {getattr(record, 'address', '')[:30]}..." 
+                elif model_name in ["Announcement", "Event", "OfficialDocument"]:
+                    target_info = getattr(record, 'title', target_info)
+                elif model_name == "BarangayOfficial" or model_name == "EmergencyContact":
+                    target_info = getattr(record, 'name', target_info)
+                elif model_name == "Reservation":
+                    target_info = getattr(record, 'purpose', target_info)
+                elif model_name == "BarangaySettings":
+                    target_info = "Global Configuration"
+                elif model_name == "Session":
+                    target_info = "Authentication"
+            except Exception:
+                pass
+                
+            if not target_info:
+                target_info = f"ID: {record.history_id}"
 
             action_user = "System"
             try:
@@ -1648,6 +1964,7 @@ class AdminAuditLogAPIView(APIView):
             log_data.append({
                 "id": record.history_id,
                 "model": model_name,
+                "target": target_info,
                 "action": action_map.get(record.history_type, 'Unknown'),
                 "user": action_user,
                 "date": record.history_date.isoformat(),
@@ -1659,9 +1976,9 @@ class AdminAuditLogAPIView(APIView):
             response = HttpResponse(content_type='text/csv')
             response['Content-Disposition'] = 'attachment; filename="audit_logs.csv"'
             writer = csv.writer(response)
-            writer.writerow(['ID', 'Timestamp', 'User', 'Action', 'Model', 'Details'])
+            writer.writerow(['ID', 'Timestamp', 'User', 'Action', 'Model', 'Target', 'Details'])
             for log in log_data:
-                writer.writerow([log['id'], log['date'], log['user'], log['action'], log['model'], log['details']])
+                writer.writerow([log['id'], log['date'], log['user'], log['action'], log['model'], log['target'], log['details']])
             return response
 
         return Response({
@@ -1703,7 +2020,7 @@ class StaffManagementAPIView(APIView):
 
         # --- SECURITY FIX: Strict Whitelist ---
         staff_role_upper = staff_role.upper()
-        allowed_roles = ['ADMIN', 'STAFF', 'CAPTAIN', 'SECRETARY', 'TREASURER', 'COUNCIL', 'SK', 'TANOD']
+        allowed_roles = ['STAFF', 'CAPTAIN']
         
         if staff_role_upper not in allowed_roles:
             return Response(
@@ -1739,6 +2056,12 @@ class StaffManagementAPIView(APIView):
             target_profile = UserProfile.objects.filter(user=target_user).first()
             requester_role = request.user.otp_profile.role if hasattr(request.user, 'otp_profile') else 'RESIDENT'
             
+            if target_profile and target_profile.role == 'ADMIN' and action_type in ['delete_account', 'change_role', 'reset_password']:
+                return Response(
+                    {"error": "Admin accounts cannot be deleted, have their role changed, or have their passwords reset via the dashboard. Use the Forgot Password page to reset passwords."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             if target_profile and target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role not in ['CAPTAIN', 'ADMIN']:
                 return Response(
                     {"error": f"You do not have clearance to modify a {target_profile.role} account."}, 
@@ -1811,7 +2134,7 @@ class SystemSettingsView(APIView):
         except Exception:
             raise PermissionDenied("User profile not found.")
             
-        if role not in ['CAPTAIN', 'SECRETARY']:
+        if role not in ['CAPTAIN', 'SECRETARY', 'ADMIN']:
             raise PermissionDenied("Only Captains and Secretaries can modify system settings.")
 
         settings, created = BarangaySettings.objects.get_or_create(pk=1)
@@ -1849,3 +2172,25 @@ class BarangayOfficialViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         return [IsInternalUser()]
 
+
+
+class ForceDemographicSnapshotView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        try:
+            role = user.otp_profile.role.upper()
+        except Exception:
+            return Response({"error": "Unauthorized"}, status=403)
+            
+        if role not in ['ADMIN', 'SECRETARY', 'CAPTAIN']:
+            return Response({"error": "Access denied."}, status=403)
+            
+        from .scheduler import generate_monthly_snapshot
+        
+        success = generate_monthly_snapshot()
+        if success:
+            return Response({"message": "Successfully generated the demographic snapshot for today."})
+        else:
+            return Response({"error": "Failed to generate snapshot."}, status=500)

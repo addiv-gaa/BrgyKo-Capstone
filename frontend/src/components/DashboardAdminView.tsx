@@ -201,6 +201,9 @@ export default function DashboardAdminView() {
         'PWD': '#2563eb',        // blue-600
         'Solo Parent': '#db2777',// pink-600
         'Senior': '#ea580c',     // orange-600
+        'Indigenous': '#ca8a04', // yellow-600
+        'OFW': '#0891b2',        // cyan-600
+        'Out of School': '#dc2626', // red-600
     };
 
     const getPercentage = (value: number, total: number) => {
@@ -218,6 +221,9 @@ export default function DashboardAdminView() {
     const countPwd = getCount(stats.charts.welfare, 'PWD');
     const countSolo = getCount(stats.charts.welfare, 'Solo Parent');
     const countSenior = getCount(stats.charts.welfare, 'Senior');
+    const countIndigenous = getCount(stats.charts.welfare, 'Indigenous');
+    const countOfw = getCount(stats.charts.welfare, 'OFW');
+    const countOsy = getCount(stats.charts.welfare, 'Out of School');
     const countReg = getCount(stats.charts.voter, 'Registered');
     const countUnreg = getCount(stats.charts.voter, 'Not Registered');
     const countSingle = getCount(stats.charts.civil_status, 'Single');
@@ -265,7 +271,7 @@ export default function DashboardAdminView() {
 
             {/* Sub-menu for Vulnerable Sectors */}
             {activeFilter === 'vulnerable' && (
-                <div className="flex gap-4 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
+                <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
                     <span className="font-bold text-gray-800 mr-2">Filter by Sector:</span>
                     <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={welfareFilters.pwd} onChange={() => toggleWelfare('pwd')} className="w-4 h-4 text-blue-600 rounded" /> PWD</label>
                     <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={welfareFilters.senior} onChange={() => toggleWelfare('senior')} className="w-4 h-4 text-orange-600 rounded" /> Senior Citizen</label>
@@ -293,7 +299,7 @@ export default function DashboardAdminView() {
                                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                                 <select 
                                     value={purokFilter} 
                                     onChange={e => { setPurokFilter(e.target.value); setPage(1); }}
@@ -372,11 +378,11 @@ export default function DashboardAdminView() {
                     {/* 1. Population by Gender */}
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                         <h2 className="text-sm font-bold text-gray-800 mb-4">Population by Gender</h2>
-                        <div className="flex items-center justify-start h-64">
-                            <div className="w-1/2 h-full relative">
+                        <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start h-auto sm:h-64">
+                            <div className="w-full sm:w-1/2 h-48 sm:h-full relative shrink-0">
                                 <ResponsiveContainer width="100%" height="100%" debounce={50}>
                                     <PieChart>
-                                        <Pie data={stats.charts.gender} innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value" stroke="none" isAnimationActive={false}>
+                                        <Pie data={stats.charts.gender} innerRadius="55%" outerRadius="80%" paddingAngle={2} dataKey="value" stroke="none" isAnimationActive={false}>
                                             {stats.charts.gender?.map((entry: any, index: number) => (
                                                 <Cell key={`cell-${index}`} fill={BINARY_COLORS[index % BINARY_COLORS.length]} />
                                             ))}
@@ -388,7 +394,7 @@ export default function DashboardAdminView() {
                                     <span className="text-xl font-bold text-gray-900">{totalGender.toLocaleString()}</span>
                                 </div>
                             </div>
-                            <div className="w-1/2 flex flex-col justify-center gap-3 pl-2">
+                            <div className="w-full sm:w-1/2 flex flex-wrap sm:flex-col justify-center gap-3 mt-4 sm:mt-0 sm:pl-2 text-center sm:text-left">
                                 <div className="flex items-center gap-2 text-sm">
                                     <span className="w-3 h-3 bg-[#14532d] rounded-sm shrink-0"></span>
                                     <span className="text-gray-600">Male:</span>
@@ -405,7 +411,7 @@ export default function DashboardAdminView() {
 
                     {/* 2. Resident AI Activity (Area Chart) */}
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex flex-wrap gap-2 justify-between items-center mb-6">
                             <h2 className="text-sm font-bold text-gray-800">AI Activity ({currentYear})</h2>
                             <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">
                                 Queries: {stats.chatbot_queries?.toLocaleString()}
@@ -426,13 +432,16 @@ export default function DashboardAdminView() {
 
                     {/* 3. Welfare Coverage (Vulnerable Sectors) */}
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
                             <h2 className="text-sm font-bold text-gray-800">Vulnerable Sectors</h2>
                             <div className="flex gap-1.5 flex-wrap justify-end">
                                 <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-[10px] font-bold">4Ps: {count4ps.toLocaleString()}</span>
                                 <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold">PWD: {countPwd.toLocaleString()}</span>
                                 <span className="bg-pink-100 text-pink-700 px-2 py-1 rounded text-[10px] font-bold">Solo: {countSolo.toLocaleString()}</span>
                                 <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-[10px] font-bold">Senior: {countSenior.toLocaleString()}</span>
+                                <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-[10px] font-bold">IP: {countIndigenous.toLocaleString()}</span>
+                                <span className="bg-cyan-100 text-cyan-700 px-2 py-1 rounded text-[10px] font-bold">OFW: {countOfw.toLocaleString()}</span>
+                                <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-bold">OSY: {countOsy.toLocaleString()}</span>
                             </div>
                         </div>
                         <div className="h-64">
@@ -457,7 +466,7 @@ export default function DashboardAdminView() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* 5. Voter Distribution (Dashboard specific) */}
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
                             <h2 className="text-sm font-bold text-gray-800">Voter Status</h2>
                             <div className="flex gap-1.5 flex-wrap justify-end">
                                 <span className="bg-[#14532d] text-white px-2 py-1 rounded text-[10px] font-bold">Reg: {countReg.toLocaleString()}</span>
@@ -467,7 +476,7 @@ export default function DashboardAdminView() {
                         <div className="h-56">
                             <ResponsiveContainer width="100%" height="100%" debounce={50}>
                                 <PieChart>
-                                    <Pie data={stats.charts.voter} innerRadius={35} outerRadius={55} paddingAngle={2} dataKey="value" stroke="none" isAnimationActive={false}>
+                                    <Pie data={stats.charts.voter} innerRadius="50%" outerRadius="80%" paddingAngle={2} dataKey="value" stroke="none" isAnimationActive={false}>
                                         {stats.charts.voter.map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={BINARY_COLORS[index % BINARY_COLORS.length]} />
                                         ))}
@@ -480,7 +489,7 @@ export default function DashboardAdminView() {
                     </div>
                     {/* 7. Civil Status Distribution (Dashboard specific) */}
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
                             <h2 className="text-sm font-bold text-gray-800">Civil Status</h2>
                             <div className="flex gap-1.5 flex-wrap justify-end">
                                 <span className="bg-[#16a34a] text-white px-1.5 py-1 rounded text-[10px] font-bold">Single: {countSingle.toLocaleString()}</span>
@@ -491,7 +500,7 @@ export default function DashboardAdminView() {
                         <div className="h-56">
                             <ResponsiveContainer width="100%" height="100%" debounce={50}>
                                 <PieChart>
-                                    <Pie data={stats.charts.civil_status} outerRadius={55} dataKey="value" stroke="none" isAnimationActive={false}>
+                                    <Pie data={stats.charts.civil_status} outerRadius="80%" dataKey="value" stroke="none" isAnimationActive={false}>
                                         {stats.charts.civil_status.map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={SPECTRUM_COLORS[index % SPECTRUM_COLORS.length]} />
                                         ))}

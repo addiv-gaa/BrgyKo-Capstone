@@ -62,12 +62,12 @@ export default function HouseholdModal({ mode, household, coords, onClose, onSav
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Physical Address / Description</label>
                         <textarea 
-                            name="address" 
+                            name="address"
+                            required 
                             rows={3}
                             className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-green-500 focus:border-green-500" 
                             defaultValue={household?.properties?.address || ''} 
                             placeholder="e.g., 123 Main St, near the basketball court..."
-                            required 
                         />
                     </div>
 

@@ -21,7 +21,7 @@ export default function BarangayOfficials() {
     
     // Check if the user is a staff member
     const userRole = auth?.user?.role || (auth?.user?.roles && auth?.user?.roles[0]) || '';
-    const canEdit = userRole.toUpperCase() === 'ADMIN' || userRole.toUpperCase() === 'CAPTAIN';
+    const canEdit = userRole.toUpperCase() === 'ADMIN';
 
     const [officials, setOfficials] = useState<BarangayOfficial[]>([]);
     const [loading, setLoading] = useState(true);
@@ -41,6 +41,10 @@ export default function BarangayOfficials() {
     
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [officialToDelete, setOfficialToDelete] = useState<BarangayOfficial | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isConfirmingSave, setIsConfirmingSave] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     const fetchOfficials = async () => {
         try {
@@ -89,9 +93,8 @@ export default function BarangayOfficials() {
         setEditingOfficial(null);
     };
 
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault();
-
+    const executeSave = async () => {
+        setIsSaving(true);
         const method = editingOfficial ? 'put' : 'post';
         const url = editingOfficial 
             ? `/api/barangay-officials/${editingOfficial.id}/`
@@ -118,26 +121,37 @@ export default function BarangayOfficials() {
             if (res.status >= 200 && res.status < 300) {
                 fetchOfficials();
                 closeModal();
+                setIsConfirmingSave(false);
             } else {
                 alert("Failed to save official.");
             }
         } catch (error) {
             console.error("Error saving official:", error);
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Are you sure you want to delete this official?")) return;
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsConfirmingSave(true);
+    };
 
+    const executeDelete = async () => {
+        if (!officialToDelete) return;
+        setIsDeleting(true);
         try {
-            const res = await api.delete(`/api/barangay-officials/${id}/`);
+            const res = await api.delete(`/api/barangay-officials/${officialToDelete.id}/`);
             if (res.status >= 200 && res.status < 300) {
                 fetchOfficials();
+                setOfficialToDelete(null);
             } else {
                 alert("Failed to delete official.");
             }
         } catch (error) {
             console.error("Error deleting official:", error);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -175,7 +189,7 @@ export default function BarangayOfficials() {
                         <button onClick={() => openModal(o)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit">
                             <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => handleDelete(o.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
+                        <button onClick={() => setOfficialToDelete(o)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
                             <Trash2 className="w-3.5 h-3.5" />
                         </button>
                     </div>
@@ -221,8 +235,39 @@ export default function BarangayOfficials() {
                         )}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {sortedOfficials.map(renderCard)}
+                    <div className="flex flex-col gap-10">
+                        {/* CAPTAIN */}
+                        {sortedOfficials.filter(o => o.order === 1).length > 0 && (
+                            <div className="flex justify-center">
+                                <div className="w-full max-w-md">
+                                    {sortedOfficials.filter(o => o.order === 1).map(renderCard)}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* KAGAWADS */}
+                        {sortedOfficials.filter(o => o.order === 2).length > 0 && (
+                            <div>
+                                <div className="flex justify-center mb-6 mt-2">
+                                    <div className="h-px bg-gray-200 w-full max-w-2xl"></div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {sortedOfficials.filter(o => o.order === 2).map(renderCard)}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* OTHERS */}
+                        {sortedOfficials.filter(o => o.order > 2).length > 0 && (
+                            <div>
+                                <div className="flex justify-center mb-6 mt-2">
+                                    <div className="h-px bg-gray-200 w-full max-w-2xl"></div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {sortedOfficials.filter(o => o.order > 2).map(renderCard)}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -321,6 +366,70 @@ export default function BarangayOfficials() {
                             </button>
                             <button type="submit" form="officialForm" className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors">
                                 {editingOfficial ? 'Save Changes' : 'Add Official'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* DELETE MODAL */}
+            {officialToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100 flex flex-col animate-fade-in-down">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Trash2 className="w-8 h-8 text-red-600" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Official</h3>
+                            <p className="text-gray-500 text-sm">
+                                Are you sure you want to delete <span className="font-bold text-gray-800">{officialToDelete.name}</span>? This action cannot be undone.
+                            </p>
+                        </div>
+                        <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end border-t border-gray-100">
+                            <button 
+                                onClick={() => setOfficialToDelete(null)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={executeDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center min-w-[90px]"
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* SAVE CONFIRMATION MODAL */}
+            {isConfirmingSave && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100 flex flex-col animate-fade-in-down">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Users className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Save</h3>
+                            <p className="text-gray-500 text-sm">
+                                Are you sure you want to save {editingOfficial ? 'these changes' : 'this new official'}?
+                            </p>
+                        </div>
+                        <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end border-t border-gray-100">
+                            <button 
+                                onClick={() => setIsConfirmingSave(false)}
+                                disabled={isSaving}
+                                className="px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={executeSave}
+                                disabled={isSaving}
+                                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center min-w-[90px]"
+                            >
+                                {isSaving ? 'Saving...' : 'Confirm'}
                             </button>
                         </div>
                     </div>

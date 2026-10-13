@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../api';
 import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
@@ -12,7 +13,12 @@ const localizer = dateFnsLocalizer({
   format, parse, startOfWeek, getDay, locales,
 });
 
-export default function BarangayCalendar() {
+interface BarangayCalendarProps {
+    onEventClick?: (event: any) => void;
+    refreshTrigger?: number;
+}
+
+export default function BarangayCalendar({ onEventClick, refreshTrigger = 0 }: BarangayCalendarProps) {
   const [scheduleData, setScheduleData] = useState<any[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState<View>('month'); 
@@ -40,12 +46,13 @@ export default function BarangayCalendar() {
     };
     
     fetchCalendar();
-  }, []);
+  }, [refreshTrigger]);
 
   const eventStyleGetter = (event: any) => {
     let backgroundColor = '#16a34a'; 
     if (event.type === 'RESERVATION') backgroundColor = '#16a34a'; 
     if (event.type === 'ABSENCE') backgroundColor = '#dc2626'; 
+    if (event.type === 'AGENDA') backgroundColor = '#f59e0b'; // yellow-orange / amber
 
     return {
       style: {
@@ -86,6 +93,39 @@ export default function BarangayCalendar() {
         view={currentView}
         onNavigate={(newDate) => setCurrentDate(newDate)}
         onView={(newView) => setCurrentView(newView)}
+        onSelectEvent={onEventClick}
+        components={{
+            event: (props: any) => {
+                const [hover, setHover] = useState(false);
+                const [coords, setCoords] = useState({x: 0, y: 0});
+
+                return (
+                    <div 
+                        className="w-full h-full truncate"
+                        onMouseEnter={(e) => {
+                            setHover(true);
+                            setCoords({ x: e.clientX, y: e.clientY });
+                        }}
+                        onMouseLeave={() => setHover(false)}
+                        onMouseMove={(e) => {
+                            if (hover) setCoords({ x: e.clientX, y: e.clientY });
+                        }}
+                    >
+                        {props.title}
+                        {hover && document.body && createPortal(
+                            <div 
+                                className="fixed z-[9999] bg-white border border-gray-200 shadow-sm p-3 pointer-events-none min-w-[150px] opacity-95"
+                                style={{ top: coords.y + 15, left: coords.x + 15 }}
+                            >
+                                <div className="text-gray-600 text-[13px] mb-1.5">{props.event.title}</div>
+                                <div className="text-gray-900 text-[13px]">{props.event.description || 'No additional details'}</div>
+                            </div>,
+                            document.body
+                        )}
+                    </div>
+                );
+            }
+        }}
       />
     </div>
   );

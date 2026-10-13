@@ -28,11 +28,16 @@ export default function Announcements() {
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [canCreate, setCanCreate] = useState<boolean>(false);
+    const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
 
     // Modal & Form State
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     
+    // Modals
+    const [isConfirmingCreate, setIsConfirmingCreate] = useState<boolean>(false);
+    const [annToArchive, setAnnToArchive] = useState<{ id: number, currentStatus: boolean } | null>(null);
+
     // Core Announcement Data
     const [formData, setFormData] = useState({
         title: "",
@@ -63,14 +68,17 @@ export default function Announcements() {
         const userRole = (Array.isArray(extractedRole) ? extractedRole[0] : extractedRole).toUpperCase();
         const authorizedRoles = ['ADMIN', 'STAFF', 'SECRETARY', 'CAPTAIN', 'COUNCIL', 'TREASURER', 'SK'];
         setCanCreate(authorizedRoles.includes(userRole));
-
-        fetchData();
     }, [auth]);
+
+    useEffect(() => {
+        fetchData();
+    }, [activeTab]);
 
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/announcements/`, {
+            const query = activeTab === 'archived' ? '?archived=true' : '';
+            const res = await fetch(`${API_URL}/api/announcements/${query}`, {
                 credentials: 'include'
             });
             if (res.ok) {
@@ -83,6 +91,31 @@ export default function Announcements() {
             console.error("Error fetching data:", error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    // Archive Handlers
+    const handleToggleArchive = (id: number, isCurrentlyArchived: boolean) => {
+        setAnnToArchive({ id, currentStatus: isCurrentlyArchived });
+    };
+
+    const executeToggleArchive = async () => {
+        if (!annToArchive) return;
+        try {
+            const action = annToArchive.currentStatus ? 'unarchive' : 'archive';
+            const res = await fetch(`${API_URL}/api/announcements/${annToArchive.id}/${action}/`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            if (res.ok) {
+                fetchData();
+            } else {
+                alert(`Failed to ${action} announcement.`);
+            }
+        } catch (error) {
+            console.error("Archive toggle error:", error);
+        } finally {
+            setAnnToArchive(null);
         }
     };
 
@@ -117,8 +150,13 @@ export default function Announcements() {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setIsConfirmingCreate(true);
+    };
+
+    const executeSubmit = async () => {
+        setIsConfirmingCreate(false);
         setIsSubmitting(true);
         let createdEventId = null;
 
@@ -205,13 +243,19 @@ export default function Announcements() {
                                 <p className="text-gray-500 text-sm mt-1">Stay updated with the latest news, events, and advisories.</p>
                             </div>
                             {canCreate && (
-                                <button 
-                                    onClick={() => setIsModalOpen(true)}
-                                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                                    Create Announcement
-                                </button>
+                                <div className="flex gap-2">
+                                    <div className="flex bg-gray-200 rounded-md p-1 mr-4">
+                                        <button onClick={() => setActiveTab('active')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${activeTab === 'active' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Active</button>
+                                        <button onClick={() => setActiveTab('archived')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${activeTab === 'archived' ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Archived</button>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsModalOpen(true)}
+                                        className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                                        Create Announcement
+                                    </button>
+                                </div>
                             )}
                         </div>
 
@@ -291,6 +335,16 @@ export default function Announcements() {
                                                 <span>Posted: {new Date(ann.created_at).toISOString().split('T')[0]}</span>
                                                 <span>By {ann.author_name}</span>
                                             </div>
+                                            {canCreate && (
+                                                <div className="border-t border-gray-100 bg-gray-50 px-6 py-3 flex justify-end">
+                                                    <button 
+                                                        onClick={() => handleToggleArchive(ann.id, activeTab === 'archived')}
+                                                        className={`text-sm font-semibold px-4 py-1.5 rounded border transition-colors ${activeTab === 'archived' ? 'border-green-200 text-green-600 hover:bg-green-50' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}
+                                                    >
+                                                        {activeTab === 'archived' ? 'Restore to Live Feed' : 'Archive Post'}
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))
@@ -412,6 +466,56 @@ export default function Announcements() {
                             <button type="submit" form="announcement-form" disabled={isSubmitting || formData.categories.length === 0} className="px-6 py-3 w-2/3 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-center shadow-md">
                                 {isSubmitting ? "Processing..." : "Post Announcement"}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Archive/Restore Confirmation Modal */}
+            {annToArchive && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-amber-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">{annToArchive.currentStatus ? 'Restore Announcement?' : 'Archive Announcement?'}</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to {annToArchive.currentStatus ? 'restore this announcement to the live feed' : 'move this announcement to the archives'}?
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setAnnToArchive(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeToggleArchive} className="flex-1 px-4 py-2 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 transition-colors">
+                                    {annToArchive.currentStatus ? 'Yes, Restore' : 'Yes, Archive'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Create Confirmation Modal */}
+            {isConfirmingCreate && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-green-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Publish Announcement?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                {hasEvent ? `You are about to publish this announcement and create a linked Calendar Event on ${eventData.startDate}. Are you sure you want to proceed?` : 'Are you sure you want to publish this announcement to the live feed?'}
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsConfirmingCreate(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Review
+                                </button>
+                                <button onClick={executeSubmit} className="flex-1 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors">
+                                    Yes, Publish
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

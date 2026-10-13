@@ -27,6 +27,7 @@ export default function Home() {
     const [userRole, setUserRole] = useState<string>("");
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null); // Modal state for clicking an announcement
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [settings, setSettings] = useState<any>(null);
 
     useEffect(() => {
         let extractedRole = "";
@@ -91,6 +92,13 @@ export default function Home() {
             // Fetch public data regardless of login status
             await fetchAnnouncements();
             await fetchEmergencyContacts();
+            try {
+                const settingsRes = await fetch(`${API_URL}/api/system/settings/`);
+                if (settingsRes.ok) {
+                    const data = await settingsRes.json();
+                    setSettings(data);
+                }
+            } catch (error) { console.error("Error fetching settings:", error); }
 
             // If not logged in, we skip fetching private user stats
             if (!auth?.user) return;
@@ -236,38 +244,126 @@ export default function Home() {
                             </div>
                         )}
 
-                        {/* --- VIEW 4: RESIDENT --- */}
+                                                {/* --- VIEW 4: RESIDENT --- */}
                         {isResident && (
                             <>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                {/* PUNONG BARANGAY MESSAGE */}
+                                {settings && (
+                                    <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-12 mt-4 w-full max-w-5xl mx-auto px-6 sm:px-12">
+                                        <div className="flex flex-col items-center">
+                                            <div className="w-32 h-32 rounded-full border-4 border-green-100 overflow-hidden bg-gray-100 mb-2 shrink-0 flex items-center justify-center">
+                                                {settings.captain_image ? (
+                                                    <img src={settings.captain_image.startsWith('http') ? settings.captain_image : `${API_URL}${settings.captain_image}`} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <UsersIcon />
+                                                )}
+                                            </div>
+                                            <span className="text-green-700 font-bold text-sm tracking-wider">PUNONG BARANGAY</span>
+                                        </div>
+                                        <div className="flex-1 text-center md:text-left">
+                                            <h4 className="text-gray-500 uppercase tracking-widest text-xs font-bold mb-1">{settings.captain_message_title || "MESSAGE FROM THE PUNONG BARANGAY"}</h4>
+                                            <h2 className="text-2xl font-bold text-gray-900 mb-1">Hon. {settings.captain_name || "Ricardo B. Magsaysay"}</h2>
+                                            <p className="text-green-700 font-semibold text-sm mb-4">Punong Barangay &middot; {settings.barangay_name || "Barangay San Gabriel"}</p>
+                                            
+                                            <div className="md:pl-4 md:border-l-4 md:border-green-500 text-gray-600 italic mb-4 leading-relaxed max-w-3xl mx-auto md:mx-0">
+                                                "{settings.captain_message}"
+                                            </div>
+                                            
+                                            <p className="text-xs text-gray-500">{settings.barangay_hall_address} &middot; {settings.official_contact_number}</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* QUICK ACTIONS */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 w-full max-w-5xl mx-auto px-6 sm:px-12">
                                     <button onClick={() => navigate('/announcements')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group">
                                         <div className="p-3 bg-orange-50 text-orange-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><MegaphoneIcon /></div>
                                         <span className="font-bold text-gray-900">Announcements</span>
-                                        <span className="text-xs text-gray-500 mt-1">View latest updates</span>
+                                        <span className="text-xs text-gray-500 mt-1 text-center">View latest updates</span>
                                     </button>
                                     <button onClick={() => navigate('/resident/schedule')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all group">
                                         <div className="p-3 bg-green-50 text-green-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
                                         <span className="font-bold text-gray-900">Barangay Calendar</span>
-                                        <span className="text-xs text-gray-500 mt-1">View events and schedules</span>
+                                        <span className="text-xs text-gray-500 mt-1 text-center">View events and schedules</span>
                                     </button>
                                     <button onClick={() => navigate('/aiassistant')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-purple-300 hover:shadow-md transition-all group">
                                         <div className="p-3 bg-purple-50 text-purple-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><ChatIcon /></div>
                                         <span className="font-bold text-gray-900">Ask Barangay AI</span>
-                                        <span className="text-xs text-gray-500 mt-1">Get instant answers 24/7</span>
+                                        <span className="text-xs text-gray-500 mt-1 text-center">Get instant answers 24/7</span>
                                     </button>
                                 </div>
 
+                                {/* ABOUT SECTION */}
+                                {settings && (
+                                    <div className="bg-[#eff7f0] rounded-none sm:rounded-2xl py-8 sm:py-12 mb-10 w-full">
+                                        <div className="w-full max-w-5xl mx-auto px-6 sm:px-12 flex flex-col items-start text-left">
+                                        
+                                        <div className="flex items-center gap-3 mb-10 w-full">
+                                            <div className="w-1.5 h-8 bg-[#2d6a4f] shrink-0"></div>
+                                            <h2 className="text-2xl font-bold text-gray-900">About {settings.barangay_name || "Barangay San Gabriel"}</h2>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-12 w-full">
+                                            <div className="bg-[#dcf0d9] p-5 rounded-xl">
+                                                <p className="text-xs text-gray-600 mb-1">Classification</p>
+                                                <p className="font-bold text-gray-900">{settings.barangay_classification}</p>
+                                            </div>
+                                            <div className="bg-[#dcf0d9] p-5 rounded-xl">
+                                                <p className="text-xs text-gray-600 mb-1">City</p>
+                                                <p className="font-bold text-gray-900">{settings.barangay_city}</p>
+                                            </div>
+                                            <div className="bg-[#dcf0d9] p-5 rounded-xl">
+                                                <p className="text-xs text-gray-600 mb-1">Province</p>
+                                                <p className="font-bold text-gray-900">{settings.barangay_province}</p>
+                                            </div>
+                                            <div className="bg-[#dcf0d9] p-5 rounded-xl">
+                                                <p className="text-xs text-gray-600 mb-1">Region</p>
+                                                <p className="font-bold text-gray-900">{settings.barangay_region}</p>
+                                            </div>
+                                            <div className="bg-[#dcf0d9] p-5 rounded-xl">
+                                                <p className="text-xs text-gray-600 mb-1">Registered Residents</p>
+                                                <p className="font-bold text-gray-900">{stats?.total_residents || "342"} ({new Date().getFullYear()})</p>
+                                            </div>
+                                            <div className="bg-[#dcf0d9] p-5 rounded-xl">
+                                                <p className="text-xs text-gray-600 mb-1">No. of Puroks</p>
+                                                <p className="font-bold text-gray-900">{settings.number_of_puroks}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-10 w-full">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-3">History</h3>
+                                                <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">{settings.history_text}</p>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-3">Location & Geography</h3>
+                                                <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">{settings.location_geography_text}</p>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-3">Community & Culture</h3>
+                                                <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">{settings.community_culture_text}</p>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-3">Services & Facilities</h3>
+                                                <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">{settings.services_facilities_text}</p>
+                                            </div>
+                                        </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ACTIVE REQUESTS */}
                                 {activeRequests.length > 0 && (
                                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
                                         <h2 className="text-lg font-bold text-gray-900 mb-4">Active Requests</h2>
                                         <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
                                             {activeRequests.map((req, i) => (
-                                                <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-100">
+                                                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded border border-gray-100 gap-3 sm:gap-0">
                                                     <div>
                                                         <p className="font-semibold text-gray-800">{req.type}: {req.display}</p>
-                                                        <p className="text-xs text-gray-500">Requested: {new Date(req.created_at || req.start_time).toLocaleDateString()}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">Requested: {new Date(req.created_at || req.start_time).toLocaleDateString()}</p>
                                                     </div>
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold text-center ${
                                                         req.status === 'PENDING' ? 'bg-orange-100 text-orange-700' :
                                                         req.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
                                                         'bg-green-100 text-green-700'

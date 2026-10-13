@@ -4,6 +4,8 @@ from rest_framework.routers import DefaultRouter
 from django.conf import settings             # 1. Import settings
 from django.conf.urls.static import static   # 2. Import static
 from api.views import (
+    ForgotPasswordView,
+    ResetPasswordView,
     # Authentication & User Management
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
@@ -53,6 +55,7 @@ from api.views import (
     # Admin Hub & Audit Logs
     AdminAuditLogAPIView,
     StaffManagementAPIView,
+    ForceDemographicSnapshotView,
     AiQueryStatisticViewSet,
 )
 from api.reports import RBIFormCReportView, RBIFormCDownloadView
@@ -82,6 +85,8 @@ urlpatterns = [
     path('api/auth/resend-otp/', ResendOTPView.as_view(), name='resend_otp'),
     path('api/auth/me/', CurrentUserView.as_view(), name='current_user'),
     path('api/auth/logout/', LogoutView.as_view(), name='logout'),
+    path('api/auth/forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
+    path('api/auth/reset-password/', ResetPasswordView.as_view(), name='reset-password'),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/register/', CreateUserView.as_view(), name='register'),
@@ -114,6 +119,7 @@ urlpatterns = [
     # --- Admin Hub & Audit Logs ---
     path('api/admin/audit-logs/', AdminAuditLogAPIView.as_view(), name='audit-logs'),
     path('api/admin/staff-management/', StaffManagementAPIView.as_view(), name='staff-management'),
+    path('api/admin/force-snapshot/', ForceDemographicSnapshotView.as_view(), name='force-snapshot'),
 
     # --- Router Includes ---
     path('api/', include(router.urls)),

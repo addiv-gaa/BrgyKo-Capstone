@@ -36,6 +36,9 @@ export default function Documents() {
 
     // Form Modal States
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isConfirmingSave, setIsConfirmingSave] = useState(false);
+    const [docToArchive, setDocToArchive] = useState<{id: number, currentStatus: boolean} | null>(null);
+    const [bulkActionConfirm, setBulkActionConfirm] = useState<'archive' | 'delete' | null>(null);
     const [formMode, setFormMode] = useState<'upload' | 'edit'>('upload');
     const [currentDocId, setCurrentDocId] = useState<number | null>(null);
     const [formState, setFormState] = useState<{title: string, type: string, file: File | null}>({ title: "", type: "Memo", file: null });
@@ -112,13 +115,16 @@ export default function Documents() {
         setIsFormModalOpen(true);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+        const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (formMode === 'upload' && !formState.file) {
             alert("Please attach a file to upload.");
             return;
         }
+        setIsConfirmingSave(true);
+    };
 
+    const executeSubmit = async () => {
         setIsSaving(true);
         
         const formData = new FormData();
@@ -135,38 +141,54 @@ export default function Documents() {
             const response = await fetch(url, { method, credentials: 'include', body: formData });
             if (response.ok) {
                 setIsFormModalOpen(false);
+                setIsConfirmingSave(false);
                 setFormState({ title: "", type: "Memo", file: null });
                 fetchDocuments();
-            } else alert("Action failed.");
+            } else {
+                alert("Action failed.");
+                setIsConfirmingSave(false);
+            }
         } catch (error) {
-            console.error("Error saving document:", error);
+            console.error(error);
+            setIsConfirmingSave(false);
         } finally {
             setIsSaving(false);
         }
     };
 
     // --- Archive & Delete Actions ---
-    const handleToggleArchive = async (id: number, currentStatus: boolean) => {
-        await fetch(`${API_URL}/api/official-documents/${id}/`, {
+    const handleToggleArchive = (id: number, currentStatus: boolean) => {
+        setDocToArchive({ id, currentStatus });
+    };
+
+    const executeToggleArchive = async () => {
+        if (!docToArchive) return;
+        await fetch(`${API_URL}/api/official-documents/${docToArchive.id}/`, {
             method: 'PATCH',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ is_archived: !currentStatus })
+            body: JSON.stringify({ is_archived: !docToArchive.currentStatus })
         });
+        setDocToArchive(null);
         fetchDocuments();
     };
 
-    const handleBulkAction = async (action: 'archive' | 'delete') => {
+    const handleBulkAction = (action: 'archive' | 'delete') => {
         if (selectedIds.length === 0) return;
-        if (!window.confirm(`Are you sure you want to ${action} ${selectedIds.length} items?`)) return;
+        setBulkActionConfirm(action);
+    };
 
-        await fetch(`${API_URL}/api/official-documents/bulk_${action}/`, {
+    const executeBulkAction = async () => {
+        if (!bulkActionConfirm) return;
+        await fetch(`${API_URL}/api/official-documents/bulk_${bulkActionConfirm}/`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: selectedIds })
         });
+        setBulkActionConfirm(null);
         fetchDocuments();
+        setSelectedIds([]);
     };
 
     const getBadgeColor = (type: string) => {
@@ -239,10 +261,12 @@ export default function Documents() {
                             
                             {/* Bulk Actions Menu (Visible when items selected) */}
                             {selectedIds.length > 0 && (
-                                <div className="flex gap-2 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
-                                    <span className="text-sm font-bold text-green-800 mr-2 self-center">{selectedIds.length} Selected</span>
-                                    <button onClick={() => handleBulkAction('archive')} className="text-xs font-semibold px-2 py-1 bg-white text-gray-700 border border-gray-300 rounded hover:bg-gray-100">Archive</button>
-                                    <button onClick={() => handleBulkAction('delete')} className="text-xs font-semibold px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">Delete</button>
+                                <div className="flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 shrink-0">
+                                    <span className="text-sm font-bold text-green-800 mr-2 whitespace-nowrap shrink-0">{selectedIds.length} Selected</span>
+                                    <button onClick={() => handleBulkAction('archive')} className="text-xs font-semibold px-2 py-1 bg-white text-gray-700 border border-gray-300 rounded hover:bg-gray-100">{showArchived ? "Restore" : "Archive"}</button>
+                                    {showArchived && (
+                                        <button onClick={() => handleBulkAction('delete')} className="text-xs font-semibold px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">Delete</button>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -300,11 +324,7 @@ export default function Documents() {
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(doc.uploaded_at).toLocaleDateString()}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                         <div className="flex justify-end gap-2">
-                                                            {/* CHANGED: Open preview securely in a new tab */}
-                                                            <button onClick={() => window.open(doc.file, '_blank', 'noopener,noreferrer')} className="text-green-600 bg-green-50 p-2 rounded hover:bg-green-100" title="Preview">
-                                                                <EyeIcon />
-                                                            </button>
-                                                            <a href={doc.file} download className="text-green-600 bg-green-50 p-2 rounded hover:bg-green-100" title="Download">
+                                                            <a href={doc.file} download target="_blank" rel="noopener noreferrer" className="text-green-600 bg-green-50 p-2 rounded hover:bg-green-100" title="Download">
                                                                 <DownloadIcon />
                                                             </a>
                                                             <button onClick={() => openEditModal(doc)} className="text-amber-600 bg-amber-50 p-2 rounded hover:bg-amber-100" title="Edit">
@@ -313,6 +333,11 @@ export default function Documents() {
                                                             <button onClick={() => handleToggleArchive(doc.id, doc.is_archived)} className="text-gray-600 bg-gray-100 p-2 rounded hover:bg-gray-200" title={doc.is_archived ? "Restore" : "Archive"}>
                                                                 <ArchiveIcon />
                                                             </button>
+                                                            {showArchived && (
+                                                                <button onClick={() => { setSelectedIds([doc.id]); setBulkActionConfirm('delete'); }} className="text-red-600 bg-red-50 p-2 rounded hover:bg-red-100" title="Delete">
+                                                                    <TrashIcon />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -390,6 +415,81 @@ export default function Documents() {
                     </div>
                 </div>
             )}
-        </div>
+            {isConfirmingSave && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-blue-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">{formMode === 'edit' ? 'Update Document?' : 'Upload Document?'}</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to {formMode === 'edit' ? 'update this official document' : 'upload this new official document'}?
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsConfirmingSave(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeSubmit} disabled={isSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+                                    {isSaving ? 'Saving...' : 'Yes, Save'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {docToArchive && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-amber-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">{docToArchive.currentStatus ? 'Restore Document?' : 'Archive Document?'}</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to {docToArchive.currentStatus ? 'restore this document to the active list' : 'move this document to the archives'}?
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setDocToArchive(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeToggleArchive} className="flex-1 px-4 py-2 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 transition-colors">
+                                    {docToArchive.currentStatus ? 'Yes, Restore' : 'Yes, Archive'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {bulkActionConfirm && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-red-100">
+                        <div className="p-6 text-center">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${bulkActionConfirm === 'delete' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                                {bulkActionConfirm === 'delete' ? (
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                ) : (
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                                )}
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">{bulkActionConfirm === 'delete' ? 'Delete Selected?' : 'Archive Selected?'}</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to {bulkActionConfirm} these {selectedIds.length} official documents?
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setBulkActionConfirm(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeBulkAction} className={`flex-1 px-4 py-2 text-white font-semibold rounded-lg transition-colors ${bulkActionConfirm === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
+                                    Yes, {bulkActionConfirm === 'delete' ? 'Delete' : 'Archive'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+                    </div>
     );
 }

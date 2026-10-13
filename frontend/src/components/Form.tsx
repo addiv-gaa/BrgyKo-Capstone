@@ -15,7 +15,7 @@ function Form({ route, method }: FormProps) {
     const [password, setPassword] = useState("");
 
     // OTP State for Registration Flow
-    const [step, setStep] = useState<'form' | 'verify'>('form');
+    const [step, setStep] = useState<'form' | 'verify' | 'forgot_email' | 'forgot_verify'>('form');
     const [userId, setUserId] = useState<number | null>(null);
     const [otp, setOtp] = useState("");
     const [otpMessage, setOtpMessage] = useState("");
@@ -52,6 +52,43 @@ function Form({ route, method }: FormProps) {
         }
         return () => clearTimeout(timer);
     }, [countdown, step]);
+
+
+    const [newPassword, setNewPassword] = useState("");
+
+    const handleForgotEmailSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const res = await api.post('/api/auth/forgot-password/', { email });
+            setUserId(res.data.user_id);
+            setStep("forgot_verify");
+            setOtpMessage(res.data.message);
+            setCountdown(60);
+            setCanResend(false);
+        } catch (error: any) {
+            alert(error.response?.data?.error || "Error sending OTP.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleForgotVerifySubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const res = await api.post('/api/auth/reset-password/', { user_id: userId, otp, new_password: newPassword });
+            alert(res.data.message);
+            setStep("form");
+            setPassword("");
+            setOtp("");
+            setNewPassword("");
+        } catch (error: any) {
+            setOtpMessage(error.response?.data?.error || "Invalid OTP.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
         setLoading(e.target === e.currentTarget);
@@ -135,9 +172,9 @@ function Form({ route, method }: FormProps) {
         <div className="flex bg-gray-100 min-h-screen flex-col justify-center px-6 py-12 lg:px-8">
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
                 <img
-                    alt="IT Helpdesk User Icon"
-                    src={usericon}
-                    className="mx-auto h-16 w-auto"
+                    alt="Barangay Logo"
+                    src="/b4-logo.jpg"
+                    className="mx-auto h-24 w-auto rounded-full shadow-sm"
                 />
                 <h2 className="mt-10 text-center text-2xl/9 font-bold tracking-tight text-black">
                     {step === 'verify' ? "Verify Your Email" : `${name} your account`}
@@ -146,7 +183,44 @@ function Form({ route, method }: FormProps) {
             </div>
 
             <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-                {step === 'form' ? (
+                {step === 'forgot_email' ? (
+                    <form onSubmit={handleForgotEmailSubmit} className="space-y-6">
+                        <div>
+                            <label className="block text-sm/6 font-medium text-black">Enter your registered Email Address</label>
+                            <div className="mt-2">
+                                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-green-600 sm:text-sm/6" />
+                            </div>
+                        </div>
+                        <div>
+                            <button type="submit" disabled={loading} className="flex w-full justify-center rounded-md bg-[#16a34a] px-3 py-1.5 text-sm/6 font-semibold text-white shadow-sm hover:bg-green-800 disabled:opacity-50">
+                                {loading ? "Sending..." : "Send OTP"}
+                            </button>
+                        </div>
+                        <p className="text-center text-sm text-gray-500 mt-4"><span onClick={() => setStep('form')} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Back to Login</span></p>
+                    </form>
+                ) : step === 'forgot_verify' ? (
+                    <form onSubmit={handleForgotVerifySubmit} className="space-y-6">
+                        {otpMessage && <div className="p-3 text-sm text-blue-800 bg-blue-50 rounded-lg">{otpMessage}</div>}
+                        <div>
+                            <label className="block text-sm/6 font-medium text-black">Enter 6-digit OTP</label>
+                            <div className="mt-2">
+                                <input type="text" required value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-green-600 sm:text-sm/6 text-center tracking-widest font-mono" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm/6 font-medium text-black">New Password</label>
+                            <div className="mt-2">
+                                <input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-black outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-green-600 sm:text-sm/6" />
+                            </div>
+                        </div>
+                        <div>
+                            <button type="submit" disabled={loading} className="flex w-full justify-center rounded-md bg-[#16a34a] px-3 py-1.5 text-sm/6 font-semibold text-white shadow-sm hover:bg-green-800 disabled:opacity-50">
+                                {loading ? "Resetting..." : "Reset Password"}
+                            </button>
+                        </div>
+                        <p className="text-center text-sm text-gray-500 mt-4"><span onClick={() => setStep('form')} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Cancel</span></p>
+                    </form>
+                ) : step === 'form' ? (
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* USERNAME FIELD */}
                         <div>
@@ -172,7 +246,7 @@ function Form({ route, method }: FormProps) {
                                 <label htmlFor="password" className="block text-sm/6 font-medium text-black">Password</label>
                                 {method === "login" && (
                                     <div className="text-sm">
-                                        <a href="#" className="font-semibold text-green-400 hover:text-green-300">Forgot password?</a>
+                                        <span onClick={() => { setStep("forgot_email"); setEmail(""); }} className="font-semibold text-green-400 hover:text-green-300 cursor-pointer">Forgot password?</span>
                                     </div>
                                 )}
                             </div>
@@ -190,7 +264,7 @@ function Form({ route, method }: FormProps) {
                         
                         {/* TOGGLE LINKS */}
                         {method === "login" ? (
-                            <p className="text-center text-sm text-gray-500 mt-4">Not a member? <span onClick={() => navigate("/register")} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Register now</span></p>
+                            <p className="text-center text-sm text-gray-500 mt-4"><span onClick={() => navigate("/")} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Back to Home Page</span></p>
                         ) : (
                             <p className="text-center text-sm text-gray-500 mt-4">Already have an account? <span onClick={() => navigate("/login")} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Sign in</span></p>
                         )}

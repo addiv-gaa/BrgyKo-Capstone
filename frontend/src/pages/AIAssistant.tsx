@@ -25,17 +25,26 @@ export default function AiAssistant() {
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     
+    const faqCategories = [
+        {
+            title: "Permits & Clearances",
+            prompts: ["How do I get a barangay clearance?", "Requirements for business permit?", "How much are the permit fees?"]
+        },
+        {
+            title: "Social Services",
+            prompts: ["Certificate of Indigency requirements", "What welfare programs are available?", "How to apply for a Senior Citizen ID?"]
+        },
+        {
+            title: "General Info & Safety",
+            prompts: ["What are your office hours?", "List of emergency hotlines", "How to report an incident?"]
+        }
+    ];
+    const [expandedCategory, setExpandedCategory] = useState<string | null>("Permits & Clearances");
+    
     // Auto-scroll reference
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Preset suggestions from your mockup
-    const suggestions = [
-        "Barangay clearance",
-        "Office hours",
-        "Indigency cert",
-        "Welfare programs",
-        "Permit fees"
-    ];
+
 
     // Scroll to bottom whenever messages change
     useEffect(() => {
@@ -96,13 +105,18 @@ export default function AiAssistant() {
                 
                 <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
                     
-                    <div className="max-w-4xl mx-auto h-full flex flex-col">
+                    <div className="max-w-6xl mx-auto h-full flex flex-col">
                         
-                        {/* Header */}
+                        {/* Header (Shared across both columns) */}
                         <div className="mb-6 shrink-0">
                             <h1 className="text-2xl font-bold text-gray-900">AI Barangay Assistant</h1>
                             <p className="text-gray-500 text-sm mt-1">Get answers to common barangay service questions</p>
                         </div>
+
+                        <div className="flex flex-col md:flex-row gap-8 flex-1 min-h-[500px] pb-8">
+                        
+                            {/* LEFT COLUMN: CHAT */}
+                            <div className="flex-1 flex flex-col h-full">
 
                         {/* GLOBAL SETTING CHECK: If Chatbot is disabled in Admin Hub */}
                         {settings && !settings.ai_chatbot_enabled ? (
@@ -181,20 +195,6 @@ export default function AiAssistant() {
                                 {/* Input Form & Suggestions Area */}
                                 <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg shrink-0">
                                     
-                                    {/* Preset Suggestions Chips */}
-                                    <div className="flex flex-wrap gap-2 mb-3">
-                                        {suggestions.map((suggestion) => (
-                                            <button
-                                                key={suggestion}
-                                                onClick={() => handleSendMessage(suggestion)}
-                                                disabled={isLoading}
-                                                className="px-3 py-1.5 bg-white border border-green-200 text-green-700 text-xs font-semibold rounded-full shadow-sm hover:bg-green-50 transition-colors disabled:opacity-50"
-                                            >
-                                                {suggestion}
-                                            </button>
-                                        ))}
-                                    </div>
-
                                     <form onSubmit={onSubmit} className="flex gap-3">
                                         <input 
                                             type="text" 
@@ -217,6 +217,47 @@ export default function AiAssistant() {
                                 </div>
                             </div>
                         )}
+                        </div>
+
+                        {/* RIGHT COLUMN: FAQ Panel */}
+                        {(!settings || settings.ai_chatbot_enabled) && (
+                            <div className="w-full md:w-80 shrink-0 flex flex-col gap-4">
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                                    <h3 className="font-bold text-gray-900 mb-1">Frequently Asked Questions</h3>
+                                    <p className="text-xs text-gray-500 mb-4">Click a category to see quick prompts.</p>
+                                    
+                                    <div className="space-y-3">
+                                        {faqCategories.map((cat, idx) => (
+                                            <div key={idx} className="border border-gray-100 rounded-lg overflow-hidden bg-gray-50">
+                                                <button 
+                                                    onClick={() => setExpandedCategory(expandedCategory === cat.title ? null : cat.title)}
+                                                    className="w-full px-4 py-3 flex items-center justify-between bg-white hover:bg-gray-50 transition-colors"
+                                                >
+                                                    <span className="font-semibold text-sm text-gray-800">{cat.title}</span>
+                                                    <svg className={`w-4 h-4 text-gray-500 transition-transform ${expandedCategory === cat.title ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                                                </button>
+                                                
+                                                {expandedCategory === cat.title && (
+                                                    <div className="p-3 border-t border-gray-100 flex flex-col gap-2">
+                                                        {cat.prompts.map((prompt, pIdx) => (
+                                                            <button
+                                                                key={pIdx}
+                                                                onClick={() => handleSendMessage(prompt)}
+                                                                disabled={isLoading}
+                                                                className="text-left px-3 py-2 bg-white border border-green-200 text-green-700 text-xs font-semibold rounded-lg shadow-sm hover:bg-green-50 hover:border-green-300 transition-all disabled:opacity-50"
+                                                            >
+                                                                "{prompt}"
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        </div>
 
                     </div>
                 </main>

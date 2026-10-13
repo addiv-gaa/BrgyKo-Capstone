@@ -80,6 +80,11 @@ export default function ResidentPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'add' | 'edit' | 'view'>('add');
     const [selectedResident, setSelectedResident] = useState<ResidentProperties | null>(null);
+    const [isConfirmingSave, setIsConfirmingSave] = useState(false);
+    const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
+    const [isConfirmingBulkUpdate, setIsConfirmingBulkUpdate] = useState(false);
+    const [pendingResidentData, setPendingResidentData] = useState<any>(null);
+    const [residentToDelete, setResidentToDelete] = useState<number | null>(null);
 
     // Upload & Export State
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -198,15 +203,7 @@ export default function ResidentPage() {
     const handleSingleApprove = (id: number) => setConfirmAction({ isOpen: true, actionType: 'approve', isBulk: false, targetId: id });
     const handleSingleDeny = (id: number) => setConfirmAction({ isOpen: true, actionType: 'deny', isBulk: false, targetId: id });
     
-    const handleBulkApprove = () => {
-        if (!selectedRows.length) return;
-        setConfirmAction({ isOpen: true, actionType: 'approve', isBulk: true });
-    };
 
-    const handleBulkDeny = () => {
-        if (!selectedRows.length) return;
-        setConfirmAction({ isOpen: true, actionType: 'deny', isBulk: true });
-    };
 
     const executeConfirmAction = async () => {
         setIsConfirming(true);
@@ -247,18 +244,18 @@ export default function ResidentPage() {
     };
 
     // Bulk Delete
-    const handleBulkDelete = async () => {
+    const handleBulkDelete = () => {
         if (selectedRows.length === 0) return;
-        
-        if (!window.confirm(`Are you sure you want to completely delete these ${selectedRows.length} residents? This action cannot be undone.`)) {
-            return;
-        }
+        setIsConfirmingBulkDelete(true);
+    };
 
+    const executeBulkDelete = async () => {
         setIsBulkDeleting(true);
         try {
             const response = await api.post(`/api/residents/bulk_delete/`, { ids: selectedRows });
 
             if ((response.status >= 200 && response.status < 300)) {
+                setSelectedRows([]);
                 fetchResidents();
             } else {
                 const errorData = response.data;
@@ -269,14 +266,18 @@ export default function ResidentPage() {
             alert("A network error occurred.");
         } finally {
             setIsBulkDeleting(false);
+            setIsConfirmingBulkDelete(false);
         }
     };
 
     // Bulk Update Welfare
-    const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
+    const handleBulkUpdateSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (selectedRows.length === 0) return;
+        setIsConfirmingBulkUpdate(true);
+    };
 
+    const executeBulkUpdate = async () => {
         setIsBulkUpdating(true);
         try {
             const response = await api.post(`/api/residents/bulk_update_welfare/`, { ids: selectedRows, flags: bulkUpdateFlags });
@@ -296,6 +297,7 @@ export default function ResidentPage() {
             alert("A network error occurred.");
         } finally {
             setIsBulkUpdating(false);
+            setIsConfirmingBulkUpdate(false);
         }
     };
 
@@ -359,36 +361,52 @@ export default function ResidentPage() {
         }
     };
 
-    const handleSaveResident = async (formData: Partial<ResidentProperties>) => {
+    const executeSaveResident = async () => {
+        if (!pendingResidentData) return;
         try {
             const method = modalMode === 'edit' ? 'PUT' : 'POST';
             const url = modalMode === 'edit' 
                 ? `${API_URL}/api/residents/${selectedResident?.id}/` 
                 : `${API_URL}/api/residents/`;
 
-            const response = await api({ method: method, url: url.replace(API_URL, ''), data: formData });
+            const response = await api({ method: method, url: url.replace(API_URL, ''), data: pendingResidentData });
 
             if ((response.status >= 200 && response.status < 300)) {
                 setIsModalOpen(false);
+                setIsConfirmingSave(false);
+                setPendingResidentData(null);
                 fetchResidents();
             } else {
                 const errorData = response.data;
                 console.error("Validation Error:", errorData);
                 alert("Failed to save. Check console for details.");
+                setIsConfirmingSave(false);
             }
         } catch (error) {
             console.error("Network error saving resident:", error);
             alert("Network error occurred.");
+            setIsConfirmingSave(false);
         }
     };
 
-    const handleDeleteResident = async (id: number) => {
-        if (!window.confirm("Are you sure you want to delete this resident?")) return;
+    const handleDeleteResident = (id: number) => {
+        setResidentToDelete(id);
+    };
+
+    const executeDeleteResident = async () => {
+        if (!residentToDelete) return;
         try {
-            const response = await api.delete(`/api/residents/${id}/`);
-            if ((response.status >= 200 && response.status < 300) || response.status === 204) fetchResidents();
+            const response = await api.delete(`/api/residents/${residentToDelete}/`);
+            if ((response.status >= 200 && response.status < 300) || response.status === 204) {
+                setResidentToDelete(null);
+                fetchResidents();
+            } else {
+                alert("Failed to delete resident.");
+                setResidentToDelete(null);
+            }
         } catch (error) {
             console.error("Network error deleting resident:", error);
+            setResidentToDelete(null);
         }
     };
 
@@ -457,13 +475,13 @@ export default function ResidentPage() {
                     {/* TABS */}
                     <div className="flex space-x-1 border-b border-gray-200 mb-6">
                         <button
-                            onClick={() => { setActiveTab('directory'); setPage(1); }}
+                            onClick={() => { setActiveTab('directory'); setPage(1); setSelectedRows([]); }}
                             className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'directory' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                         >
                             Resident Directory
                         </button>
                         <button
-                            onClick={() => { setActiveTab('queue'); setPage(1); }}
+                            onClick={() => { setActiveTab('queue'); setPage(1); setSelectedRows([]); }}
                             className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'queue' ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                         >
                             Approval Queue
@@ -501,11 +519,24 @@ export default function ResidentPage() {
                                 )}
                                 {activeTab === 'queue' && authContext?.user?.role === 'CAPTAIN' && (
                                     <div className="flex gap-3 items-center">
-                                        <button onClick={handleBulkApprove} className="bg-white text-green-700 hover:bg-green-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2">Approve Selected</button>
-                                        <button onClick={handleBulkDeny} className="bg-white text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2">Deny Selected</button>
+                                        <button 
+                                            onClick={() => setConfirmAction({ isOpen: true, actionType: 'approve', isBulk: true, targetId: undefined })}
+                                            className="bg-white text-green-700 hover:bg-green-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            Approve Selected
+                                        </button>
+                                        <button 
+                                            onClick={() => setConfirmAction({ isOpen: true, actionType: 'deny', isBulk: true, targetId: undefined })}
+                                            className="bg-white text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            Deny Selected
+                                        </button>
                                         <div className="w-px h-6 bg-green-400 mx-1"></div>
                                     </div>
                                 )}
+
 
                                 <button onClick={() => setSelectedRows([])} className="text-white hover:text-green-200 text-sm font-medium transition-colors ml-4">
                                     Clear Selection
@@ -616,12 +647,14 @@ export default function ResidentPage() {
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-600 font-bold uppercase tracking-wider">
                                         <th className="px-6 py-4 w-10 sticky left-0 bg-gray-50 z-10">
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 rounded text-green-600 cursor-pointer"
-                                                checked={filteredResidents.length > 0 && selectedRows.length === filteredResidents.length}
-                                                onChange={handleSelectAll}
-                                            />
+                                            {(activeTab === 'directory' || (activeTab === 'queue' && authContext?.user?.role === 'CAPTAIN')) && (
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-4 h-4 rounded text-green-600 cursor-pointer"
+                                                    checked={filteredResidents.length > 0 && selectedRows.length === filteredResidents.length}
+                                                    onChange={handleSelectAll}
+                                                />
+                                            )}
                                         </th>
                                         <th className="px-6 py-4">Inhabitant Type</th>
                                         <th className="px-6 py-4 cursor-pointer hover:bg-gray-200" onClick={() => {setOrdering(ordering === 'last_name' ? '-last_name' : 'last_name'); setPage(1);}}>
@@ -660,12 +693,14 @@ export default function ResidentPage() {
                                         return (
                                             <tr key={resident.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-green-50' : ''}`}>
                                                 <td className="px-6 py-4 sticky left-0 bg-inherit z-10">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="w-4 h-4 rounded text-green-600 cursor-pointer"
-                                                        checked={isSelected}
-                                                        onChange={() => handleSelectRow(resident.id)}
-                                                    />
+                                                    {(activeTab === 'directory' || (activeTab === 'queue' && authContext?.user?.role === 'CAPTAIN')) && (
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="w-4 h-4 rounded text-green-600 cursor-pointer"
+                                                            checked={isSelected}
+                                                            onChange={() => handleSelectRow(resident.id)}
+                                                        />
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 font-medium text-gray-900">{resident.inhabitant_type}</td>
                                                 <td className="px-6 py-4 font-bold text-gray-900">{resident.last_name}</td>
@@ -928,9 +963,112 @@ export default function ResidentPage() {
                     mode={modalMode}
                     resident={selectedResident}
                     households={householdOptions}
-                    onClose={() => setIsModalOpen(false)}
-                    onSave={handleSaveResident}
+                    onClose={() => {
+                        setIsModalOpen(false);
+                        setIsConfirmingSave(false);
+                        setPendingResidentData(null);
+                    }}
+                    onSave={(formData) => {
+                        setPendingResidentData(formData);
+                        setIsConfirmingSave(true);
+                    }}
                 />
+            )}
+
+            {isConfirmingSave && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-blue-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Save Resident Changes?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to {modalMode === 'edit' ? 'update this resident' : 'add this new resident'}?
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsConfirmingSave(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeSaveResident} className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+                                    Yes, Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+                        {isConfirmingBulkDelete && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-red-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Delete {selectedRows.length} Residents?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to permanently delete these {selectedRows.length} residents from the registry? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsConfirmingBulkDelete(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeBulkDelete} className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors">
+                                    Yes, Delete All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isConfirmingBulkUpdate && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-blue-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Update Welfare?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to apply these welfare updates to {selectedRows.length} residents?
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsConfirmingBulkUpdate(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeBulkUpdate} className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+                                    Yes, Apply Updates
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {residentToDelete && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-red-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Resident?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to permanently delete this resident from the registry? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setResidentToDelete(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={executeDeleteResident} className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors">
+                                    Yes, Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState } from 'react';
 import BarangayCalendar from "../components/BarangayCalendar";
+import { AlertTriangle, Save, CalendarPlus } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -12,98 +13,126 @@ export default function StaffSchedulePage() {
         end_time: ''
     });
 
-    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
-    const [selectedRequest, setSelectedRequest] = useState<any | null>(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-    useEffect(() => {
-        fetchPendingRequests();
-    }, []);
+    const [editEventData, setEditEventData] = useState<any>(null);
+    const [isConfirmingAdd, setIsConfirmingAdd] = useState(false);
+    const [isConfirmingEdit, setIsConfirmingEdit] = useState(false);
+    const [eventToDelete, setEventToDelete] = useState<any>(null);
 
-    const fetchPendingRequests = async () => {
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsConfirmingAdd(true);
+    };
+
+    const executeAdd = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/reservations/`, {
+            const response = await fetch(`${API_URL}/api/events/`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            if (response.ok) {
+                setRefreshTrigger(prev => prev + 1);
+                setFormData({ title: '', event_type: 'ACTIVITY', description: '', start_time: '', end_time: '' });
+                setIsConfirmingAdd(false);
+            } else {
+                alert("Failed to add event: " + await response.text());
+                setIsConfirmingAdd(false);
+            }
+        } catch (error) {
+            console.error("Error adding event:", error);
+        }
+    };
+
+    const handleEventClick = (event: any) => {
+        if (!event.raw_id) {
+            alert(`Cannot edit this specific event from here.\n\nTitle: ${event.title}`);
+            return;
+        }
+        setEditEventData({
+            raw_id: event.raw_id,
+            title: event.title,
+            description: event.description || '',
+            event_type: event.type
+        });
+    };
+
+    const handleEditSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsConfirmingEdit(true);
+    };
+
+    const executeEdit = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/events/${editEventData.raw_id}/`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: editEventData.title,
+                    description: editEventData.description,
+                    event_type: editEventData.event_type
+                })
+            });
+            if (response.ok) {
+                setRefreshTrigger(prev => prev + 1);
+                setIsConfirmingEdit(false);
+                setEditEventData(null);
+            } else {
+                alert("Failed to update event: " + await response.text());
+                setIsConfirmingEdit(false);
+            }
+        } catch (error) {
+            console.error("Error updating event:", error);
+        }
+    };
+
+    const handleEditDelete = () => {
+        setEventToDelete(editEventData);
+    };
+
+    const executeDelete = async () => {
+        if (!eventToDelete) return;
+        try {
+            const response = await fetch(`${API_URL}/api/events/${eventToDelete.raw_id}/`, {
+                method: 'DELETE',
                 credentials: 'include'
             });
             if (response.ok) {
-                const data = await response.json();
-                const pending = data.filter((req: any) => req.status === 'PENDING');
-                setPendingRequests(pending);
-            }
-        } catch (error) {
-            console.error("Error fetching pending requests:", error);
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        await fetch(`${API_URL}/api/events/`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-        });
-        
-        alert("Event added to calendar!");
-        window.location.reload(); 
-    };
-
-    const handleStatusUpdate = async (id: number, newStatus: string) => {
-        try {
-            const response = await fetch(`${API_URL}/api/reservations/${id}/update_status/`, {
-                method: 'PATCH',
-                credentials: 'include',
-                headers: { 
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ status: newStatus })
-            });
-
-            if (response.ok) {
-                alert(`Reservation ${newStatus}!`);
-                window.location.reload(); 
+                setRefreshTrigger(prev => prev + 1);
+                setEventToDelete(null);
+                setEditEventData(null);
             } else {
-                alert("Failed to update status. Check permissions.");
+                alert("Failed to delete event: " + await response.text());
+                setEventToDelete(null);
             }
         } catch (error) {
-            console.error("Error updating status:", error);
+            console.error("Error deleting event:", error);
         }
     };
-
-    const getRequestedItem = (req: any) => {
-        if (req.facility) {
-            return req.facility_name || req.facility.name || `Facility (ID: ${req.facility})`;
-        }
-        if (req.equipment) {
-            const qty = req.equipment_quantity ? ` (Qty: ${req.equipment_quantity})` : '';
-            const name = req.equipment_name || req.equipment.name || `Equipment (ID: ${req.equipment})`;
-            return `${name}${qty}`;
-        }
-        return 'Unknown Item';
-    };
-
-    const openModal = (req: any) => setSelectedRequest(req);
-    const closeModal = () => setSelectedRequest(null);
 
     return (
         <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
-            
             <div className="flex flex-1 overflow-hidden">
-                
                 <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
-                    
                     <div className="w-full h-full"> 
-                        <h1 className="text-2xl font-bold mb-6">Manage Schedule & Events</h1>
                         
+                        <div className="flex justify-between items-end mb-6">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">Barangay Schedule</h1>
+                                <p className="text-gray-500 text-sm mt-1">Manage official events and absences.</p>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 mb-8">
                             <div className="xl:col-span-3">
-                                <BarangayCalendar />
+                                <BarangayCalendar onEventClick={handleEventClick} refreshTrigger={refreshTrigger} />
                             </div>
 
                             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-fit">
-                                <h2 className="text-lg font-bold mb-4">Add to Calendar</h2>
+                                <h1 className="text-2xl font-bold mb-6">Manage Events</h1>
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Type</label>
@@ -114,10 +143,11 @@ export default function StaffSchedulePage() {
                                         >
                                             <option value="ACTIVITY">Barangay Activity</option>
                                             <option value="ABSENCE">Official Absence</option>
+                                            <option value="AGENDA">Barangay Official Events / Agenda</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Title / Name</label>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Title</label>
                                         <input 
                                             type="text" required
                                             value={formData.title}
@@ -127,7 +157,16 @@ export default function StaffSchedulePage() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Start Time</label>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Details / Description</label>
+                                        <textarea
+                                            value={formData.description}
+                                            onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                            placeholder="Optional event details..."
+                                            className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600 min-h-[80px]"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Start Date & Time</label>
                                         <input 
                                             type="datetime-local" required
                                             value={formData.start_time}
@@ -136,7 +175,7 @@ export default function StaffSchedulePage() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">End Time</label>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">End Date & Time</label>
                                         <input 
                                             type="datetime-local" required
                                             value={formData.end_time}
@@ -144,72 +183,145 @@ export default function StaffSchedulePage() {
                                             className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"
                                         />
                                     </div>
-                                    <button type="submit" className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 mt-2 transition-colors">
+                                    <button 
+                                        type="submit"
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors"
+                                    >
                                         Save to Calendar
                                     </button>
                                 </form>
                             </div>
                         </div>
+
                     </div>
                 </main>
             </div>
 
-            {selectedRequest && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity p-4">
-                    {/* Added max-h-full and overflow-y-auto to handle vertically tall content */}
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
-                        
-                        <div className="flex justify-between items-center p-5 border-b border-gray-200 shrink-0">
-                            <h2 className="text-lg font-bold text-gray-900">Reservation Details</h2>
-                            <button 
-                                onClick={closeModal}
-                                className="text-gray-400 hover:text-gray-600 p-1 rounded-md border border-gray-200"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            {/* Edit Event Modal */}
+            {editEventData && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+                        <div className="flex justify-between items-center p-5 border-b border-gray-200">
+                            <h2 className="text-lg font-bold text-gray-900">Edit Event</h2>
+                            <button onClick={() => setEditEventData(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-md border border-gray-200">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
+                        <form onSubmit={handleEditSave} className="p-5 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Type</label>
+                                <select 
+                                    value={editEventData.event_type}
+                                    onChange={(e) => setEditEventData({...editEventData, event_type: e.target.value})}
+                                    className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"
+                                >
+                                    <option value="ACTIVITY">Barangay Activity</option>
+                                    <option value="ABSENCE">Official Absence</option>
+                                    <option value="AGENDA">Barangay Official Events / Agenda</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Title</label>
+                                <input 
+                                    type="text" required
+                                    value={editEventData.title}
+                                    onChange={(e) => setEditEventData({...editEventData, title: e.target.value})}
+                                    className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Details / Description</label>
+                                <textarea
+                                    value={editEventData.description}
+                                    onChange={(e) => setEditEventData({...editEventData, description: e.target.value})}
+                                    className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600 min-h-[80px]"
+                                />
+                            </div>
+                            <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                                <button type="button" onClick={handleEditDelete} className="text-red-600 hover:text-red-800 text-sm font-bold transition-colors">
+                                    Delete Event
+                                </button>
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setEditEventData(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md text-sm font-semibold hover:bg-gray-50 transition-colors">Cancel</button>
+                                    <button type="submit" className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-semibold transition-colors shadow-sm">Save Changes</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
-                        {/* Modal Body: Added overflow-y-auto here to allow scrolling inside the modal if it gets too tall */}
-                        <div className="p-6 space-y-4 overflow-y-auto">
-                            <div className="grid grid-cols-3 gap-2 border-b border-gray-100 pb-4">
-                                <span className="text-xs font-semibold text-gray-500 uppercase">Request ID</span>
-                                <span className="col-span-2 font-medium text-gray-900 wrap-break-word">#{selectedRequest.id}</span>
+            {/* Add Confirmation Modal */}
+            {isConfirmingAdd && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-blue-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                                <CalendarPlus className="w-6 h-6" />
                             </div>
-                            <div className="grid grid-cols-3 gap-2 border-b border-gray-100 pb-4">
-                                <span className="text-xs font-semibold text-gray-500 uppercase">Item/Facility</span>
-                                {/* Added break-words to handle extremely long item names */}
-                                <span className="col-span-2 font-bold text-green-700 wrap-break-word">{getRequestedItem(selectedRequest)}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 border-b border-gray-100 pb-4">
-                                <span className="text-xs font-semibold text-gray-500 uppercase">Purpose</span>
-                                {/* Added break-words to prevent long text from spilling out */}
-                                <span className="col-span-2 font-medium text-gray-900 wrap-break-word">{selectedRequest.purpose}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 border-b border-gray-100 pb-4">
-                                <span className="text-xs font-semibold text-gray-500 uppercase">Start Time</span>
-                                <span className="col-span-2 font-medium text-gray-900 wrap-break-word">{new Date(selectedRequest.start_time).toLocaleString()}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                <span className="text-xs font-semibold text-gray-500 uppercase">End Time</span>
-                                <span className="col-span-2 font-medium text-gray-900 wrap-break-word">{new Date(selectedRequest.end_time).toLocaleString()}</span>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Create New Event?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to add <strong>{formData.title}</strong> to the official barangay calendar?
+                            </p>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setIsConfirmingAdd(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button type="button" onClick={executeAdd} className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+                                    Yes, Create
+                                </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
 
-                        <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 shrink-0">
-                            <button 
-                                onClick={() => handleStatusUpdate(selectedRequest.id, 'REJECTED')}
-                                className="px-4 py-2 border border-red-200 bg-red-50 text-red-700 rounded-md text-sm font-semibold hover:bg-red-100 transition-colors"
-                            >
-                                Reject Request
-                            </button>
-                            <button 
-                                onClick={() => handleStatusUpdate(selectedRequest.id, 'APPROVED')}
-                                className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-semibold transition-colors shadow-sm"
-                            >
-                                Approve Request
-                            </button>
+            {/* Edit Confirmation Modal */}
+            {isConfirmingEdit && editEventData && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-green-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-4">
+                                <Save className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Save Changes?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to save the new details for <strong>{editEventData.title}</strong>?
+                            </p>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setIsConfirmingEdit(false)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button type="button" onClick={executeEdit} className="flex-1 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors">
+                                    Yes, Save
+                                </button>
+                            </div>
                         </div>
+                    </div>
+                </div>
+            )}
 
+            {/* Delete Confirmation Modal */}
+            {eventToDelete && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-red-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                                <AlertTriangle className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Event?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to completely remove <strong>{eventToDelete.title}</strong>? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setEventToDelete(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    Cancel
+                                </button>
+                                <button type="button" onClick={executeDelete} className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors">
+                                    Yes, Delete
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

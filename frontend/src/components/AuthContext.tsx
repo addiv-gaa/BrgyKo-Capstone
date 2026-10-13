@@ -117,7 +117,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return (
         <AuthContext.Provider value={{ user, settings, login, logout, refreshSettings: fetchSettings, refreshUser }}>
-            {!isAppLoading ? children : <div className="flex h-screen items-center justify-center">Loading App...</div>}
+            {!isAppLoading ? children : <div className="flex flex-col h-screen items-center justify-center bg-[#f4f7fa]">
+                <div className="animate-spin rounded-full h-14 w-14 border-4 border-gray-200 border-t-green-600 mb-4 shadow-sm"></div>
+                <div className="text-gray-600 font-bold tracking-wide">Loading Barangay Portal...</div>
+            </div>}
         </AuthContext.Provider>
     );
 };

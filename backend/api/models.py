@@ -126,6 +126,7 @@ class AiQueryStatistic(models.Model):
     prompt = models.TextField()
     response = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"Query by {self.user} at {self.created_at}"
@@ -143,6 +144,7 @@ class Facility(models.Model):
     location = models.CharField(max_length=255, blank=True, help_text="Specific area in the barangay")
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Available')
     created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"{self.name} ({self.status})"
@@ -160,6 +162,7 @@ class Equipment(models.Model):
     total_quantity = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Available')
     created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"{self.name} - Total: {self.total_quantity}"
@@ -177,7 +180,7 @@ class Event(models.Model):
     
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
-    event_type = models.CharField(max_length=20, choices=[('ACTIVITY', 'Barangay Activity'), ('ABSENCE', 'Official Absence')], default='ACTIVITY') 
+    event_type = models.CharField(max_length=20, choices=[('ACTIVITY', 'Barangay Activity'), ('ABSENCE', 'Official Absence'), ('AGENDA', 'Barangay Official Events / Agenda')], default='ACTIVITY') 
     
     # NEW FIELDS
     tags = models.CharField(max_length=20, choices=TAG_CHOICES, default='GENERAL')
@@ -187,6 +190,7 @@ class Event(models.Model):
     end_time = models.DateTimeField()
     organizer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"[{self.get_tags_display()}] {self.title}"
@@ -212,6 +216,8 @@ class Reservation(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     rejection_reason = models.TextField(blank=True, null=True) # NEW
     date_requested = models.DateTimeField(auto_now_add=True)
+
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['-start_time']
@@ -296,6 +302,8 @@ class Announcement(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
+    is_archived = models.BooleanField(default=False)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['-created_at']
@@ -447,6 +455,7 @@ class ResidentApplication(models.Model):
     rejection_reason = models.TextField(blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"Application: {self.first_name} {self.last_name}"
@@ -470,6 +479,7 @@ class OfficialDocument(models.Model):
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_documents')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_archived = models.BooleanField(default=False)
+    history = HistoricalRecords()
     
     history = HistoricalRecords()
 
@@ -519,11 +529,27 @@ class BarangaySettings(models.Model):
     police_hotline = models.CharField(max_length=50, default="117")
     fire_hotline = models.CharField(max_length=50, default="112")
 
+    # Homepage Content
+    captain_image = models.FileField(upload_to='settings/', blank=True, null=True)
+    captain_message = models.TextField(default="Mabuhay at maligayang pagdating sa opisyal na pahina ng Barangay! Ang aming layunin ay magbigay ng mabilis, tapat, at mapagkakatiwalaang serbisyo sa bawat residente.")
+    
+    barangay_classification = models.CharField(max_length=100, default="Urban Barangay")
+    barangay_city = models.CharField(max_length=100, default="City of General Trias")
+    barangay_province = models.CharField(max_length=100, default="Cavite")
+    barangay_region = models.CharField(max_length=100, default="IV-A CALABARZON")
+    number_of_puroks = models.CharField(max_length=50, default="4 Puroks")
+    
+    history_text = models.TextField(default="Barangay San Gabriel is one of the barangays comprising the City...")
+    location_geography_text = models.TextField(default="Situated within the city...")
+    community_culture_text = models.TextField(default="Residents are known for their deep faith...")
+    services_facilities_text = models.TextField(default="The Barangay Hall provides a full range of community services...")
+
     # Feature Toggles & Kill-Switches
     ai_chatbot_enabled = models.BooleanField(default=True)
     accept_permit_requests = models.BooleanField(default=True)
     accept_reservations = models.BooleanField(default=True)
     maintenance_mode = models.BooleanField(default=False)
+    history = HistoricalRecords()
 
     # Workflow & Policy Limits
     max_pending_requests_per_user = models.IntegerField(default=3)
@@ -548,6 +574,7 @@ class EmergencyContact(models.Model):
     phone = models.CharField(max_length=100)
     icon = models.CharField(max_length=50, default='phone')
     order = models.IntegerField(default=0)
+    history = HistoricalRecords()
     
     def __str__(self):
         return f"{self.name} - {self.phone}"
@@ -560,7 +587,59 @@ class BarangayOfficial(models.Model):
     image = models.ImageField(upload_to='officials/', blank=True, null=True)
     order = models.IntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return f'{self.name} - {self.position}'
 
+
+
+class DemographicSnapshot(models.Model):
+    snapshot_date = models.DateField(unique=True)
+    total_residents = models.IntegerField(default=0)
+    
+    # Age Brackets
+    children = models.IntegerField(default=0)
+    youth = models.IntegerField(default=0)
+    adults = models.IntegerField(default=0)
+    seniors = models.IntegerField(default=0)
+    
+    # Sectors
+    four_ps = models.IntegerField(default=0)
+    pwd = models.IntegerField(default=0)
+    solo_parents = models.IntegerField(default=0)
+    indigenous = models.IntegerField(default=0)
+    ofw = models.IntegerField(default=0)
+    out_of_school = models.IntegerField(default=0)
+    registered_voters = models.IntegerField(default=0)
+    
+    # Gender
+    male = models.IntegerField(default=0)
+    female = models.IntegerField(default=0)
+
+    purok_data = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-snapshot_date']
+
+    def __str__(self):
+        return f"Snapshot - {self.snapshot_date.strftime('%B %Y')}"
+
+
+class SessionLog(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    action = models.CharField(max_length=50)
+    history_date = models.DateTimeField(auto_now_add=True)
+    
+    @property
+    def history_id(self):
+        return f"sess-{self.id}"
+        
+    @property
+    def history_user(self):
+        return self.user
+        
+    @property
+    def history_type(self):
+        return '*'

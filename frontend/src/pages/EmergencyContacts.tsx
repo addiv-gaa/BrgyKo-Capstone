@@ -39,6 +39,8 @@ export default function EmergencyContacts() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
     const [formData, setFormData] = useState<Partial<EmergencyContact>>({});
+    const [contactToDelete, setContactToDelete] = useState<EmergencyContact | null>(null);
+    const [isConfirmingSave, setIsConfirmingSave] = useState(false);
 
     const fetchContacts = async () => {
         try {
@@ -80,9 +82,12 @@ export default function EmergencyContacts() {
         setFormData({});
     };
 
-    const handleSave = async (e: React.FormEvent) => {
+    const handleFormSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setIsConfirmingSave(true);
+    };
 
+    const executeSave = async () => {
         const method = editingContact ? 'PUT' : 'POST';
         const url = editingContact 
             ? `${API_URL}/api/emergency-contacts/${editingContact.id}/`
@@ -101,19 +106,25 @@ export default function EmergencyContacts() {
             if (res.ok) {
                 fetchContacts();
                 closeModal();
+                setIsConfirmingSave(false);
             } else {
                 alert("Failed to save contact.");
+                setIsConfirmingSave(false);
             }
         } catch (error) {
             console.error("Error saving contact:", error);
+            setIsConfirmingSave(false);
         }
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Are you sure you want to delete this contact?")) return;
+    const handleDeleteClick = (contact: EmergencyContact) => {
+        setContactToDelete(contact);
+    };
 
+    const executeDelete = async () => {
+        if (!contactToDelete) return;
         try {
-            const res = await fetch(`${API_URL}/api/emergency-contacts/${id}/`, {
+            const res = await fetch(`${API_URL}/api/emergency-contacts/${contactToDelete.id}/`, {
                 method: 'DELETE',
                 credentials: 'include'
             });
@@ -125,6 +136,8 @@ export default function EmergencyContacts() {
             }
         } catch (error) {
             console.error("Error deleting contact:", error);
+        } finally {
+            setContactToDelete(null);
         }
     };
 
@@ -163,7 +176,7 @@ export default function EmergencyContacts() {
                         <button onClick={() => openModal(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => handleDelete(c.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors">
+                        <button onClick={() => handleDeleteClick(c)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                         </button>
                     </div>
@@ -261,7 +274,7 @@ export default function EmergencyContacts() {
                             </button>
                         </div>
                         
-                        <form onSubmit={handleSave} className="p-6 space-y-4">
+                        <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">Category</label>
                                 <select 
@@ -343,6 +356,68 @@ export default function EmergencyContacts() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation Modal for Delete */}
+            {contactToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-red-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                                <AlertTriangle className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Contact?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to remove <strong>{contactToDelete.name}</strong> from the emergency contacts list? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setContactToDelete(null)}
+                                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={executeDelete}
+                                    className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+                                >
+                                    Yes, Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation Modal for Save */}
+            {isConfirmingSave && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-blue-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                                <Info className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Save Changes?</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Are you sure you want to save these details for <strong>{formData.name}</strong>?
+                            </p>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setIsConfirmingSave(false)}
+                                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={executeSave}
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    Confirm Save
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

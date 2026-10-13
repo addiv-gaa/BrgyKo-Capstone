@@ -115,7 +115,7 @@ const Sidebar = ({ isOpen = true }: { isOpen?: boolean }) => {
                     {isCaptainOrSecretary && (
                         <>
                             <div className="px-6 mt-4 mb-2 text-[10px] font-bold text-green-300 uppercase tracking-wider">Administration</div>
-                            {renderMenuSection(MENU_CONFIG.staffAdministration)}
+                            {renderMenuSection(MENU_CONFIG.staffAdministration.filter(item => item.label !== 'Admin Hub' || userRole === 'ADMIN'))}
                         </>
                     )}
                 </div>
