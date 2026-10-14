@@ -97,11 +97,38 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
+        from django.core.cache import cache
+        username = str(request.data.get('username') or '').strip()
+        lock_key = f"login_lock_{username.lower()}"
+        attempt_key = f"login_attempts_{username.lower()}"
+
+        if cache.get(lock_key):
+            return Response(
+                {"detail": "Account locked: 5 consecutive failed login attempts. Please try again after 15 minutes."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-        except Exception as e:
-            return super().post(request, *args, **kwargs)
+        except Exception:
+            attempts = cache.get(attempt_key, 0) + 1
+            if attempts >= 5:
+                cache.set(lock_key, True, timeout=15 * 60)
+                cache.delete(attempt_key)
+                return Response(
+                    {"detail": "Account locked: 5 consecutive failed login attempts. Locked for 15 minutes."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+            cache.set(attempt_key, attempts, timeout=15 * 60)
+            return Response(
+                {"detail": "No active account found with the given credentials."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Clear failed login counters on successful authentication
+        cache.delete(lock_key)
+        cache.delete(attempt_key)
 
         user = serializer.user
         access_token = serializer.validated_data.get('access')
@@ -139,6 +166,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
         response.data = {
             'detail': 'Login successful',
+            'access': str(access_token),
+            'refresh': str(refresh_token),
             'user': {
                 'username': user.username,
                 'first_name': user.first_name,
@@ -154,11 +183,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 
 class CustomTokenRefreshView(APIView):
-    """Reads the refresh token from the HttpOnly cookie and issues a new access token cookie."""
+    """Reads refresh token from HttpOnly cookie or request body and returns new access token."""
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        refresh_token = request.COOKIES.get('refresh_token')
+        refresh_token = request.COOKIES.get('refresh_token') or request.data.get('refresh')
 
         if not refresh_token:
             return Response({'error': 'No refresh token found.'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -167,7 +196,10 @@ class CustomTokenRefreshView(APIView):
             refresh = RefreshToken(refresh_token)
             new_access_token = str(refresh.access_token)
 
-            response = Response({'detail': 'Token refreshed successfully.'})
+            response = Response({
+                'detail': 'Token refreshed successfully.',
+                'access': new_access_token
+            })
             response.set_cookie(
                 key='access_token',
                 value=new_access_token,
@@ -217,8 +249,6 @@ class ForgotPasswordView(APIView):
         profile.otp_attempts = 0
         profile.save()
         
-        print(f"\n{'='*40}\nPASSWORD RESET OTP FOR {user.email}: {otp}\n{'='*40}\n")
-        
         try:
             send_mail(
                 'Password Reset Verification Code',
@@ -250,23 +280,38 @@ class ResetPasswordView(APIView):
             
         from .models import UserProfile
         profile = getattr(user, 'otp_profile', None)
-        if not profile or profile.email_otp != otp:
-            if profile:
-                profile.otp_attempts += 1
-                profile.save()
+        if not profile:
             return Response({"error": "Invalid OTP."}, status=400)
+
+        # Enforce maximum 5 wrong attempts (F-006 Brute Force protection)
+        if profile.otp_attempts >= 5:
+            profile.email_otp = ''
+            profile.save()
+            return Response({"error": "Too many failed attempts. This OTP has been invalidated. Please request a new OTP."}, status=400)
+
+        if profile.email_otp != otp:
+            profile.otp_attempts += 1
+            if profile.otp_attempts >= 5:
+                profile.email_otp = ''
+                profile.save()
+                return Response({"error": "Too many failed attempts. This OTP has been invalidated. Please request a new OTP."}, status=400)
+            profile.save()
+            return Response({"error": f"Invalid OTP. {5 - profile.otp_attempts} attempt(s) remaining."}, status=400)
             
-        # Verify age of OTP (e.g. 10 mins)
+        # Verify age of OTP (10 mins)
         from django.utils import timezone
         import datetime
         if not profile.otp_created_at or timezone.now() - profile.otp_created_at > datetime.timedelta(minutes=10):
+            profile.email_otp = ''
+            profile.save()
             return Response({"error": "OTP has expired."}, status=400)
             
         user.set_password(new_password)
         user.save()
         
-        # Clear OTP
+        # Clear OTP and reset attempts
         profile.email_otp = ''
+        profile.otp_attempts = 0
         profile.save()
         
         # Log the password reset
@@ -281,8 +326,13 @@ class LogoutView(APIView):
 
     def post(self, request, *args, **kwargs):
         if request.user and request.user.is_authenticated:
-            from .models import SessionLog
-            SessionLog.objects.create(user=request.user, action='Logged Out')
+            from django.core.cache import cache
+            cache_key = f"recent_logout_{request.user.id}"
+            if not cache.get(cache_key):
+                cache.set(cache_key, True, timeout=3)
+                from .models import SessionLog
+                SessionLog.objects.create(user=request.user, action='Logged Out')
+
         response = Response({'detail': 'Logged out successfully.'})
         response.delete_cookie(
             'access_token', 
@@ -298,11 +348,9 @@ class LogoutView(APIView):
 
 
 class CurrentUserView(APIView):
-    """Returns the currently authenticated user's info. Used by the frontend
-    to know who is logged in since it can no longer decode the HttpOnly cookie."""
+    """Returns the currently authenticated user's info."""
 
     def get(self, request):
-        print(f"DEBUG COOKIES: {request.COOKIES}")
         try:
             role = request.user.otp_profile.role
         except Exception:
@@ -604,7 +652,7 @@ class CreateProfileUpdateRequestView(generics.CreateAPIView):
 
 class StaffProfileUpdateListView(generics.ListAPIView):
     serializer_class = ProfileUpdateRequestSerializer
-    permission_classes = [permissions.IsAuthenticated] 
+    permission_classes = [IsAdminUser] 
 
     def get_queryset(self):
         return ProfileUpdateRequest.objects.all().order_by('-created_at')
@@ -612,7 +660,7 @@ class StaffProfileUpdateListView(generics.ListAPIView):
 class StaffProfileUpdateActionView(generics.UpdateAPIView):
     queryset = ProfileUpdateRequest.objects.all()
     serializer_class = ProfileUpdateRequestSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def patch(self, request, *args, **kwargs):
         update_request = self.get_object()
@@ -649,13 +697,10 @@ class StaffProfileUpdateActionView(generics.UpdateAPIView):
 class CertificateRequestView(generics.ListCreateAPIView):
     queryset = CertificateRequest.objects.all()
     serializer_class = CertificateRequestSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         return CertificateRequest.objects.filter(user=self.request.user)
-
-
-
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -663,22 +708,17 @@ class CertificateRequestView(generics.ListCreateAPIView):
 class PermitRequestView(generics.ListCreateAPIView):
     queryset = PermitRequest.objects.all()
     serializer_class = PermitRequestSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         return PermitRequest.objects.filter(user=self.request.user)
 
-
-
-
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    
-
 class IncidentReportViewSet(viewsets.ModelViewSet):
     serializer_class = IncidentReportSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     #throttle_classes = [IncidentReportThrottle]
 
     def get_queryset(self):
@@ -734,7 +774,7 @@ class IncidentReportViewSet(viewsets.ModelViewSet):
 # 6. MANAGER & STAFF VIEWSETS
 # ==========================================
 class CertificateRequestManagerViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsInternalUser]
+    permission_classes = [IsAdminUser]
     queryset = CertificateRequest.objects.all().order_by('-date_requested')
     serializer_class = CertificateRequestSerializer
 
@@ -755,7 +795,7 @@ class CertificateRequestManagerViewSet(viewsets.ModelViewSet):
         return Response({"message": f"Certificate request {new_status.lower()}."})
 
 class PermitRequestManagerViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsInternalUser]
+    permission_classes = [IsAdminUser]
     queryset = PermitRequest.objects.all().order_by('-date_requested')
     serializer_class = PermitRequestSerializer
 
@@ -824,6 +864,7 @@ class ResidentPagination(PageNumberPagination):
         return super().paginate_queryset(queryset, request, view)
 
 class ResidentViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsInternalUser]
     queryset = Resident.objects.select_related('household').all()
     serializer_class = ResidentSerializer
     pagination_class = ResidentPagination
@@ -1174,26 +1215,17 @@ class ResidentViewSet(viewsets.ModelViewSet):
 class FacilityViewSet(viewsets.ModelViewSet):
     queryset = Facility.objects.all()
     serializer_class = FacilitySerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsInternalUser()]
-        return super().get_permissions()
+    permission_classes = [IsAdminUser]
 
 class EquipmentViewSet(viewsets.ModelViewSet):
     queryset = Equipment.objects.all()
     serializer_class = EquipmentSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsInternalUser()]
-        return super().get_permissions()
+    permission_classes = [IsAdminUser]
 
 class ReservationViewSet(viewsets.ModelViewSet):
     queryset = Reservation.objects.all()
     serializer_class = ReservationSerializer
+    permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         user = self.request.user
@@ -1761,7 +1793,7 @@ class DocumentPagination(PageNumberPagination):
 class OfficialDocumentViewSet(viewsets.ModelViewSet):
     queryset = OfficialDocument.objects.all()
     serializer_class = OfficialDocumentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsInternalUser]
     pagination_class = DocumentPagination
     
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, OrderingFilter]
@@ -1787,16 +1819,23 @@ class OfficialDocumentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[IsInternalUser])
     def bulk_delete(self, request):
         ids = request.data.get('ids', [])
-        OfficialDocument.objects.filter(id__in=ids).delete()
+        documents = OfficialDocument.objects.filter(id__in=ids)
+        for doc in documents:
+            doc._change_reason = "Bulk Deleted from Archives"
+            doc.delete()
         return Response(status=204)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[IsInternalUser])
     def bulk_archive(self, request):
         ids = request.data.get('ids', [])
-        OfficialDocument.objects.filter(id__in=ids).update(is_archived=True)
+        documents = OfficialDocument.objects.filter(id__in=ids)
+        for doc in documents:
+            doc.is_archived = True
+            doc._change_reason = "Bulk Archived"
+            doc.save()
         return Response(status=204)
 
 # ==========================================
@@ -1933,7 +1972,9 @@ class AdminAuditLogAPIView(APIView):
             
             try:
                 if model_name == "UserProfile":
-                    target_info = record.user.username if record.user else f"User ID {getattr(record, 'user_id', '?')}"
+                    from django.contrib.auth.models import User
+                    u = User.objects.filter(id=getattr(record, 'user_id', None)).first()
+                    target_info = u.username if u else f"User #{getattr(record, 'user_id', getattr(record, 'id', '?'))}"
                 elif model_name == "Resident":
                     target_info = f"{getattr(record, 'first_name', '')} {getattr(record, 'last_name', '')}".strip()
                 elif model_name == "Household":
@@ -2035,6 +2076,8 @@ class StaffManagementAPIView(APIView):
                 new_user.is_staff = True
                 new_user.save()
             UserProfile.objects.create(user=new_user, role=staff_role_upper)
+            from .models import SessionLog
+            SessionLog.objects.create(user=request.user, action=f"Created {staff_role_upper} Account: {username}")
             return Response({"message": f"{staff_role_upper} account created successfully."}, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -2068,6 +2111,8 @@ class StaffManagementAPIView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+            from .models import SessionLog
+
             if action_type == 'toggle_status':
                 # Double-check protection: Never allow deactivating a Captain or Secretary from the frontend unless you're an ADMIN
                 if target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role != 'ADMIN':
@@ -2076,6 +2121,7 @@ class StaffManagementAPIView(APIView):
                 target_user.is_active = not target_user.is_active
                 target_user.save()
                 status_text = "Activated" if target_user.is_active else "Deactivated"
+                SessionLog.objects.create(user=request.user, action=f"Account {status_text}: {target_user.username}")
                 return Response({"message": f"Account {status_text} successfully."}, status=status.HTTP_200_OK)
             
             elif action_type == 'reset_password':
@@ -2084,12 +2130,15 @@ class StaffManagementAPIView(APIView):
                     return Response({"error": "New password is required."}, status=status.HTTP_400_BAD_REQUEST)
                 target_user.set_password(new_password)
                 target_user.save()
+                SessionLog.objects.create(user=request.user, action=f"Reset Password for {target_user.username}")
                 return Response({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
 
             elif action_type == 'delete_account':
                 if target_profile and target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role != 'ADMIN':
                     return Response({"error": "Critical system accounts cannot be deleted."}, status=status.HTTP_403_FORBIDDEN)
+                deleted_name = target_user.username
                 target_user.delete()
+                SessionLog.objects.create(user=request.user, action=f"Deleted Account: {deleted_name}")
                 return Response({"message": "Account permanently deleted."}, status=status.HTTP_200_OK)
 
             elif action_type == 'change_role':
@@ -2152,7 +2201,7 @@ class AiQueryStatisticViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = AiQueryStatistic.objects.all().order_by('-created_at')
     serializer_class = AiQueryStatisticSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 class EmergencyContactViewSet(viewsets.ModelViewSet):
     queryset = EmergencyContact.objects.all().order_by('category', 'order', 'id')
     serializer_class = EmergencyContactSerializer
@@ -2194,3 +2243,49 @@ class ForceDemographicSnapshotView(APIView):
             return Response({"message": "Successfully generated the demographic snapshot for today."})
         else:
             return Response({"error": "Failed to generate snapshot."}, status=500)
+
+
+class ProtectedMediaView(APIView):
+    """
+    Secure media serving view.
+    Public media (announcements, officials, settings) are publicly accessible.
+    Sensitive media (resident IDs, official documents, profile updates) require authenticated internal staff.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, file_path):
+        import os
+        import mimetypes
+        from django.http import FileResponse, Http404
+
+        safe_path = os.path.normpath(file_path).lstrip('/\\')
+        if safe_path.startswith('..') or '..' in safe_path.split(os.path.sep):
+            raise Http404("Invalid file path.")
+
+        lower_path = safe_path.replace('\\', '/').lower()
+        is_sensitive = any(lower_path.startswith(prefix) for prefix in [
+            'residents/', 'official_documents/', 'documents/', 'updates/', 'cert_requirements/'
+        ])
+
+        if is_sensitive:
+            if not request.user or not request.user.is_authenticated:
+                return Response(
+                    {"detail": "Authentication required to access this file."}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            try:
+                role = str(request.user.otp_profile.role).upper()
+            except Exception:
+                role = ''
+            if not (request.user.is_superuser or role in ['ADMIN', 'STAFF', 'CAPTAIN']):
+                return Response(
+                    {"detail": "Access denied to protected document."}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        full_path = os.path.join(settings.MEDIA_ROOT, safe_path)
+        if not os.path.exists(full_path) or not os.path.isfile(full_path):
+            raise Http404("File not found.")
+
+        content_type, _ = mimetypes.guess_type(full_path)
+        return FileResponse(open(full_path, 'rb'), content_type=content_type or 'application/octet-stream')

@@ -57,6 +57,7 @@ from api.views import (
     StaffManagementAPIView,
     ForceDemographicSnapshotView,
     AiQueryStatisticViewSet,
+    ProtectedMediaView,
 )
 from api.reports import RBIFormCReportView, RBIFormCDownloadView
 
@@ -124,8 +125,8 @@ urlpatterns = [
     # --- Router Includes ---
     path('api/', include(router.urls)),
 
+    # --- Protected Media Serving (F-003) ---
+    path('media/<path:file_path>', ProtectedMediaView.as_view(), name='protected_media'),
+
     path('admin/', admin.site.urls),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

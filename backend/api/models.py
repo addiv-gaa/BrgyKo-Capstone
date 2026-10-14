@@ -19,7 +19,7 @@ class UserProfile(models.Model):
     otp_created_at = models.DateTimeField(blank=True, null=True)
     otp_attempts = models.IntegerField(default=0)
     
-    history = HistoricalRecords()
+    history = HistoricalRecords(excluded_fields=['email_otp'])
 
     def __str__(self):
         return f"{self.user.email} - {self.get_role_display()}"
