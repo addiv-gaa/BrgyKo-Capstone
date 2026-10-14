@@ -172,7 +172,10 @@ def get_rbi_form_c_data():
         BarangayOfficial.objects.filter(position__icontains='Captain', is_active=True).first() or
         BarangayOfficial.objects.filter(order__in=[0, 1], is_active=True).first()
     )
-    secretary_name = (sec_official.name if sec_official else 'MAICA ANN M. MENDOZA').upper()
+    secretary_name = (
+        (settings_obj.secretary_name.strip() if settings_obj and settings_obj.secretary_name and settings_obj.secretary_name.strip() else None) or
+        (sec_official.name if sec_official else 'MAICA ANN M. MENDOZA')
+    ).upper()
     captain_name = (
         cap_official.name if cap_official else (settings_obj.captain_name if settings_obj and settings_obj.captain_name else 'ALLAN A. PEDRAZA')
     ).upper()

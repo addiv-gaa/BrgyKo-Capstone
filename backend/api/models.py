@@ -519,6 +519,7 @@ class BarangaySettings(models.Model):
     # Barangay Identity & Metadata
     barangay_name = models.CharField(max_length=255, default="Barangay Magsaysay")
     captain_name = models.CharField(max_length=255, default="Juan Dela Cruz")
+    secretary_name = models.CharField(max_length=255, default="Maica Ann M. Mendoza", blank=True)
     barangay_hall_address = models.CharField(max_length=255, default="Barangay Hall, Main St.")
     official_contact_email = models.EmailField(default="official@magsaysay.gov.ph")
     official_contact_number = models.CharField(max_length=50, default="09123456789")

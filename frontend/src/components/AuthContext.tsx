@@ -13,6 +13,7 @@ interface User {
 interface SystemSettings {
     barangay_name: string;
     captain_name: string;
+    secretary_name?: string;
     barangay_hall_address: string;
     official_contact_email: string;
     official_contact_number: string;

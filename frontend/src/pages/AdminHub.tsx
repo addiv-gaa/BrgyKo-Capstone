@@ -27,6 +27,7 @@ interface StaffMember {
 interface SystemSettings {
     barangay_name: string;
     captain_name: string;
+    secretary_name?: string;
     barangay_hall_address: string;
     official_contact_email: string;
     official_contact_number: string;
@@ -85,6 +86,7 @@ export default function AdminHub() {
     const [settingsForm, setSettingsForm] = useState<SystemSettings>({
         barangay_name: "", 
         captain_name: "", 
+        secretary_name: "",
         barangay_hall_address: "",
         official_contact_email: "",
         official_contact_number: "",
@@ -520,6 +522,10 @@ export default function AdminHub() {
                                                 <div>
                                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Punong Barangay</label>
                                                     <input type="text" required value={settingsForm.captain_name} onChange={(e) => setSettingsForm({...settingsForm, captain_name: e.target.value})} className={inputClass} placeholder="e.g. Juan Dela Cruz" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Barangay Secretary</label>
+                                                    <input type="text" value={settingsForm.secretary_name || ""} onChange={(e) => setSettingsForm({...settingsForm, secretary_name: e.target.value})} className={inputClass} placeholder="e.g. Maica Ann M. Mendoza" />
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Hall Address</label>
