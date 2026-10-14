@@ -4,29 +4,37 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
     const location = useLocation();
 
-    // Auto-close sidebar on mobile when navigating
+    // Auto-close sidebar on mobile/tablet when navigating
     useEffect(() => {
-        if (window.innerWidth < 768) {
+        if (window.innerWidth < 1024) {
             setIsSidebarOpen(false);
         }
     }, [location.pathname]);
 
     return (
         <div className="h-screen w-full flex bg-gray-100 overflow-hidden text-gray-800 relative">
-            {/* Mobile Backdrop Overlay */}
+            {/* Mobile/Tablet Backdrop Overlay */}
             {isSidebarOpen && (
                 <div 
-                    className="fixed inset-0 bg-black/50 z-[900] md:hidden"
+                    className="fixed inset-0 bg-black/50 z-[900] lg:hidden"
                     onClick={() => setIsSidebarOpen(false)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Close navigation sidebar"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape' || e.key === 'Enter') {
+                            setIsSidebarOpen(false);
+                        }
+                    }}
                 />
             )}
 
             {/* Sidebar Container */}
-            <div className={`shrink-0 h-full absolute md:relative z-[1000] transition-all duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-                {/* We pass a forced true or false to Sidebar to handle its internal width if needed, or just let the container handle translation. Sidebar's internal w-0 logic can conflict with translate-x, so let's just pass isSidebarOpen but for desktop we want it to close if clicked. */}
+            <div className={`shrink-0 h-full absolute lg:relative z-[1000] transition-all duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+                {/* Pass isSidebarOpen to handle width */}
                 <Sidebar isOpen={isSidebarOpen} />
             </div>
 

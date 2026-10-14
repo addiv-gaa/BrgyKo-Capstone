@@ -202,10 +202,10 @@ export default function BarangayOfficials() {
     const sortedOfficials = [...officials].sort((a, b) => a.order - b.order);
 
     return (
-        <div className="h-full w-full flex flex-col bg-[#f4f7fa] overflow-y-auto text-gray-800 p-8">
+        <div className="h-full w-full flex flex-col bg-[#f4f7fa] overflow-y-auto text-gray-800 p-4 sm:p-6 md:p-8">
             <div className="max-w-6xl w-full mx-auto">
                 {/* Header */}
-                <div className="flex justify-between items-end mb-8">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 mb-8">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 mb-1">Barangay Officials</h1>
                         <p className="text-gray-600 text-sm">Directory of current barangay officials</p>
@@ -213,7 +213,7 @@ export default function BarangayOfficials() {
                     {canEdit && (
                         <button 
                             onClick={() => openModal()} 
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
                         >
                             <Plus className="w-4 h-4" />
                             Add Official

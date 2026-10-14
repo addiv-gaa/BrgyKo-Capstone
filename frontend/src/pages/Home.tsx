@@ -172,21 +172,21 @@ export default function Home() {
     return (
         <div className="h-full w-full flex bg-gray-100 overflow-hidden text-gray-800">
             <div className="flex flex-1 flex-col overflow-hidden">
-                <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
+                <main className="flex-1 h-full overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#f4f7fa]">
                     
                     <div className="w-full">
                         
                         {/* Green Banner */}
-                        <div className="bg-[#1e7b2b] text-white rounded-xl mb-6 p-8 flex items-center justify-between relative overflow-hidden shadow-sm">
-                            <div className="flex items-center gap-6 z-10">
-                                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center p-1 shadow-md">
+                        <div className="bg-[#1e7b2b] text-white rounded-xl mb-6 p-4 sm:p-6 md:p-8 flex items-center justify-between relative overflow-hidden shadow-sm">
+                            <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-6 z-10 w-full sm:w-auto">
+                                <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white rounded-full flex items-center justify-center p-1 shadow-md shrink-0">
                                     <img src="/b4-logo.jpg" alt="Logo" className="w-full h-full rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                 </div>
                                 <div className="flex flex-col">
                                     <p className="text-xs text-green-100 mb-1">Republic of the Philippines · Gen. Trias, Cavite</p>
-                                    <h1 className="text-3xl font-bold mb-1">Barangay San Gabriel</h1>
-                                    <p className="text-sm text-green-50 mb-4">Management Information System</p>
-                                    <div className="inline-flex items-center gap-2 bg-[#176623] border border-[#2e8f3b] text-xs px-3 py-1.5 rounded-full w-fit">
+                                    <h1 className="text-2xl sm:text-3xl font-bold mb-1">Barangay San Gabriel</h1>
+                                    <p className="text-sm text-green-50 mb-3 sm:mb-4">Management Information System</p>
+                                    <div className="inline-flex items-center gap-2 bg-[#176623] border border-[#2e8f3b] text-xs px-3 py-1.5 rounded-full w-fit mx-auto sm:mx-0">
                                         <div className="w-2 h-2 rounded-full bg-green-400"></div>
                                         <span>System Online — {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
                                     </div>

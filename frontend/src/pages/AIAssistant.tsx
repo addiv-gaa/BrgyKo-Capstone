@@ -103,7 +103,7 @@ export default function AiAssistant() {
                 
                 
                 
-                <main className="flex-1 h-full overflow-y-auto p-8 bg-[#f4f7fa]">
+                <main className="flex-1 h-full overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#f4f7fa]">
                     
                     <div className="max-w-6xl mx-auto h-full flex flex-col">
                         
@@ -132,7 +132,7 @@ export default function AiAssistant() {
                             <div className="bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col flex-1 min-h-[500px] mb-8">
                                 
                                 {/* Message History Area */}
-                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
                                     {messages.map((msg) => (
                                         <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                                             
@@ -146,7 +146,7 @@ export default function AiAssistant() {
                                             )}
 
                                             {/* Text Bubble */}
-                                            <div className={`max-w-[85%] px-4 py-3 rounded-lg text-sm shadow-sm ${
+                                            <div className={`max-w-[85%] px-4 py-3 rounded-lg text-sm shadow-sm break-words overflow-hidden ${
                                                 msg.sender === 'user' 
                                                 ? 'bg-[#16a34a] text-white rounded-br-none' 
                                                 : 'bg-white border border-gray-200 text-gray-700 rounded-bl-none'

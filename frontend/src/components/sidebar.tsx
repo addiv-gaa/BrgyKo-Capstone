@@ -63,21 +63,30 @@ const Sidebar = ({ isOpen = true }: { isOpen?: boolean }) => {
         return items.map((item) => {
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             return (
-                <div 
-                    key={item.path} 
-                    className={`cursor-pointer px-4 py-2.5 mx-3 mb-1 rounded-md transition-colors text-sm flex items-center justify-between ${
+                <button 
+                    key={item.path}
+                    type="button"
+                    tabIndex={0}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`w-[calc(100%-1.5rem)] text-left cursor-pointer px-4 py-2.5 mx-3 mb-1 rounded-md transition-all text-sm flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-2 focus:ring-offset-[#1e7b2b] ${
                         isActive ? 'bg-[#44934e] text-white font-semibold' : 'text-green-100 hover:bg-[#2e8f3b]'
                     }`}
                     onClick={() => navigate(item.path)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            navigate(item.path);
+                        }
+                    }}
                 >
                     <div className="flex items-center gap-3">
-                        <svg className="w-4 h-4 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <svg className="w-4 h-4 opacity-90 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                         </svg>
-                        {item.label}
+                        <span>{item.label}</span>
                     </div>
-                    {isActive && <span className="text-[10px] font-bold">&gt;</span>}
-                </div>
+                    {isActive && <span className="text-[10px] font-bold" aria-hidden="true">&gt;</span>}
+                </button>
             );
         });
     };

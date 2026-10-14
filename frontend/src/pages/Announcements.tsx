@@ -262,17 +262,17 @@ export default function Announcements() {
             <div className="flex flex-1 overflow-hidden">
                 
                 
-                <main className="flex-1 w-full overflow-y-auto p-8 bg-[#f4f7fa] text-gray-800">
+                <main className="flex-1 w-full overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#f4f7fa] text-gray-800">
                     <div className="max-w-4xl mx-auto">
                         
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900">Barangay Announcements</h1>
                                 <p className="text-gray-500 text-sm mt-1">Stay updated with the latest news, events, and advisories.</p>
                             </div>
                             {canCreate && (
-                                <div className="flex gap-2">
-                                    <div className="flex bg-gray-200 rounded-md p-1 mr-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex bg-gray-200 rounded-md p-1">
                                         <button onClick={() => setActiveTab('active')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${activeTab === 'active' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Active</button>
                                         <button onClick={() => setActiveTab('archived')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${activeTab === 'archived' ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Archived</button>
                                     </div>
@@ -299,7 +299,7 @@ export default function Announcements() {
                                 announcements.map((ann) => (
                                     <div key={ann.id} className={`bg-white rounded-xl shadow-sm border ${ann.is_urgent ? 'border-red-400 shadow-red-50' : 'border-gray-200'} overflow-hidden`}>
                                         
-                                        <div className="p-6">
+                                        <div className="p-4 sm:p-6">
                                             {/* Category & Tags Row (Displayed Near The Top) */}
                                             <div className="flex flex-wrap gap-2 mb-3">
                                                 {ann.categories && ann.categories.map((cat, i) => (
@@ -315,11 +315,11 @@ export default function Announcements() {
                                             </div>
 
                                             {/* Title & Urgent Badge */}
-                                            <div className="flex items-center gap-2 mb-3">
+                                            <div className="flex flex-wrap items-center gap-2 mb-3">
                                                 {ann.is_urgent && (
                                                     <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold uppercase rounded-sm tracking-wide">Urgent</span>
                                                 )}
-                                                <h2 className="text-2xl font-bold text-gray-900">{ann.title}</h2>
+                                                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">{ann.title}</h2>
                                             </div>
 
                                             {/* Event Schedule Badges (If Linked) */}
@@ -337,7 +337,7 @@ export default function Announcements() {
                                             )}
 
                                             {/* Content */}
-                                            <p className="text-gray-700 whitespace-pre-wrap mb-6 text-base leading-relaxed">{ann.content}</p>
+                                            <p className="text-gray-700 whitespace-pre-wrap mb-6 text-base leading-relaxed break-words">{ann.content}</p>
                                             
                                             {/* Inline Media Rendering (Images/Videos shown directly) */}
                                             {ann.attachment && (

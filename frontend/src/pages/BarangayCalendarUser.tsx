@@ -9,7 +9,7 @@ export default function ResidentSchedulePage() {
             
             <div className="flex flex-1 overflow-hidden">
                 
-                <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa]">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#f4f7fa]">
                     
                     <div className="w-full h-full">
                         

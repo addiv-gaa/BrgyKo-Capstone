@@ -358,7 +358,7 @@ export default function MappingPage() {
     return (
         <div className="h-full w-full flex flex-col bg-gray-100 overflow-hidden text-gray-800">
             <div className="flex flex-1 overflow-hidden">
-                <main className="flex-1 overflow-y-auto p-8 bg-[#f4f7fa] flex flex-col">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#f4f7fa] flex flex-col">
                     
                     <div className="mb-6 flex flex-col gap-4">
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">

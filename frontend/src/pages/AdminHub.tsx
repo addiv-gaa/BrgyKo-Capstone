@@ -291,7 +291,7 @@ export default function AdminHub() {
     }
 
     return (
-        <div className="h-full w-full overflow-y-auto p-8 bg-[#f8fafc] text-gray-800 font-sans">
+        <div className="h-full w-full overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#f8fafc] text-gray-800 font-sans">
                     <div className="w-full space-y-8">
                         
                         {/* Header & Tabs */}
