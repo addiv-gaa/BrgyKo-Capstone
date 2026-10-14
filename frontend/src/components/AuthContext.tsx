@@ -112,6 +112,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch {
             // Ignore errors during logout
         }
+        sessionStorage.removeItem('access_token');
+        sessionStorage.removeItem('refresh_token');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
         setUser(null);
     };
 

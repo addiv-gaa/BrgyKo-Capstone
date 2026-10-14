@@ -83,6 +83,7 @@ function Form({ route, method }: FormProps) {
             setPassword("");
             setOtp("");
             setNewPassword("");
+            setOtpMessage("");
         } catch (error: any) {
             setOtpMessage(error.response?.data?.error || "Invalid OTP.");
         } finally {
@@ -97,8 +98,13 @@ function Form({ route, method }: FormProps) {
         try {
             if (method === "login") {
                 const res = await api.post(route, { username, password });
-                // Cookies are set automatically by the backend response.
-                // Just update the React auth state with the user info from the response body.
+                // F-029: Store tokens in sessionStorage for Bearer auth on Safari/iOS
+                if (res.data?.access) {
+                    sessionStorage.setItem("access_token", res.data.access);
+                }
+                if (res.data?.refresh) {
+                    sessionStorage.setItem("refresh_token", res.data.refresh);
+                }
                 if (auth) auth.login(res.data.user);
                 navigate("/");
             } else {
@@ -125,7 +131,14 @@ function Form({ route, method }: FormProps) {
                 setCanResend(false);
             }
         } catch (error: any) {
-            alert(error.response?.data?.error || error.message || "An error occurred.");
+            // F-016: Explicitly handle 401 as 'Invalid Credentials' and 429 as lockout
+            if (error.response?.status === 401) {
+                alert("Invalid Credentials");
+            } else if (error.response?.status === 429) {
+                alert(error.response?.data?.detail || "Account locked: 5 consecutive failed login attempts. Please try again after 15 minutes.");
+            } else {
+                alert(error.response?.data?.detail || error.response?.data?.error || error.message || "An error occurred.");
+            }
         } finally {
             setLoading(false);
         }
@@ -177,9 +190,9 @@ function Form({ route, method }: FormProps) {
                     className="mx-auto h-24 w-auto rounded-full shadow-sm"
                 />
                 <h2 className="mt-10 text-center text-2xl/9 font-bold tracking-tight text-black">
-                    {step === 'verify' ? "Verify Your Email" : `${name} your account`}
+                    {step === 'verify' ? "Verify Your Email" : (step === 'forgot_email' || step === 'forgot_verify') ? "Recover Your Account" : `${name} your account`}
                 </h2>
-                {otpMessage && <p className={`text-xs text-center mt-2 ${otpMessage.includes("Failed") ? "text-red-600" : "text-green-600"}`}>{otpMessage}</p>}
+                {step !== 'forgot_verify' && otpMessage && <p className={`text-xs text-center mt-2 ${otpMessage.includes("Failed") ? "text-red-600" : "text-green-600"}`}>{otpMessage}</p>}
             </div>
 
             <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
@@ -196,7 +209,7 @@ function Form({ route, method }: FormProps) {
                                 {loading ? "Sending..." : "Send OTP"}
                             </button>
                         </div>
-                        <p className="text-center text-sm text-gray-500 mt-4"><span onClick={() => setStep('form')} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Back to Login</span></p>
+                        <p className="text-center text-sm text-gray-500 mt-4"><span onClick={() => { setStep('form'); setOtpMessage(''); }} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Back to Login</span></p>
                     </form>
                 ) : step === 'forgot_verify' ? (
                     <form onSubmit={handleForgotVerifySubmit} className="space-y-6">
@@ -218,7 +231,7 @@ function Form({ route, method }: FormProps) {
                                 {loading ? "Resetting..." : "Reset Password"}
                             </button>
                         </div>
-                        <p className="text-center text-sm text-gray-500 mt-4"><span onClick={() => setStep('form')} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Cancel</span></p>
+                        <p className="text-center text-sm text-gray-500 mt-4"><span onClick={() => { setStep('form'); setOtpMessage(''); }} className="font-semibold text-green-500 hover:text-green-400 cursor-pointer">Cancel</span></p>
                     </form>
                 ) : step === 'form' ? (
                     <form onSubmit={handleSubmit} className="space-y-6">
