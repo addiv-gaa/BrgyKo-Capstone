@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import BarangayCalendar from "../components/BarangayCalendar";
 import { AlertTriangle, Save, CalendarPlus } from 'lucide-react';
 
@@ -25,6 +25,18 @@ export default function StaffSchedulePage() {
         setIsConfirmingAdd(true);
     };
 
+    // F-028: Extract friendly error messages instead of raw text
+    const getFriendlyError = async (res: Response, fallback: string) => {
+        try {
+            const data = await res.json();
+            return data?.error || data?.detail || 
+                (typeof data === 'object' && Object.values(data)[0] ? (Array.isArray(Object.values(data)[0]) ? (Object.values(data)[0] as string[])[0] : Object.values(data)[0]) : null) || 
+                fallback;
+        } catch {
+            return fallback;
+        }
+    };
+
     const executeAdd = async () => {
         try {
             const response = await fetch(`${API_URL}/api/events/`, {
@@ -38,7 +50,8 @@ export default function StaffSchedulePage() {
                 setFormData({ title: '', event_type: 'ACTIVITY', description: '', start_time: '', end_time: '' });
                 setIsConfirmingAdd(false);
             } else {
-                alert("Failed to add event: " + await response.text());
+                const msg = await getFriendlyError(response, "Failed to create event. Please verify required fields.");
+                alert(msg);
                 setIsConfirmingAdd(false);
             }
         } catch (error) {
@@ -81,7 +94,8 @@ export default function StaffSchedulePage() {
                 setIsConfirmingEdit(false);
                 setEditEventData(null);
             } else {
-                alert("Failed to update event: " + await response.text());
+                const msg = await getFriendlyError(response, "Failed to update event. Please verify required fields.");
+                alert(msg);
                 setIsConfirmingEdit(false);
             }
         } catch (error) {
@@ -105,7 +119,8 @@ export default function StaffSchedulePage() {
                 setEventToDelete(null);
                 setEditEventData(null);
             } else {
-                alert("Failed to delete event: " + await response.text());
+                const msg = await getFriendlyError(response, "Failed to delete event.");
+                alert(msg);
                 setEventToDelete(null);
             }
         } catch (error) {

@@ -164,7 +164,7 @@ export default function Reports() {
                                         {label: 'Vulnerable Groups', key: 'vulnerable'},
                                         {label: 'Indigenous Peoples (IPs)', key: 'indigenous'},
                                     ].map(s => {
-                                        const v = data.sectors[s.key];
+                                        const v = data.sectors[s.key] || { male: 0, female: 0, total: 0 };
                                         return (
                                             <tr key={s.key}>
                                                 <td className="border p-2 pl-6">{s.label}</td>
@@ -174,9 +174,68 @@ export default function Reports() {
                                             </tr>
                                         )
                                     })}
+
+                                    {/* Civil Status */}
+                                    {data.civil_status && (
+                                        <>
+                                            <tr className="bg-gray-50 font-bold"><td colSpan={4} className="border p-2">Civil Status:</td></tr>
+                                            <tr>
+                                                <td className="border p-2 pl-6">Single</td>
+                                                <td className="border p-2 text-center">{data.civil_status.single?.male || 0}</td>
+                                                <td className="border p-2 text-center">{data.civil_status.single?.female || 0}</td>
+                                                <td className="border p-2 text-center font-bold bg-indigo-50/30">{data.civil_status.single?.total || 0}</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="border p-2 pl-6">Married</td>
+                                                <td className="border p-2 text-center">{data.civil_status.married?.male || 0}</td>
+                                                <td className="border p-2 text-center">{data.civil_status.married?.female || 0}</td>
+                                                <td className="border p-2 text-center font-bold bg-indigo-50/30">{data.civil_status.married?.total || 0}</td>
+                                            </tr>
+                                        </>
+                                    )}
+
+                                    {/* Citizenship */}
+                                    {data.citizenship && (
+                                        <>
+                                            <tr className="bg-gray-50 font-bold"><td colSpan={4} className="border p-2">Citizenship:</td></tr>
+                                            <tr>
+                                                <td className="border p-2 pl-6">Filipino</td>
+                                                <td className="border p-2 text-center">{data.citizenship.filipino?.male || 0}</td>
+                                                <td className="border p-2 text-center">{data.citizenship.filipino?.female || 0}</td>
+                                                <td className="border p-2 text-center font-bold bg-indigo-50/30">{data.citizenship.filipino?.total || 0}</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="border p-2 pl-6">Foreigner</td>
+                                                <td className="border p-2 text-center">{data.citizenship.foreigner?.male || 0}</td>
+                                                <td className="border p-2 text-center">{data.citizenship.foreigner?.female || 0}</td>
+                                                <td className="border p-2 text-center font-bold bg-indigo-50/30">{data.citizenship.foreigner?.total || 0}</td>
+                                            </tr>
+                                        </>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Signatories Footer */}
+                        {data.metadata?.signatories && (
+                            <div className="mt-8 pt-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-8 text-center">
+                                <div className="flex flex-col items-center">
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-8">Prepared by:</p>
+                                    <p className="font-bold text-gray-900 border-b border-gray-400 pb-1 px-8 text-sm">{data.metadata.signatories.prepared_by || "BARANGAY SECRETARY"}</p>
+                                    <p className="text-xs text-gray-600 mt-1">{data.metadata.signatories.prepared_by_title || "Barangay Secretary"}</p>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-8">Submitted by:</p>
+                                    <p className="font-bold text-gray-900 border-b border-gray-400 pb-1 px-8 text-sm">{data.metadata.signatories.submitted_by || "PUNONG BARANGAY"}</p>
+                                    <p className="text-xs text-gray-600 mt-1">{data.metadata.signatories.submitted_by_title || "Punong Barangay"}</p>
+                                </div>
+                                {data.metadata.signatories.date_accomplished && (
+                                    <div className="col-span-1 md:col-span-2 text-center pt-2">
+                                        <p className="text-xs text-gray-500">Date Accomplished: <span className="font-semibold text-gray-700">{data.metadata.signatories.date_accomplished}</span></p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </main>

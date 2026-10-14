@@ -230,6 +230,24 @@ export default function DashboardAdminView() {
     const countMarried = getCount(stats.charts.civil_status, 'Married');
     const countWidowed = getCount(stats.charts.civil_status, 'Widowed');
 
+    const getResidentAgeGroup = (resident: any) => {
+        if (!resident.birth_date) {
+            return resident.is_senior_citizen ? 'Senior (60+)' : (activeFilter === 'youth' ? 'Youth (15-30)' : 'Adult');
+        }
+        const today = new Date();
+        const birthDate = new Date(resident.birth_date);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+
+        if (age < 0) return 'Child (<15)';
+        if (age < 15) return `Child (${age})`;
+        if (age <= 30) return `Youth (${age})`;
+        if (age >= 60 || resident.is_senior_citizen) return `Senior (${age})`;
+        return `Adult (${age})`;
+    };
 
     return (
         <div className="flex flex-col gap-8 w-full pb-8">
@@ -353,8 +371,8 @@ export default function DashboardAdminView() {
                                             <td className="px-6 py-3 font-medium">{r.first_name} {r.last_name}</td>
                                             <td className="px-6 py-3">{r.purok}</td>
                                             <td className="px-6 py-3">{r.sex}</td>
-                                            <td className="px-6 py-3">
-                                                {r.is_senior_citizen ? 'Senior' : (activeFilter === 'youth' ? 'Youth' : 'Adult')}
+                                            <td className="px-6 py-3 font-semibold text-gray-700">
+                                                {getResidentAgeGroup(r)}
                                             </td>
                                         </tr>
                                     ))

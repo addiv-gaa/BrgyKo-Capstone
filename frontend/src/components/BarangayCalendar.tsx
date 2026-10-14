@@ -79,6 +79,11 @@ export default function BarangayCalendar({ onEventClick, refreshTrigger = 0 }: B
             <span className="w-3 h-3 rounded-full bg-[#dc2626]"></span>
             <span className="text-sm font-medium">Absence</span>
         </div>
+
+        <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-[#f59e0b]"></span>
+            <span className="text-sm font-medium">Agenda / Official Events</span>
+        </div>
       </div>
 
       <Calendar

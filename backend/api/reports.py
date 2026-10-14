@@ -144,23 +144,40 @@ def get_rbi_form_c_data():
             sectors['vulnerable']['total'] += 1
             
         # CIVIL STATUS
-        cstat = r['civil_status'].lower()
+        cstat = (r['civil_status'] or '').lower().strip()
         if cstat == 'married':
             civil_status['married'][sex] += 1
             civil_status['married']['total'] += 1
+        elif cstat == 'single' or not cstat:
+            civil_status['single'][sex] += 1
+            civil_status['single']['total'] += 1
         else:
-            # Lump Single, Widowed, Separated, etc. into 'Single' to match template strictness
+            # Map other legal non-married statuses (widowed, separated) cleanly
             civil_status['single'][sex] += 1
             civil_status['single']['total'] += 1
             
         # CITIZENSHIP
-        cit = r['citizenship'].lower()
-        if 'filipino' in cit:
+        cit = (r['citizenship'] or '').lower().strip()
+        if 'filipino' in cit or not cit:
             citizenship['filipino'][sex] += 1
             citizenship['filipino']['total'] += 1
         else:
             citizenship['foreigner'][sex] += 1
             citizenship['foreigner']['total'] += 1
+
+    from .models import BarangaySettings, BarangayOfficial
+    settings_obj = BarangaySettings.objects.first()
+    sec_official = BarangayOfficial.objects.filter(position__icontains='Secretary', is_active=True).first()
+    cap_official = (
+        BarangayOfficial.objects.filter(position__icontains='Captain', is_active=True).first() or
+        BarangayOfficial.objects.filter(order__in=[0, 1], is_active=True).first()
+    )
+    secretary_name = (sec_official.name if sec_official else 'MAICA ANN M. MENDOZA').upper()
+    captain_name = (
+        cap_official.name if cap_official else (settings_obj.captain_name if settings_obj and settings_obj.captain_name else 'ALLAN A. PEDRAZA')
+    ).upper()
+
+    semester_text = f"{'1st' if today.month <= 6 else '2nd'} Semester of CY {today.year}"
 
     return {
         'metadata': {
@@ -168,7 +185,14 @@ def get_rbi_form_c_data():
             'province': 'CAVITE',
             'city': 'GENERAL TRIAS',
             'barangay': 'SAN GABRIEL',
-            'semester': '2nd Semester of CY ' + str(today.year),
+            'semester': semester_text,
+            'signatories': {
+                'prepared_by': secretary_name,
+                'prepared_by_title': 'Barangay Secretary',
+                'submitted_by': captain_name,
+                'submitted_by_title': 'Punong Barangay',
+                'date_accomplished': today.strftime('%B %d, %Y')
+            }
         },
         'totals': {
             'inhabitants': len(res_data),
@@ -251,6 +275,19 @@ class RBIFormCDownloadView(APIView):
         # Citizenship
         inject_row(47, data['citizenship']['filipino'])
         inject_row(48, data['citizenship']['foreigner'])
+
+        # F-017: Inject Dynamic Signatories and Accomplishment Date
+        signatories = data['metadata'].get('signatories', {})
+        if signatories.get('prepared_by'):
+            ws['A52'] = signatories['prepared_by']
+            ws['A52'].alignment = center_align
+            ws['A52'].font = bold_font
+        if signatories.get('submitted_by'):
+            ws['E52'] = signatories['submitted_by']
+            ws['E52'].alignment = center_align
+            ws['E52'].font = bold_font
+        if signatories.get('date_accomplished'):
+            ws['A57'] = f"Date Accomplished: {signatories['date_accomplished']}"
 
         # HTTP Response
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

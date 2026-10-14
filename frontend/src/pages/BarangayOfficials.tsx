@@ -236,38 +236,31 @@ export default function BarangayOfficials() {
                     </div>
                 ) : (
                     <div className="flex flex-col gap-10">
-                        {/* CAPTAIN */}
-                        {sortedOfficials.filter(o => o.order === 1).length > 0 && (
+                        {/* F-019: CAPTAIN / PUNONG BARANGAY (Order 0 or 1) */}
+                        {sortedOfficials.filter(o => o.order <= 1).length > 0 && (
                             <div className="flex justify-center">
                                 <div className="w-full max-w-md">
-                                    {sortedOfficials.filter(o => o.order === 1).map(renderCard)}
+                                    {sortedOfficials.filter(o => o.order <= 1).map(renderCard)}
                                 </div>
                             </div>
                         )}
 
-                        {/* KAGAWADS */}
-                        {sortedOfficials.filter(o => o.order === 2).length > 0 && (
-                            <div>
-                                <div className="flex justify-center mb-6 mt-2">
-                                    <div className="h-px bg-gray-200 w-full max-w-2xl"></div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {sortedOfficials.filter(o => o.order === 2).map(renderCard)}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* OTHERS */}
-                        {sortedOfficials.filter(o => o.order > 2).length > 0 && (
-                            <div>
-                                <div className="flex justify-center mb-6 mt-2">
-                                    <div className="h-px bg-gray-200 w-full max-w-2xl"></div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {sortedOfficials.filter(o => o.order > 2).map(renderCard)}
-                                </div>
-                            </div>
-                        )}
+                        {/* F-019: EACH DISTINCT HIERARCHY RANK GETS ITS OWN ROW */}
+                        {Array.from(new Set(sortedOfficials.filter(o => o.order > 1).map(o => o.order)))
+                            .sort((a, b) => a - b)
+                            .map(rank => {
+                                const rankOfficials = sortedOfficials.filter(o => o.order === rank);
+                                return (
+                                    <div key={rank}>
+                                        <div className="flex justify-center mb-6 mt-2">
+                                            <div className="h-px bg-gray-200 w-full max-w-2xl"></div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {rankOfficials.map(renderCard)}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                     </div>
                 )}
             </div>
@@ -335,7 +328,7 @@ export default function BarangayOfficials() {
                                             className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-green-500 focus:border-green-500" 
                                             required 
                                         />
-                                        <p className="text-[10px] text-gray-500 mt-1">1 = Captain, 2 = Kagawad</p>
+                                        <p className="text-[10px] text-gray-500 mt-1">0 or 1 = Captain, 2 = Kagawad, 3+ = Other Officials</p>
                                     </div>
                                     <div className="col-span-2">
                                         <label className="block text-xs font-bold text-gray-700 mb-1.5">Committee (Optional)</label>

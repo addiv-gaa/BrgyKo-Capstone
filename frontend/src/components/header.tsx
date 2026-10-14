@@ -62,7 +62,7 @@ const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
                 </button>
                 <div className="flex flex-col">
                     <h1 className="text-sm font-bold text-gray-900 leading-tight">{currentTitle}</h1>
-                    <p className="text-[11px] text-gray-500 leading-tight">Brgy. San Gabriel A — Gen. Trias, Cavite</p>
+                    <p className="text-[11px] text-gray-500 leading-tight">Brgy. San Gabriel — Gen. Trias, Cavite</p>
                 </div>
             </div>
             

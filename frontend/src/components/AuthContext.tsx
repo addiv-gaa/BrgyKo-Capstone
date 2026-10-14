@@ -55,6 +55,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const res = await fetch(`${API_URL}/api/system/settings/`);
             if (res.ok) {
                 const data = await res.json();
+                if (data.barangay_seal_url && (data.barangay_seal_url.trim().toLowerCase() === 'null' || data.barangay_seal_url.trim().toLowerCase() === 'undefined')) {
+                    data.barangay_seal_url = '';
+                }
                 setSettings(data);
             }
         } catch (error) {

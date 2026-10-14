@@ -94,6 +94,35 @@ export default function Announcements() {
         }
     };
 
+    // F-023: Reset form draft state when cancelling or closing modal
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setFormData({ title: "", content: "", categories: [], is_urgent: false, attachment: null });
+        setTagsList([]);
+        setTagInput("");
+        setHasEvent(false);
+        setEventData({ startDate: "", startTime: "", endDate: "", endTime: "" });
+    };
+
+    // F-027: Format raw event timestamps into human-friendly strings (YYYY-MM-DD HH:mm)
+    const formatEventTimestamp = (isoString?: string) => {
+        if (!isoString) return "";
+        try {
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return isoString.replace('T', ' ').slice(0, 16);
+            return d.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        } catch {
+            return isoString.replace('T', ' ').slice(0, 16);
+        }
+    };
+
     // Archive Handlers
     const handleToggleArchive = (id: number, isCurrentlyArchived: boolean) => {
         setAnnToArchive({ id, currentStatus: isCurrentlyArchived });
@@ -210,15 +239,14 @@ export default function Announcements() {
             });
 
             if (response.ok) {
-                setIsModalOpen(false);
-                setFormData({ title: "", content: "", categories: [], is_urgent: false, attachment: null });
-                setTagsList([]);
-                setHasEvent(false);
-                setEventData({ startDate: "", startTime: "", endDate: "", endTime: "" });
+                handleCloseModal();
                 fetchData(); 
             } else {
-                const errorData = await response.json();
-                alert(`Failed to post: ${JSON.stringify(errorData)}`);
+                const errorData = await response.json().catch(() => ({}));
+                const errDetail = errorData?.error || errorData?.detail || 
+                    (typeof errorData === 'object' && Object.values(errorData)[0] ? (Array.isArray(Object.values(errorData)[0]) ? (Object.values(errorData)[0] as string[])[0] : Object.values(errorData)[0]) : null) || 
+                    "Failed to post announcement. Please verify your inputs.";
+                alert(typeof errDetail === 'string' ? errDetail : "Failed to post announcement.");
             }
         } catch (error) {
             console.error("Submit error:", error);
@@ -299,11 +327,11 @@ export default function Announcements() {
                                                 <div className="flex flex-wrap items-center gap-3 mb-4">
                                                     <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-800 text-white text-xs font-semibold rounded-md shadow-sm">
                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                                        Starts: {ann.linked_event_details.start_time.replace('T', ' ')}
+                                                        Starts: {formatEventTimestamp(ann.linked_event_details.start_time)}
                                                     </div>
                                                     <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-900 text-xs font-semibold rounded-md border border-green-200">
                                                         <svg className="w-4 h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                        Ends: {ann.linked_event_details.end_time.replace('T', ' ')}
+                                                        Ends: {formatEventTimestamp(ann.linked_event_details.end_time)}
                                                     </div>
                                                 </div>
                                             )}
@@ -361,7 +389,7 @@ export default function Announcements() {
                         
                         <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
                             <h3 className="text-xl font-bold text-gray-900">Post Announcement</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                            <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600 transition-colors">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
@@ -460,7 +488,7 @@ export default function Announcements() {
                         </div>
                         
                         <div className="px-8 py-5 border-t border-gray-100 bg-white flex gap-4 shrink-0 justify-between items-center">
-                            <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 w-1/3 bg-gray-200 text-gray-800 text-sm font-bold rounded-lg hover:bg-gray-300 transition-colors">
+                            <button type="button" onClick={handleCloseModal} className="px-6 py-3 w-1/3 bg-gray-200 text-gray-800 text-sm font-bold rounded-lg hover:bg-gray-300 transition-colors">
                                 Cancel
                             </button>
                             <button type="submit" form="announcement-form" disabled={isSubmitting || formData.categories.length === 0} className="px-6 py-3 w-2/3 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-center shadow-md">

@@ -138,6 +138,18 @@ export default function MappingPage() {
     const userRole = auth?.user?.role || (auth?.user?.roles && auth?.user?.roles[0]) || '';
     const canEdit = userRole.toUpperCase() === 'ADMIN';
 
+    // F-028: Extract friendly error messages instead of raw text
+    const getFriendlyError = async (res: Response, fallback: string) => {
+        try {
+            const data = await res.json();
+            return data?.error || data?.detail || 
+                (typeof data === 'object' && Object.values(data)[0] ? (Array.isArray(Object.values(data)[0]) ? (Object.values(data)[0] as string[])[0] : Object.values(data)[0]) : null) || 
+                fallback;
+        } catch {
+            return fallback;
+        }
+    };
+
     const fetchHouseholds = async (query = '') => {
         try {
             const url = query 
@@ -201,7 +213,8 @@ export default function MappingPage() {
                 setPendingResidentData(null);
                 fetchHouseholds(searchQuery); 
             } else {
-                alert("Failed to save resident updates: " + await response.text());
+                const msg = await getFriendlyError(response, "Failed to save resident updates.");
+                alert(msg);
                 setIsConfirmingResidentSave(false);
             }
         } catch (error) {
@@ -249,7 +262,8 @@ export default function MappingPage() {
                 if (modalMode === 'add') setSelectedHousehold(null);
                 fetchHouseholds(searchQuery); 
             } else {
-                alert("Failed to save household: " + await response.text());
+                const msg = await getFriendlyError(response, "Failed to save household.");
+                alert(msg);
                 setIsConfirmingSave(false);
             }
         } catch (error) {
@@ -271,7 +285,8 @@ export default function MappingPage() {
                 setHouseholdToDelete(null);
                 fetchHouseholds(searchQuery);
             } else {
-                alert("Failed to delete structure: " + await response.text());
+                const msg = await getFriendlyError(response, "Failed to delete structure.");
+                alert(msg);
                 setHouseholdToDelete(null);
             }
         } catch (error) {
@@ -305,7 +320,8 @@ export default function MappingPage() {
                     });
                 }
             } else {
-                alert("Failed to remove resident: " + await response.text());
+                const msg = await getFriendlyError(response, "Failed to remove resident from household.");
+                alert(msg);
                 setResidentToRemove(null);
             }
         } catch (error) {
@@ -411,7 +427,7 @@ export default function MappingPage() {
                     <div className="flex-1 flex overflow-hidden relative rounded-xl shadow-sm border border-gray-200">
                         {/* MAP AREA */}
                         <div className={`flex-1 relative transition-all duration-300 bg-gray-100 ${isAddMode ? 'cursor-crosshair' : ''}`}>
-                            <MapContainer center={[14.282, 120.952]} zoom={15} className="h-full w-full z-0 relative">
+                            <MapContainer center={[14.384, 120.886]} zoom={15} className="h-full w-full z-0 relative">
                                 <LayersControl position="topright">
                                     <LayersControl.BaseLayer checked name="Street View">
                                         <TileLayer 

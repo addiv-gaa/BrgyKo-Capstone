@@ -1035,45 +1035,72 @@ class ResidentViewSet(viewsets.ModelViewSet):
                         is_auto_senior = True
 
                 try:
-                    # 1. Define the fields that will UPDATE if a match is found
-                    defaults = {
-                        'inhabitant_type': str(row_data.get('INHABITANT TYPE') or 'NON-MIGRANT').strip(),
-                        'middle_name': str(row_data.get('MIDDLE NAME') or '').strip(),
-                        'suffix': str(row_data.get('SUFFIX') or '').strip(),
-                        'birth_place': str(row_data.get('BIRTH PLACE') or '').strip(),
-                        'sex': str(row_data.get('SEX') or 'Male').strip().capitalize(),
-                        'civil_status': str(row_data.get('CIVIL STATUS') or 'Single').strip().capitalize(),
-                        'citizenship': str(row_data.get('CITIZENSHIP') or 'Filipino').strip(),
-                        'occupation': str(row_data.get('PROFESSION/ OCCUPATION') or '').strip(),
-                        'contact_number': str(row_data.get('CONTACT NUMBER') or '').strip(),
-                        'email_address': str(row_data.get('EMAIL ADDRESS') or '').strip(),
-                        'highest_education': str(row_data.get('HIGHEST EDUCATIONAL ATTAINMENT') or '').strip(),
-                        'mothers_first_name': str(row_data.get("MOTHER'S FIRST NAME") or '').strip(),
-                        'mothers_middle_name': str(row_data.get("MOTHER'S MIDDLE NAME") or '').strip(),
-                        'mothers_last_name': str(row_data.get("MOTHER'S LAST NAME") or '').strip(),
-                        'is_senior_citizen': is_auto_senior,
-                    }
-
-                    # 2. Update or Create logic based on First Name, Last Name, and Birthdate
-                    resident, created = Resident.objects.update_or_create(
+                    # F-018: Check if resident already exists to prevent blank spreadsheet cells from overwriting existing DB data
+                    existing_resident = Resident.objects.filter(
                         first_name=str(first_name).strip(),
                         last_name=str(last_name).strip(),
-                        birth_date=birth_date,
-                        defaults=defaults
-                    )
+                        birth_date=birth_date
+                    ).first()
 
-                    # 3. Handle fallbacks ONLY if it is a brand new record
-                    if created:
-                        resident.is_approved = False
-                        resident.submitted_by = request.user if request.user.is_authenticated else None
-                        resident.purok = 'Unassigned'
-                        resident.is_4ps_beneficiary = False
-                        resident.is_pwd = False
-                        resident.is_solo_parent = False
-                        resident.save()
-                        created_count += 1
-                    else:
+                    if existing_resident:
+                        field_map = {
+                            'inhabitant_type': row_data.get('INHABITANT TYPE'),
+                            'middle_name': row_data.get('MIDDLE NAME'),
+                            'suffix': row_data.get('SUFFIX'),
+                            'birth_place': row_data.get('BIRTH PLACE'),
+                            'sex': row_data.get('SEX'),
+                            'civil_status': row_data.get('CIVIL STATUS'),
+                            'citizenship': row_data.get('CITIZENSHIP'),
+                            'occupation': row_data.get('PROFESSION/ OCCUPATION'),
+                            'contact_number': row_data.get('CONTACT NUMBER'),
+                            'email_address': row_data.get('EMAIL ADDRESS'),
+                            'highest_education': row_data.get('HIGHEST EDUCATIONAL ATTAINMENT'),
+                            'mothers_first_name': row_data.get("MOTHER'S FIRST NAME"),
+                            'mothers_middle_name': row_data.get("MOTHER'S MIDDLE NAME"),
+                            'mothers_last_name': row_data.get("MOTHER'S LAST NAME"),
+                        }
+                        for field, raw_val in field_map.items():
+                            if raw_val is not None:
+                                val_str = str(raw_val).strip()
+                                if val_str:
+                                    if field == 'sex':
+                                        val_str = val_str.capitalize()
+                                    elif field == 'civil_status':
+                                        val_str = val_str.capitalize()
+                                    setattr(existing_resident, field, val_str)
+                        if is_auto_senior:
+                            existing_resident.is_senior_citizen = True
+                        existing_resident.save()
                         updated_count += 1
+                    else:
+                        new_data = {
+                            'first_name': str(first_name).strip(),
+                            'last_name': str(last_name).strip(),
+                            'birth_date': birth_date,
+                            'inhabitant_type': str(row_data.get('INHABITANT TYPE') or 'NON-MIGRANT').strip(),
+                            'middle_name': str(row_data.get('MIDDLE NAME') or '').strip(),
+                            'suffix': str(row_data.get('SUFFIX') or '').strip(),
+                            'birth_place': str(row_data.get('BIRTH PLACE') or '').strip(),
+                            'sex': str(row_data.get('SEX') or 'Male').strip().capitalize(),
+                            'civil_status': str(row_data.get('CIVIL STATUS') or 'Single').strip().capitalize(),
+                            'citizenship': str(row_data.get('CITIZENSHIP') or 'Filipino').strip(),
+                            'occupation': str(row_data.get('PROFESSION/ OCCUPATION') or '').strip(),
+                            'contact_number': str(row_data.get('CONTACT NUMBER') or '').strip(),
+                            'email_address': str(row_data.get('EMAIL ADDRESS') or '').strip(),
+                            'highest_education': str(row_data.get('HIGHEST EDUCATIONAL ATTAINMENT') or '').strip(),
+                            'mothers_first_name': str(row_data.get("MOTHER'S FIRST NAME") or '').strip(),
+                            'mothers_middle_name': str(row_data.get("MOTHER'S MIDDLE NAME") or '').strip(),
+                            'mothers_last_name': str(row_data.get("MOTHER'S LAST NAME") or '').strip(),
+                            'is_senior_citizen': is_auto_senior,
+                            'is_approved': False,
+                            'submitted_by': request.user if request.user.is_authenticated else None,
+                            'purok': 'Unassigned',
+                            'is_4ps_beneficiary': False,
+                            'is_pwd': False,
+                            'is_solo_parent': False,
+                        }
+                        Resident.objects.create(**new_data)
+                        created_count += 1
 
                 except Exception as e:
                     errors.append(f"Row {i} Failed: {str(e)}")
@@ -1139,10 +1166,10 @@ class ResidentViewSet(viewsets.ModelViewSet):
                 getattr(res, 'occupation', ''),
                 getattr(res, 'contact_number', ''),
                 getattr(res, 'email_address', ''),
-                getattr(res, 'educational_attainment', ''),
-                getattr(res, 'mother_first_name', ''),
-                getattr(res, 'mother_middle_name', ''),
-                getattr(res, 'mother_last_name', ''),
+                getattr(res, 'highest_education', ''),
+                getattr(res, 'mothers_first_name', ''),
+                getattr(res, 'mothers_middle_name', ''),
+                getattr(res, 'mothers_last_name', ''),
             ]
             ws.append(row)
 
@@ -2174,6 +2201,10 @@ class SystemSettingsView(APIView):
 
     def get(self, request):
         settings, created = BarangaySettings.objects.get_or_create(pk=1)
+        # F-027: Prevent empty seal URL from turning into literal string 'null'
+        if settings.barangay_seal_url and settings.barangay_seal_url.strip().lower() in ['null', 'none', 'undefined']:
+            settings.barangay_seal_url = ''
+            settings.save()
         serializer = BarangaySettingsSerializer(settings)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -2187,7 +2218,13 @@ class SystemSettingsView(APIView):
             raise PermissionDenied("Only Captains and Secretaries can modify system settings.")
 
         settings, created = BarangaySettings.objects.get_or_create(pk=1)
-        serializer = BarangaySettingsSerializer(settings, data=request.data, partial=True)
+        save_data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if 'barangay_seal_url' in save_data:
+            val = str(save_data.get('barangay_seal_url') or '').strip()
+            if val.lower() in ['null', 'none', 'undefined', '']:
+                save_data['barangay_seal_url'] = ''
+
+        serializer = BarangaySettingsSerializer(settings, data=save_data, partial=True)
         
         if serializer.is_valid():
             serializer.save()

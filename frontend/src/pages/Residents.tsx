@@ -129,6 +129,13 @@ export default function ResidentPage() {
     }>({ isOpen: false, actionType: 'approve', isBulk: false });
     const [isConfirming, setIsConfirming] = useState(false);
 
+    // F-024: Feedback modal state when Admin/Staff submits a resident to the Captain's queue
+    const [submissionFeedback, setSubmissionFeedback] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+    }>({ isOpen: false, title: '', message: '' });
+
     const fetchResidents = async () => {
         try {
             const queryParams = new URLSearchParams({
@@ -376,15 +383,25 @@ export default function ResidentPage() {
                 setIsConfirmingSave(false);
                 setPendingResidentData(null);
                 fetchResidents();
+
+                // F-024: Show feedback notice when creating a new resident that goes to the Captain's queue
+                if (modalMode !== 'edit') {
+                    setSubmissionFeedback({
+                        isOpen: true,
+                        title: "Submitted for Captain's Approval",
+                        message: "The resident record has been created successfully. Since all new resident additions require Captain approval, it has been placed in the Approval Queue."
+                    });
+                }
             } else {
                 const errorData = response.data;
-                console.error("Validation Error:", errorData);
-                alert("Failed to save. Check console for details.");
+                const errDetail = errorData?.error || errorData?.detail || (typeof errorData === 'object' ? Object.values(errorData)[0] : null) || "Failed to save resident record.";
+                alert(typeof errDetail === 'string' ? errDetail : JSON.stringify(errDetail));
                 setIsConfirmingSave(false);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Network error saving resident:", error);
-            alert("Network error occurred.");
+            const errDetail = error.response?.data?.error || error.response?.data?.detail || (typeof error.response?.data === 'object' ? Object.values(error.response?.data)[0] : null) || error.message || "Network error occurred.";
+            alert(typeof errDetail === 'string' ? errDetail : JSON.stringify(errDetail));
             setIsConfirmingSave(false);
         }
     };
@@ -1066,6 +1083,29 @@ export default function ResidentPage() {
                                     Yes, Delete
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* F-024: Feedback Modal for queue submission */}
+            {submissionFeedback.isOpen && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 font-sans">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-green-100">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">{submissionFeedback.title}</h2>
+                            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                                {submissionFeedback.message}
+                            </p>
+                            <button 
+                                onClick={() => setSubmissionFeedback({ isOpen: false, title: '', message: '' })} 
+                                className="w-full px-4 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                            >
+                                Understood
+                            </button>
                         </div>
                     </div>
                 </div>
