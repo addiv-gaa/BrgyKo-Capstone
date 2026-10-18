@@ -1686,9 +1686,10 @@ class StaffDemographicsAiView(APIView):
 [{month_name} Snapshot - As of {s.snapshot_date}]
 Total Residents: {s.total_residents}
 Age Groups: Children={s.children}, Youth={s.youth}, Adults={s.adults}, Seniors={s.seniors}
-Sectors: 4Ps={s.four_ps}, PWD={s.pwd}, Solo Parents={s.solo_parents}, OFW={s.ofw}, OSY={s.out_of_school}
+Sectors: 4Ps={s.four_ps}, PWD={s.pwd}, Solo Parents={s.solo_parents}, OFW={s.ofw}, OSY={s.out_of_school}, Indigenous={s.indigenous}
 Registered Voters: {s.registered_voters}
 Gender: Male={s.male}, Female={s.female}
+Purok data: {s.purok_data}
 """
 
             system_instruction = f"""
