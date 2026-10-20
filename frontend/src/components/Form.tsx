@@ -3,10 +3,19 @@ import api from "../api";
 import { useNavigate } from "react-router-dom";
 import usericon from "../images/usericon.png";
 import { AuthContext } from "./AuthContext";
+import { XCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface FormProps {
     route: string;
     method: "login" | "register";
+}
+
+interface DialogModalState {
+    title: string;
+    message: string;
+    type: 'error' | 'success' | 'warning';
+    confirmText?: string;
+    onConfirm?: () => void;
 }
 
 function Form({ route, method }: FormProps) {
@@ -20,6 +29,9 @@ function Form({ route, method }: FormProps) {
     const [otp, setOtp] = useState("");
     const [otpMessage, setOtpMessage] = useState("");
     
+    // Modal Overlay State
+    const [dialogModal, setDialogModal] = useState<DialogModalState | null>(null);
+
     // Resend Timer State
     const [countdown, setCountdown] = useState(60);
     const [canResend, setCanResend] = useState(false);
@@ -67,7 +79,11 @@ function Form({ route, method }: FormProps) {
             setCountdown(60);
             setCanResend(false);
         } catch (error: any) {
-            alert(error.response?.data?.error || "Error sending OTP.");
+            setDialogModal({
+                title: "Unable to Send OTP",
+                message: error.response?.data?.error || "Error sending recovery OTP. Please try again.",
+                type: "error"
+            });
         } finally {
             setLoading(false);
         }
@@ -78,14 +94,29 @@ function Form({ route, method }: FormProps) {
         setLoading(true);
         try {
             const res = await api.post('/api/auth/reset-password/', { user_id: userId, otp, new_password: newPassword });
-            alert(res.data.message);
-            setStep("form");
-            setPassword("");
-            setOtp("");
-            setNewPassword("");
-            setOtpMessage("");
+            const recoveredUsername = res.data?.username || "";
+            setDialogModal({
+                title: "Password Changed Successfully",
+                message: "Your password has been updated. You can now log in with your new credentials.",
+                type: "success",
+                confirmText: "Sign In Now",
+                onConfirm: () => {
+                    setStep("form");
+                    setPassword("");
+                    setOtp("");
+                    setNewPassword("");
+                    setOtpMessage("");
+                    if (recoveredUsername) {
+                        setUsername(recoveredUsername);
+                    }
+                }
+            });
         } catch (error: any) {
-            setOtpMessage(error.response?.data?.error || "Invalid OTP.");
+            setDialogModal({
+                title: "Reset Failed",
+                message: error.response?.data?.error || "Invalid OTP code or password reset failed.",
+                type: "error"
+            });
         } finally {
             setLoading(false);
         }
@@ -131,13 +162,28 @@ function Form({ route, method }: FormProps) {
                 setCanResend(false);
             }
         } catch (error: any) {
-            // F-016: Explicitly handle 401 as 'Invalid Credentials' and 429 as lockout
+            // Explicitly handle 401 as 'Invalid Credentials' and 429 as lockout with custom center modal
             if (error.response?.status === 401) {
-                alert("Invalid Credentials");
+                setDialogModal({
+                    title: "Invalid Credentials",
+                    message: "The username or password you entered is incorrect. Please verify your credentials and try again.",
+                    type: "error",
+                    confirmText: "Try Again"
+                });
             } else if (error.response?.status === 429) {
-                alert(error.response?.data?.detail || "Account locked: 5 consecutive failed login attempts. Please try again after 15 minutes.");
+                setDialogModal({
+                    title: "Account Temporarily Locked",
+                    message: error.response?.data?.detail || "Account locked: 5 consecutive failed login attempts. Please try again after 15 minutes.",
+                    type: "warning",
+                    confirmText: "I Understand"
+                });
             } else {
-                alert(error.response?.data?.detail || error.response?.data?.error || error.message || "An error occurred.");
+                setDialogModal({
+                    title: "Authentication Notice",
+                    message: error.response?.data?.detail || error.response?.data?.error || error.message || "An unexpected error occurred.",
+                    type: "error",
+                    confirmText: "OK"
+                });
             }
         } finally {
             setLoading(false);
@@ -154,11 +200,22 @@ function Form({ route, method }: FormProps) {
                 // NEW: Clear the sessionStorage upon successful verification
                 sessionStorage.removeItem("registrationUserId");
                 
-                alert("Account verified successfully! Please log in.");
-                navigate("/login");
+                setDialogModal({
+                    title: "Account Verified!",
+                    message: "Your account has been verified successfully. Please sign in to proceed.",
+                    type: "success",
+                    confirmText: "Proceed to Login",
+                    onConfirm: () => {
+                        navigate("/login");
+                    }
+                });
             }
         } catch (error: any) {
-            alert(error.response?.data?.error || "Invalid OTP code.");
+            setDialogModal({
+                title: "Verification Failed",
+                message: error.response?.data?.error || "Invalid OTP code. Please check and try again.",
+                type: "error"
+            });
         } finally {
             setLoading(false);
         }
@@ -313,6 +370,42 @@ function Form({ route, method }: FormProps) {
                     </form>
                 )}
             </div>
+
+            {/* Custom Center Modal Dialog Overlay */}
+            {dialogModal && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+                    <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-gray-100 p-6 text-center transform transition-all animate-in zoom-in-95 duration-150">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                            dialogModal.type === 'error' ? 'bg-red-100 text-red-600' :
+                            dialogModal.type === 'warning' ? 'bg-amber-100 text-amber-600' :
+                            'bg-green-100 text-green-600'
+                        }`}>
+                            {dialogModal.type === 'error' && <XCircle className="w-6 h-6" />}
+                            {dialogModal.type === 'warning' && <AlertTriangle className="w-6 h-6" />}
+                            {dialogModal.type === 'success' && <CheckCircle2 className="w-6 h-6" />}
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">{dialogModal.title}</h3>
+                        <p className="text-sm text-gray-600 mb-6 leading-relaxed">{dialogModal.message}</p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const action = dialogModal.onConfirm;
+                                setDialogModal(null);
+                                if (action) {
+                                    action();
+                                }
+                            }}
+                            className={`w-full py-2.5 px-4 rounded-xl font-bold text-sm text-white transition-all shadow-sm ${
+                                dialogModal.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                                dialogModal.type === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
+                                'bg-green-600 hover:bg-green-700'
+                            }`}
+                        >
+                            {dialogModal.confirmText || 'OK'}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

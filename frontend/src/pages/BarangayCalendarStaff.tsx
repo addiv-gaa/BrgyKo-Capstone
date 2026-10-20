@@ -20,8 +20,33 @@ export default function StaffSchedulePage() {
     const [isConfirmingEdit, setIsConfirmingEdit] = useState(false);
     const [eventToDelete, setEventToDelete] = useState<any>(null);
 
+    const getNowDateTimeString = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!formData.start_time || !formData.end_time) {
+            alert("Please select both start and end date/time.");
+            return;
+        }
+        const start = new Date(formData.start_time);
+        const end = new Date(formData.end_time);
+        const now = new Date();
+        if (start < new Date(now.getTime() - 5 * 60 * 1000)) {
+            alert("Event start time cannot be in the past.");
+            return;
+        }
+        if (end < start) {
+            alert("Event end time cannot be before the start time.");
+            return;
+        }
         setIsConfirmingAdd(true);
     };
 
@@ -184,8 +209,16 @@ export default function StaffSchedulePage() {
                                         <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Start Date & Time</label>
                                         <input 
                                             type="datetime-local" required
+                                            min={getNowDateTimeString()}
                                             value={formData.start_time}
-                                            onChange={(e) => setFormData({...formData, start_time: e.target.value})}
+                                            onChange={(e) => {
+                                                const newStart = e.target.value;
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    start_time: newStart,
+                                                    end_time: prev.end_time && prev.end_time < newStart ? newStart : prev.end_time
+                                                }));
+                                            }}
                                             className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"
                                         />
                                     </div>
@@ -193,6 +226,7 @@ export default function StaffSchedulePage() {
                                         <label className="block text-xs font-bold text-gray-600 uppercase mb-1">End Date & Time</label>
                                         <input 
                                             type="datetime-local" required
+                                            min={formData.start_time || getNowDateTimeString()}
                                             value={formData.end_time}
                                             onChange={(e) => setFormData({...formData, end_time: e.target.value})}
                                             className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-green-600"

@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useContext } from "react";
 import { AuthContext } from "./AuthContext";
+import { useSettings } from "./SettingsContext";
 import { MENU_CONFIG } from "./sidebar";
 
 const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
@@ -8,6 +9,7 @@ const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const auth = useContext(AuthContext);
+    const { settings } = useSettings();
     const [userRole, setUserRole] = useState<string>("Resident");
 
     useEffect(() => {
@@ -25,8 +27,7 @@ const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
     }, [auth]);
 
     // Format role for display (e.g., "Resident", "Barangay Staff")
-    const displayRole = userRole.toLowerCase() === 'resident' ? 'Resident' : 
-                        userRole.toLowerCase() === 'tanod' ? 'Tanod' : 'Barangay Staff';
+    const displayRole = userRole.toLowerCase() === 'resident' ? 'Resident' : 'Barangay Staff';
 
     const ProfileClicked = () => navigate('/profile');
 
@@ -37,7 +38,6 @@ const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
     // Flatten all menu items to easily find the matching one
     const allMenuItems = [
         ...MENU_CONFIG.residentServices,
-        ...MENU_CONFIG.tanodAdministration,
         ...MENU_CONFIG.staffAdministration
     ];
     
@@ -64,9 +64,11 @@ const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                 </button>
-                <div className="flex flex-col">
+                <div className="flex flex-col min-w-0">
                     <h1 className="text-sm font-bold text-gray-900 leading-tight">{currentTitle}</h1>
-                    <p className="text-[11px] text-gray-500 leading-tight">Brgy. San Gabriel — Gen. Trias, Cavite</p>
+                    <p className="text-[11px] text-gray-500 leading-tight truncate">
+                        {settings?.barangay_name || 'Barangay'} — {settings?.barangay_city || 'City of General Trias'}, {settings?.barangay_province || 'Cavite'}
+                    </p>
                 </div>
             </div>
             
@@ -94,7 +96,7 @@ const PageHeader = ({ toggleSidebar }: { toggleSidebar?: () => void }) => {
                     </button>
                 )}
             </div>
-                    {isConfirmingLogout && (
+            {isConfirmingLogout && (
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 font-sans">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border border-red-100">
                         <div className="p-6 text-center">

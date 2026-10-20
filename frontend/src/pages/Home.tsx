@@ -1,33 +1,26 @@
 import { useState, useEffect, useContext, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../components/AuthContext";
-import StatCard from "../components/statcard";
+import { useSettings } from "../components/SettingsContext";
 import DashboardAdminView from "../components/DashboardAdminView";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 // --- Icons ---
 const UsersIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
-const FileBadgeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M5 17a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M7 16.5 8 22l-3-1-3 1 1-5.5"/></svg>;
 const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
-const HeartHandIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08v0c.82.82 2.13.85 3 .07l2.07-1.9a2.82 2.82 0 0 1 3.79 0l2.96 2.66"/></svg>;
-const StarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
 const ChatIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
 const MegaphoneIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>;
 const PhoneCallIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
-const AlertCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
-const FileTextIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
-const MapIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>;
-const ShieldAlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 const ClockIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" className={className || "w-4 h-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+
 export default function Home() {
     const auth = useContext(AuthContext);
     const navigate = useNavigate();
     
     const [userRole, setUserRole] = useState<string>("");
-    const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null); // Modal state for clicking an announcement
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [settings, setSettings] = useState<any>(null);
+    const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
+    const { settings, getSealUrl } = useSettings();
 
     useEffect(() => {
         let extractedRole = "";
@@ -44,22 +37,13 @@ export default function Home() {
     }, [auth]);
 
     const isCaptainOrSecretary = ['SECRETARY', 'CAPTAIN', 'ADMIN', 'STAFF'].includes(userRole);
-    const isTanod = userRole === 'TANOD';
-    const isSK = userRole === 'SK';
-    const isResident = userRole === 'RESIDENT' || (!isCaptainOrSecretary && !isTanod && !isSK);
-
-    const displayName = auth?.user?.first_name || auth?.user?.username || 'Resident';
+    const isResident = !isCaptainOrSecretary;
 
     const [stats, setStats] = useState({ 
         total_residents: 0, 
         chatbot_queries: 0 
     });
 
-    const [welfareBeneficiariesCount, setWelfareBeneficiariesCount] = useState<number>(0);
-    
-    const [residentCerts, setResidentCerts] = useState<any[]>([]);
-    const [residentPermits, setResidentPermits] = useState<any[]>([]);
-    const [residentReservations, setResidentReservations] = useState<any[]>([]);
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
 
@@ -92,82 +76,23 @@ export default function Home() {
             // Fetch public data regardless of login status
             await fetchAnnouncements();
             await fetchEmergencyContacts();
-            try {
-                const settingsRes = await fetch(`${API_URL}/api/system/settings/`);
-                if (settingsRes.ok) {
-                    const data = await settingsRes.json();
-                    setSettings(data);
-                }
-            } catch (error) { console.error("Error fetching settings:", error); }
 
-            // If not logged in, we skip fetching private user stats
-            if (!auth?.user) return;
-
-            if (isCaptainOrSecretary) {
+            // If logged-in staff/captain/admin, fetch system-wide dashboard metrics
+            if (auth?.user && isCaptainOrSecretary) {
                 try {
                     const response = await fetch(`${API_URL}/api/dashboard-stats/`, { credentials: 'include' });
                     if (response.ok) {
                         const data = await response.json();
                         setStats(data);
-                        if (typeof data.welfare_beneficiaries === 'number') {
-                            setWelfareBeneficiariesCount(data.welfare_beneficiaries);
-                        }
-                    }
-
-                    // Fetch actual resident registry to accurately count the welfare statuses if not provided
-                    const resResponse = await fetch(`${API_URL}/api/residents/?paginate=false`, { credentials: 'include' });
-                    if (resResponse.ok) {
-                        const resData = await resResponse.json();
-                        const residentsList = Array.isArray(resData) ? resData : (resData.results || []); 
-                        
-                        // Count residents who have ANY of the welfare flags true
-                        const welfareCount = residentsList.filter((r: any) => 
-                            r.is_4ps_beneficiary || 
-                            r.is_senior_citizen || 
-                            r.is_pwd || 
-                            r.is_solo_parent
-                        ).length;
-                        
-                        setWelfareBeneficiariesCount(welfareCount);
                     }
                 } catch (error) {
                     console.error("Error fetching stats:", error);
-                }
-            } else if (isResident) {
-                try {
-                    const [certRes, permitRes, resRes] = await Promise.all([
-                        fetch(`${API_URL}/api/certificates/`, { credentials: 'include' }),
-                        fetch(`${API_URL}/api/permits/`, { credentials: 'include' }),
-                        fetch(`${API_URL}/api/reservations/`, { credentials: 'include' })
-                    ]);
-                    
-                    if (certRes.ok) {
-                        const data = await certRes.json();
-                        setResidentCerts(data.results || data);
-                    }
-                    if (permitRes.ok) {
-                        const data = await permitRes.json();
-                        setResidentPermits(data.results || data);
-                    }
-                    if (resRes.ok) {
-                        const data = await resRes.json();
-                        setResidentReservations(data.results || data);
-                    }
-                } catch (error) {
-                    console.error("Error fetching resident data:", error);
                 }
             }
         };
 
         fetchDashboardData();
-    }, [auth?.user, isCaptainOrSecretary, isResident, fetchAnnouncements, fetchEmergencyContacts]);
-
-    const activeRequests = [
-        ...residentCerts.map(c => ({ ...c, type: 'Certificate', display: c.certificate_type })),
-        ...residentPermits.map(p => ({ ...p, type: 'Permit', display: p.permit_type })),
-        ...residentReservations.map(r => ({ ...r, type: 'Reservation', display: r.purpose }))
-    ].filter(req => req.status === 'PENDING' || req.status === 'APPROVED' || req.status === 'PROCESSING')
-     .sort((a, b) => new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime());
+    }, [auth?.user, isCaptainOrSecretary, fetchAnnouncements, fetchEmergencyContacts]);
 
     return (
         <div className="h-full w-full flex bg-gray-100 overflow-hidden text-gray-800">
@@ -180,11 +105,13 @@ export default function Home() {
                         <div className="bg-[#1e7b2b] text-white rounded-xl mb-6 p-4 sm:p-6 md:p-8 flex items-center justify-between relative overflow-hidden shadow-sm">
                             <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-6 z-10 w-full sm:w-auto">
                                 <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white rounded-full flex items-center justify-center p-1 shadow-md shrink-0">
-                                    <img src="/b4-logo.jpg" alt="Logo" className="w-full h-full rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                    <img src={getSealUrl()} alt="Barangay Seal" className="w-full h-full rounded-full object-cover" onError={(e) => { e.currentTarget.src = '/b4-logo.jpg'; }} />
                                 </div>
                                 <div className="flex flex-col">
-                                    <p className="text-xs text-green-100 mb-1">Republic of the Philippines · Gen. Trias, Cavite</p>
-                                    <h1 className="text-2xl sm:text-3xl font-bold mb-1">Barangay San Gabriel</h1>
+                                    <p className="text-xs text-green-100 mb-1">
+                                        Republic of the Philippines · {settings?.barangay_city || 'City of General Trias'}, {settings?.barangay_province || 'Cavite'}
+                                    </p>
+                                    <h1 className="text-2xl sm:text-3xl font-bold mb-1">{settings?.barangay_name || 'Barangay San Gabriel'}</h1>
                                     <p className="text-sm text-green-50 mb-3 sm:mb-4">Management Information System</p>
                                     <div className="inline-flex items-center gap-2 bg-[#176623] border border-[#2e8f3b] text-xs px-3 py-1.5 rounded-full w-fit mx-auto sm:mx-0">
                                         <div className="w-2 h-2 rounded-full bg-green-400"></div>
@@ -195,56 +122,14 @@ export default function Home() {
                             
                             {/* Background watermark */}
                             <div className="absolute right-[-40px] top-[-40px] opacity-10 pointer-events-none transform scale-150 z-0">
-                                <img src="/b4-logo.jpg" alt="" className="w-96 h-96 rounded-full grayscale opacity-20" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                <img src={getSealUrl()} alt="" className="w-96 h-96 rounded-full grayscale opacity-20 object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                             </div>
                         </div>
                         
-                        {/* --- VIEW 1: CAPTAIN & SECRETARY --- */}
+                        {/* --- VIEW 1: CAPTAIN & SECRETARY DASHBOARD --- */}
                         {isCaptainOrSecretary && <DashboardAdminView />}
 
-                        {/* --- VIEW 2: TANOD / FIELD STAFF --- */}
-                        {isTanod && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                                <button onClick={() => navigate('/tanod/dashboard')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-red-300 hover:shadow-md transition-all group">
-                                    <div className="p-3 bg-red-50 text-red-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><ShieldAlertIcon /></div>
-                                    <span className="font-bold text-gray-900">Incident Dashboard</span>
-                                    <span className="text-xs text-gray-500 mt-1">View & Update Active Incidents</span>
-                                </button>
-                                <button onClick={() => navigate('/geomapping')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group">
-                                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><MapIcon /></div>
-                                    <span className="font-bold text-gray-900">Geo Mapping</span>
-                                    <span className="text-xs text-gray-500 mt-1">View Outposts & Heatmaps</span>
-                                </button>
-                                <button onClick={() => navigate('/barangaycalendarstaff')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all group">
-                                    <div className="p-3 bg-green-50 text-green-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
-                                    <span className="font-bold text-gray-900">Staff Schedule</span>
-                                    <span className="text-xs text-gray-500 mt-1">View Duty Rosters & Events</span>
-                                </button>
-                            </div>
-                        )}
-
-                        {/* --- VIEW 3: SK / YOUTH COUNCIL --- */}
-                        {isSK && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                                <button onClick={() => navigate('/inventory')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-pink-300 hover:shadow-md transition-all group">
-                                    <div className="p-3 bg-pink-50 text-pink-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><HeartHandIcon /></div>
-                                    <span className="font-bold text-gray-900">Inventory</span>
-                                    <span className="text-xs text-gray-500 mt-1">Manage SK & Welfare Items</span>
-                                </button>
-                                <button onClick={() => navigate('/barangaycalendarstaff')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all group">
-                                    <div className="p-3 bg-green-50 text-green-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><CalendarIcon /></div>
-                                    <span className="font-bold text-gray-900">Staff Calendar</span>
-                                    <span className="text-xs text-gray-500 mt-1">View Duty Rosters & Events</span>
-                                </button>
-                                <button onClick={() => navigate('/announcements')} className="flex flex-col items-center justify-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group">
-                                    <div className="p-3 bg-orange-50 text-orange-600 rounded-full mb-3 group-hover:scale-110 transition-transform"><MegaphoneIcon /></div>
-                                    <span className="font-bold text-gray-900">Announcements</span>
-                                    <span className="text-xs text-gray-500 mt-1">Manage & View Updates</span>
-                                </button>
-                            </div>
-                        )}
-
-                                                {/* --- VIEW 4: RESIDENT --- */}
+                        {/* --- VIEW 2: RESIDENT PORTAL --- */}
                         {isResident && (
                             <>
                                 {/* PUNONG BARANGAY MESSAGE */}
@@ -322,12 +207,14 @@ export default function Home() {
                                             </div>
                                             <div className="bg-[#dcf0d9] p-5 rounded-xl">
                                                 <p className="text-xs text-gray-600 mb-1">Registered Residents</p>
-                                                <p className="font-bold text-gray-900">{stats?.total_residents || "342"} ({new Date().getFullYear()})</p>
+                                                <p className="font-bold text-gray-900">{stats?.total_residents || "0"} ({new Date().getFullYear()})</p>
                                             </div>
-                                            <div className="bg-[#dcf0d9] p-5 rounded-xl">
-                                                <p className="text-xs text-gray-600 mb-1">No. of Puroks</p>
-                                                <p className="font-bold text-gray-900">{settings.number_of_puroks}</p>
-                                            </div>
+                                            {settings.operating_hours && (
+                                                <div className="bg-[#dcf0d9] p-5 rounded-xl">
+                                                    <p className="text-xs text-gray-600 mb-1">Operating Hours</p>
+                                                    <p className="font-bold text-gray-900 text-sm">{settings.operating_hours}</p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="space-y-10 w-full">
@@ -351,30 +238,6 @@ export default function Home() {
                                         </div>
                                     </div>
                                 )}
-
-                                {/* ACTIVE REQUESTS */}
-                                {activeRequests.length > 0 && (
-                                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-                                        <h2 className="text-lg font-bold text-gray-900 mb-4">Active Requests</h2>
-                                        <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                                            {activeRequests.map((req, i) => (
-                                                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded border border-gray-100 gap-3 sm:gap-0">
-                                                    <div>
-                                                        <p className="font-semibold text-gray-800">{req.type}: {req.display}</p>
-                                                        <p className="text-xs text-gray-500 mt-1">Requested: {new Date(req.created_at || req.start_time).toLocaleDateString()}</p>
-                                                    </div>
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold text-center ${
-                                                        req.status === 'PENDING' ? 'bg-orange-100 text-orange-700' :
-                                                        req.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
-                                                        'bg-green-100 text-green-700'
-                                                    }`}>
-                                                        {req.status}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
                             </>
                         )}
 
@@ -393,7 +256,7 @@ export default function Home() {
                                         <p className="text-gray-500 text-sm">No new announcements from the barangay.</p>
                                     ) : (
                                         announcements.map((ann) => (
-                                            <div 
+                                             <div 
                                                 key={ann.id} 
                                                 onClick={() => setSelectedAnnouncement(ann)}
                                                 className="border-b border-gray-100 pb-4 last:border-0 last:pb-0 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"

@@ -35,46 +35,34 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics
 
 from .models import (
-    CertificateRequest, 
-    PermitRequest, 
     AiQueryStatistic,  
     Announcement, 
     ReadAnnouncement, 
     Household,
     Resident,
-    Facility, 
-    Equipment, 
-    Reservation,
     Event,
     OfficialDocument,
     UserProfile,
-    ProfileUpdateRequest,
-    IncidentReport,
     BarangaySettings,
-    ResidentApplication,
     EmergencyContact,
     BarangayOfficial,
+    OfficialTab,
+    BarangayFAQ,
 )
 
 from .serializers import (
-    CertificateRequestSerializer, 
-    PermitRequestSerializer, 
     UserSerializer, 
     AnnouncementSerializer, 
     HouseholdSerializer,
     ResidentSerializer,
-    ReservationSerializer,
-    FacilitySerializer, 
-    EquipmentSerializer, 
     EventSerializer,
     OfficialDocumentSerializer,
     ResidentProfileSerializer,
-    ProfileUpdateRequestSerializer,
-    IncidentReportSerializer,
     BarangaySettingsSerializer,
-    ResidentApplicationSerializer,
     AiQueryStatisticSerializer,
     EmergencyContactSerializer, BarangayOfficialSerializer,
+    OfficialTabSerializer,
+    BarangayFAQSerializer,
 )
 
 genai.configure(api_key=settings.GOOGLE_API_KEY)
@@ -161,8 +149,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         # Get user info to send in the response body
         try:
             role = user.otp_profile.role
+            must_change_password = user.otp_profile.must_change_password
         except Exception:
             role = 'RESIDENT'
+            must_change_password = False
 
         response.data = {
             'detail': 'Login successful',
@@ -172,6 +162,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 'username': user.username,
                 'first_name': user.first_name,
                 'role': role,
+                'must_change_password': must_change_password,
             }
         }
         response.status_code = 200
@@ -309,16 +300,50 @@ class ResetPasswordView(APIView):
         user.set_password(new_password)
         user.save()
         
-        # Clear OTP and reset attempts
+        # Clear OTP, reset attempts, and clear must_change_password
         profile.email_otp = ''
         profile.otp_attempts = 0
+        profile.must_change_password = False
         profile.save()
         
         # Log the password reset
         from .models import SessionLog
         SessionLog.objects.create(user=user, action="Password Reset")
         
-        return Response({"message": "Password reset successfully."})
+        return Response({"message": "Password reset successfully.", "username": user.username})
+
+
+class ChangeTemporaryPasswordView(APIView):
+    """Enforces first-login mandatory password change for staff accounts."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        new_password = request.data.get('new_password')
+        confirm_password = request.data.get('confirm_password')
+
+        if not new_password:
+            return Response({"error": "New password is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if confirm_password is not None and new_password != confirm_password:
+            return Response({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(new_password) < 6:
+            return Response({"error": "Password must be at least 6 characters long."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        user.set_password(new_password)
+        user.save()
+
+        if hasattr(user, 'otp_profile'):
+            profile = user.otp_profile
+            profile.must_change_password = False
+            profile.save()
+
+        from .models import SessionLog
+        SessionLog.objects.create(user=user, action="Changed Temporary Password")
+
+        return Response({"message": "Password changed successfully.", "must_change_password": False}, status=status.HTTP_200_OK)
+
 
 class LogoutView(APIView):
     """Clears the HttpOnly auth cookies."""
@@ -353,13 +378,16 @@ class CurrentUserView(APIView):
     def get(self, request):
         try:
             role = request.user.otp_profile.role
+            must_change_password = request.user.otp_profile.must_change_password
         except Exception:
             role = 'RESIDENT'
+            must_change_password = False
 
         return Response({
             'username': request.user.username,
             'first_name': request.user.first_name,
             'role': role,
+            'must_change_password': must_change_password,
         })
 
 class CreateUserView(generics.CreateAPIView):
@@ -506,345 +534,28 @@ class ResendOTPView(APIView):
 # ==========================================
 # 3. RESIDENT IDENTITY & PROFILES
 # ==========================================
-from .models import ResidentApplication
-
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # 1. Check if they are already an officially verified resident
         if hasattr(request.user, 'resident_profile') and request.user.resident_profile is not None:
             serializer = ResidentProfileSerializer(request.user.resident_profile)
             data = serializer.data
             data['approval_status'] = 'APPROVED'
             return Response(data)
-        
-        # 2. Check if they have an active or pending application in the staging table
-        application = ResidentApplication.objects.filter(user=request.user).order_by('-created_at').first()
-        if application:
-            return Response({
-                "approval_status": application.status,
-                "rejection_reason": application.rejection_reason,
-                "first_name": application.first_name,
-                "last_name": application.last_name,
-            })
-            
-        # 3. If neither exists, they are completely unclaimed
-        return Response({"approval_status": "UNCLAIMED"})
+        return Response({"approval_status": "UNLINKED"})
 
-class ClaimResidentProfileView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-
-        if hasattr(user, 'resident_profile') and user.resident_profile is not None:
-            return Response({"error": "An account is already linked to a resident profile."}, status=status.HTTP_400_BAD_REQUEST)
-
-        first_name = request.data.get('first_name', '').strip()
-        last_name = request.data.get('last_name', '').strip()
-        birthdate = request.data.get('birthdate')
-
-        if not first_name or not last_name or not birthdate:
-            return Response({"error": "First name, last name, and birthdate are required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            # Look for an exact match in the official registry
-            resident = Resident.objects.get(
-                first_name__iexact=first_name,
-                last_name__iexact=last_name,
-                birth_date=birthdate,
-                user__isnull=True 
-            )
-            
-            # Match found: Instantly link them!
-            resident.user = user
-            resident.save()
-            
-            # Clean up any pending applications they might have made previously
-            ResidentApplication.objects.filter(user=user).delete()
-            
-            return Response({"message": "Profile successfully matched and linked!"}, status=status.HTTP_200_OK)
-
-        except Resident.DoesNotExist:
-            return Response({
-                "error": "not_found", 
-                "message": "No matching record found in the barangay registry. Please submit a new application."
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        except Resident.MultipleObjectsReturned:
-            return Response({
-                "error": "duplicate_found", 
-                "message": "Multiple records found. Please contact the barangay hall for manual verification."
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-class SubmitResidentApplicationView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        
-        # Guard rails
-        if hasattr(user, 'resident_profile') and user.resident_profile is not None:
-            return Response({"error": "An account is already linked."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        if ResidentApplication.objects.filter(user=user, status='PENDING').exists():
-            return Response({"error": "You already have an application under review."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Save to the Staging Table
-        serializer = ResidentApplicationSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(user=user, status='PENDING')
-            return Response({"message": "New application submitted for review."}, status=status.HTTP_201_CREATED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-class UnlinkProfileView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        try:
-            # Unlink the official profile
-            resident = request.user.resident_profile
-            resident.user = None
-            resident.save()
-            
-            # Also clear any lingering applications so they start totally fresh
-            ResidentApplication.objects.filter(user=request.user).delete()
-            
-            return Response({"message": "Account successfully unlinked."}, status=status.HTTP_200_OK)
-        except Resident.DoesNotExist:
-            return Response({"error": "No profile to unlink."}, status=status.HTTP_404_NOT_FOUND)
-
-class ResetRejectedClaimView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        # Reset a rejected application in the staging table
-        application = ResidentApplication.objects.filter(user=request.user, status='REJECTED').first()
-        if application:
-            application.status = 'PENDING'
-            application.rejection_reason = ''
-            application.save()
-            return Response({"message": "Claim reset successfully."}, status=status.HTTP_200_OK)
-        
-        return Response({"error": "Profile is not in a rejected state."}, status=status.HTTP_400_BAD_REQUEST)
-
-
-# ==========================================
-# 4. PROFILE CORRECTIONS & UPDATES
-# ==========================================
-class CreateProfileUpdateRequestView(generics.CreateAPIView):
-    queryset = ProfileUpdateRequest.objects.all()
-    serializer_class = ProfileUpdateRequestSerializer
-    permission_classes = [IsAuthenticated]
-
-
-
-
-    def perform_create(self, serializer):
-        try:
-            resident = self.request.user.resident_profile
-        except Resident.DoesNotExist:
-            raise NotFound("You must claim a resident profile before requesting corrections.")
-        
-        serializer.save(user=self.request.user, resident=resident)
-
-class StaffProfileUpdateListView(generics.ListAPIView):
-    serializer_class = ProfileUpdateRequestSerializer
-    permission_classes = [IsAdminUser] 
-
-    def get_queryset(self):
-        return ProfileUpdateRequest.objects.all().order_by('-created_at')
-
-class StaffProfileUpdateActionView(generics.UpdateAPIView):
-    queryset = ProfileUpdateRequest.objects.all()
-    serializer_class = ProfileUpdateRequestSerializer
-    permission_classes = [IsAdminUser]
-
-    def patch(self, request, *args, **kwargs):
-        update_request = self.get_object()
-        action_status = request.data.get('status') 
-        rejection_reason = request.data.get('rejection_reason', '') 
-
-        if action_status not in ['APPROVED', 'REJECTED']:
-            return Response({"error": "Invalid status action."}, status=status.HTTP_400_BAD_REQUEST)
-
-        update_request.status = action_status
-        if action_status == 'REJECTED':
-            update_request.rejection_reason = rejection_reason 
-            
-        update_request.save()
-
-        if action_status == 'APPROVED':
-            resident = update_request.resident
-            if update_request.requested_first_name:
-                resident.first_name = update_request.requested_first_name
-            if update_request.requested_last_name:
-                resident.last_name = update_request.requested_last_name
-            if update_request.requested_birth_date:
-                resident.birth_date = update_request.requested_birth_date
-            if update_request.requested_civil_status:
-                resident.civil_status = update_request.requested_civil_status
-            resident.save()
-
-        return Response({"message": f"Request {action_status.lower()} successfully."})
-
-
-# ==========================================
-# 5. USER-FACING REQUESTS & REPORTS
-# ==========================================
-class CertificateRequestView(generics.ListCreateAPIView):
-    queryset = CertificateRequest.objects.all()
-    serializer_class = CertificateRequestSerializer
-    permission_classes = [IsAdminUser]
-
-    def get_queryset(self):
-        return CertificateRequest.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-class PermitRequestView(generics.ListCreateAPIView):
-    queryset = PermitRequest.objects.all()
-    serializer_class = PermitRequestSerializer
-    permission_classes = [IsAdminUser]
-
-    def get_queryset(self):
-        return PermitRequest.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-class IncidentReportViewSet(viewsets.ModelViewSet):
-    serializer_class = IncidentReportSerializer
-    permission_classes = [IsAdminUser]
-    #throttle_classes = [IncidentReportThrottle]
-
-    def get_queryset(self):
-        user = self.request.user
-        try:
-            role = user.otp_profile.role
-        except Exception:
-            role = 'RESIDENT'
-            
-        # PRIVACY FIX: Staff sees everything, residents only see their own
-        if role in ['TANOD', 'SECRETARY', 'CAPTAIN']:
-            return IncidentReport.objects.all().order_by('-created_at')
-        return IncidentReport.objects.filter(user=user).order_by('-created_at')
-
-
-
-
-    def perform_create(self, serializer):
-        # Automatically attaches the logged-in user so they can't spoof being someone else
-        serializer.save(user=self.request.user)
-
-    @action(detail=True, methods=['patch'])
-    def update_status(self, request, pk=None):
-        user = request.user
-        try:
-            role = user.otp_profile.role
-        except Exception:
-            role = 'RESIDENT'
-            
-        # SECURITY FIX: Only allow authorized staff to update the status of a report
-        if role not in ['TANOD', 'SECRETARY', 'CAPTAIN']:
-            return Response(
-                {"error": "You do not have permission to change the status of this report."}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        report = self.get_object()
-        new_status = request.data.get('status')
-        resolution_notes = request.data.get('resolution_notes', '')
-
-        if new_status not in dict(IncidentReport.STATUS_CHOICES).keys():
-            return Response({"error": "Invalid status."}, status=status.HTTP_400_BAD_REQUEST)
-
-        report.status = new_status
-        if resolution_notes:
-            report.resolution_notes = resolution_notes
-            
-        report.save()
-        return Response({"message": f"Report updated to {new_status}."})
-
-
-# ==========================================
-# 6. MANAGER & STAFF VIEWSETS
-# ==========================================
-class CertificateRequestManagerViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAdminUser]
-    queryset = CertificateRequest.objects.all().order_by('-date_requested')
-    serializer_class = CertificateRequestSerializer
-
-    @action(detail=True, methods=['patch'])
-    def update_status(self, request, pk=None):
-        cert_request = self.get_object()
-        new_status = request.data.get('status')
-        rejection_reason = request.data.get('rejection_reason', '')
-
-        if new_status not in dict(CertificateRequest.STATUS_CHOICES).keys():
-            return Response({"error": "Invalid status."}, status=status.HTTP_400_BAD_REQUEST)
-
-        cert_request.status = new_status
-        if new_status == 'REJECTED':
-            cert_request.rejection_reason = rejection_reason
-        
-        cert_request.save()
-        return Response({"message": f"Certificate request {new_status.lower()}."})
-
-class PermitRequestManagerViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAdminUser]
-    queryset = PermitRequest.objects.all().order_by('-date_requested')
-    serializer_class = PermitRequestSerializer
-
-class ResidentApprovalViewSet(viewsets.ModelViewSet):
-    queryset = ResidentApplication.objects.all().order_by('-created_at')
-    serializer_class = ResidentApplicationSerializer
-    permission_classes = [IsInternalUser]
-
-    @action(detail=False, methods=['get'])
-    def pending(self, request):
-        pending_apps = ResidentApplication.objects.filter(status='PENDING')
-        serializer = self.get_serializer(pending_apps, many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['post'])
-    def update_status(self, request, pk=None):
-        application = self.get_object()
-        new_status = request.data.get('status') 
-        rejection_reason = request.data.get('rejection_reason', '') 
-
-        if new_status not in ['APPROVED', 'REJECTED']:
-            return Response({"error": "Invalid status value."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if new_status == 'REJECTED':
-            application.status = 'REJECTED'
-            application.rejection_reason = rejection_reason 
-            application.save()
-            return Response({"message": "Application rejected."}, status=status.HTTP_200_OK)
-
-        if new_status == 'APPROVED':
-            official_resident = Resident.objects.create(
-                user=application.user,
-                first_name=application.first_name,
-                middle_name=application.middle_name,
-                last_name=application.last_name,
-                suffix=application.suffix,
-                birth_date=application.birth_date,
-                sex=application.sex,
-                civil_status=application.civil_status,
-                purok=application.purok,
-                contact_number=application.contact_number,
-                occupation=application.occupation,
-                id_picture=application.id_picture,
-            )
-            
-            application.status = 'APPROVED'
-            application.save()
-            
-            return Response({"message": f"Resident {application.first_name} officially added to the registry."}, status=status.HTTP_200_OK)
+    def patch(self, request):
+        if hasattr(request.user, 'resident_profile') and request.user.resident_profile is not None:
+            contact = request.data.get('contact_number')
+            if contact is not None:
+                request.user.resident_profile.contact_number = str(contact).strip()
+                request.user.resident_profile.save()
+            serializer = ResidentProfileSerializer(request.user.resident_profile)
+            data = serializer.data
+            data['approval_status'] = 'APPROVED'
+            return Response(data)
+        return Response({"error": "No linked resident profile found."}, status=status.HTTP_404_NOT_FOUND)
 
 class HouseholdViewSet(viewsets.ModelViewSet):
     permission_classes = [IsInternalUser]
@@ -863,13 +574,89 @@ class ResidentPagination(PageNumberPagination):
             return None
         return super().paginate_queryset(queryset, request, view)
 
+class ResidentSearchFilter(filters.SearchFilter):
+    """
+    Search filter that supports names, purok, and flexible birthdate queries.
+    Supports formats:
+    - Exact ISO date: YYYY-MM-DD
+    - Slashed dates: MM/DD/YYYY, DD/MM/YYYY
+    - Dashed dates: MM-DD-YYYY, DD-MM-YYYY
+    - Textual dates: Month DD, YYYY (e.g. 'December 7, 2005')
+    - Birth year: YYYY (e.g. 1995)
+    - Standard text icontains for first_name, last_name, purok, birth_date
+    """
+    def filter_queryset(self, request, queryset, view):
+        raw_search = request.query_params.get(self.search_param, '').strip()
+        if not raw_search:
+            return queryset
+
+        from django.db.models import Q
+        import datetime
+
+        # 1. Check if the full raw search string parses as a date
+        raw_date_candidates = set()
+        for fmt in [
+            '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%m-%d-%Y', '%d-%m-%Y',
+            '%B %d, %Y', '%b %d, %Y', '%B %d %Y', '%b %d %Y', 
+            '%d %B %Y', '%d %b %Y'
+        ]:
+            try:
+                parsed = datetime.datetime.strptime(raw_search, fmt).date()
+                raw_date_candidates.add(parsed)
+            except ValueError:
+                pass
+
+        if raw_date_candidates:
+            date_q = Q()
+            for d in raw_date_candidates:
+                date_q |= Q(birth_date=d)
+            text_q = (
+                Q(first_name__icontains=raw_search) | 
+                Q(last_name__icontains=raw_search) | 
+                Q(purok__icontains=raw_search)
+            )
+            return queryset.filter(date_q | text_q)
+
+        # 2. Otherwise process search terms individually
+        search_terms = self.get_search_terms(request)
+        if not search_terms:
+            return queryset
+
+        base_conditions = []
+        for term in search_terms:
+            term_q = (
+                Q(first_name__icontains=term) | 
+                Q(last_name__icontains=term) | 
+                Q(purok__icontains=term) | 
+                Q(birth_date__icontains=term)
+            )
+
+            # Year match (e.g. 1995)
+            if term.isdigit() and len(term) == 4 and 1900 <= int(term) <= 2100:
+                term_q |= Q(birth_date__year=int(term))
+
+            # Partial/full date formats for individual terms
+            for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%m-%d-%Y', '%d-%m-%Y']:
+                try:
+                    d = datetime.datetime.strptime(term, fmt).date()
+                    term_q |= Q(birth_date=d)
+                except ValueError:
+                    pass
+
+            base_conditions.append(term_q)
+
+        for condition in base_conditions:
+            queryset = queryset.filter(condition)
+
+        return queryset
+
 class ResidentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsInternalUser]
     queryset = Resident.objects.select_related('household').all()
     serializer_class = ResidentSerializer
     pagination_class = ResidentPagination
-    filter_backends = [filters.SearchFilter, DjangoFilterBackend, OrderingFilter]
-    search_fields = ['first_name', 'last_name', 'purok']
+    filter_backends = [ResidentSearchFilter, DjangoFilterBackend, OrderingFilter]
+    search_fields = ['first_name', 'last_name', 'purok', 'birth_date']
     filterset_fields = [
         'purok', 
         'household', 
@@ -1173,13 +960,37 @@ class ResidentViewSet(viewsets.ModelViewSet):
             ]
             ws.append(row)
 
+        from io import BytesIO
+        from django.core.files.base import ContentFile
+        from django.utils import timezone
+        from .models import OfficialDocument
+
+        buffer = BytesIO()
+        wb.save(buffer)
+        excel_bytes = buffer.getvalue()
+
+        try:
+            timestamp_str = timezone.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Resident_Registry_Export_{timestamp_str}.xlsx"
+            display_time = timezone.now().strftime("%b %d, %Y %I:%M %p")
+            doc_title = f"Resident Registry Demographic Export - Generated {display_time}"
+            uploader = request.user if request.user.is_authenticated else None
+
+            OfficialDocument.objects.create(
+                title=doc_title,
+                file=ContentFile(excel_bytes, name=filename),
+                document_type='Report',
+                uploaded_by=uploader
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error auto-archiving registry export: {e}")
+
         response = HttpResponse(
+            excel_bytes,
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = 'attachment; filename="Resident_Registry_Export.xlsx"'
-        
-        wb.save(response)
-        
         return response
     
     @action(detail=False, methods=['post'], url_path='bulk_delete')
@@ -1237,117 +1048,8 @@ class ResidentViewSet(viewsets.ModelViewSet):
 
 
 # ==========================================
-# 7. FACILITIES, EVENTS & RESERVATIONS
+# 7. CALENDAR & EVENTS
 # ==========================================
-class FacilityViewSet(viewsets.ModelViewSet):
-    queryset = Facility.objects.all()
-    serializer_class = FacilitySerializer
-    permission_classes = [IsAdminUser]
-
-class EquipmentViewSet(viewsets.ModelViewSet):
-    queryset = Equipment.objects.all()
-    serializer_class = EquipmentSerializer
-    permission_classes = [IsAdminUser]
-
-class ReservationViewSet(viewsets.ModelViewSet):
-    queryset = Reservation.objects.all()
-    serializer_class = ReservationSerializer
-    permission_classes = [IsAdminUser]
-
-    def get_queryset(self):
-        user = self.request.user
-        try:
-            role = user.otp_profile.role.upper()
-        except Exception:
-            role = 'RESIDENT'
-            
-        # Staff and management roles can view all reservations
-        if role in ['CAPTAIN', 'SECRETARY', 'TREASURER', 'COUNCIL', 'SK', 'TANOD']:
-            return Reservation.objects.all().order_by('-date_requested')
-            
-        # Regular residents can only see their own reservations
-        return Reservation.objects.filter(user=user).order_by('-date_requested')
-
-    def create(self, request, *args, **kwargs):
-        facility_id = request.data.get('facility')
-        equipment_id = request.data.get('equipment')
-        start = request.data.get('start_time')
-        end = request.data.get('end_time')
-
-        if facility_id:
-            overlapping_facilities = Reservation.objects.filter(
-                facility_id=facility_id,
-                status='APPROVED' 
-            ).filter(
-                Q(start_time__lt=end) & Q(end_time__gt=start)
-            )
-
-            if overlapping_facilities.exists():
-                return Response(
-                    {"error": "This facility is already booked for the selected time slot."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        if equipment_id:
-            qty_requested = int(request.data.get('equipment_quantity', 0))
-            try:
-                equipment = Equipment.objects.get(id=equipment_id)
-            except Equipment.DoesNotExist:
-                return Response({"error": "Equipment not found."}, status=status.HTTP_404_NOT_FOUND)
-
-            overlapping_equipment = Reservation.objects.filter(
-                equipment_id=equipment_id, status='APPROVED'
-            ).filter(
-                Q(start_time__lt=end) & Q(end_time__gt=start)
-            ).aggregate(total_reserved=Sum('equipment_quantity'))
-
-            reserved_qty = overlapping_equipment['total_reserved'] or 0
-            available_qty = equipment.total_quantity - reserved_qty
-
-            if qty_requested > available_qty:
-                return Response(
-                    {"error": f"Only {available_qty} '{equipment.name}' available during this time slot."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        return super().create(request, *args, **kwargs)
-    
-    @action(detail=True, methods=['patch'])
-    def update_status(self, request, pk=None):
-        reservation = self.get_object()
-        new_status = request.data.get('status')
-        rejection_reason = request.data.get('rejection_reason', '')
-        
-        if new_status not in ['APPROVED', 'REJECTED']:
-            return Response({"error": "Invalid status provided."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        reservation.status = new_status
-        if new_status == 'REJECTED':
-            reservation.rejection_reason = rejection_reason
-            
-        reservation.save()
-        return Response({"message": f"Reservation successfully {new_status.lower()}."})
-
-
-
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-    
-    @action(detail=True, methods=['patch'])
-    def cancel(self, request, pk=None):
-        reservation = self.get_object()
-        
-        if reservation.user != request.user:
-            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
-            
-        if reservation.status == 'CANCELLED':
-            return Response({"error": "Already cancelled."}, status=status.HTTP_400_BAD_REQUEST)
-
-        reservation.status = 'CANCELLED'
-        reservation.save()
-        return Response({"message": "Reservation successfully cancelled."})
-
 class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all().order_by('-start_time')
     serializer_class = EventSerializer
@@ -1485,7 +1187,10 @@ class DashboardStatsView(APIView):
             Q(is_4ps_beneficiary=True) | 
             Q(is_senior_citizen=True) | 
             Q(is_pwd=True) | 
-            Q(is_solo_parent=True)
+            Q(is_solo_parent=True) |
+            Q(is_indigenous=True) |
+            Q(is_ofw=True) |
+            Q(is_out_of_school=True)
         ).count()
 
         registered_voters = residents.filter(is_registered_voter=True).count()
@@ -1578,10 +1283,7 @@ class DashboardStatsView(APIView):
             "youth_residents": youth_residents,
             
             # Additional Dashboard metrics
-            "certs_this_month": CertificateRequest.objects.count(),
-            "pending_reservations": Reservation.objects.filter(status='PENDING').count(), 
-            "pending_documents": CertificateRequest.objects.filter(status='PENDING').count(),
-            "chatbot_queries": AiQueryStatistic.objects.count(),
+                                                "chatbot_queries": AiQueryStatistic.objects.count(),
 
             # Charts
             "charts": {
@@ -1711,7 +1413,7 @@ Purok data: {s.purok_data}
             """
 
             model = genai.GenerativeModel(
-                model_name="gemini-3.1-flash-lite",
+                model_name="gemini-3.5-flash-lite",
                 system_instruction=system_instruction
             )
             chat_response = model.generate_content(user_prompt)
@@ -1735,23 +1437,28 @@ class AiAssistantView(APIView):
             return Response({"error": "Prompt is required"}, status=400)
 
         try:
-            from .models import BarangaySettings, EmergencyContact, BarangayOfficial
+            from .models import BarangaySettings, EmergencyContact, BarangayOfficial, BarangayFAQ
             
             # 1. Fetch live context from the database
             settings = BarangaySettings.objects.first()
-            contacts = EmergencyContact.objects.all()
-            officials = BarangayOfficial.objects.all().order_by('order')
+            contacts = EmergencyContact.objects.all().order_by('category', 'order')
+            officials = BarangayOfficial.objects.filter(is_active=True).order_by('order')
+            faqs = BarangayFAQ.objects.filter(is_active=True).order_by('category', 'order', 'id')
 
             # 2. Build Context Strings
             b_name = settings.barangay_name if settings else "the Barangay"
             
             settings_context = ""
             if settings:
+                operating_hrs = getattr(settings, 'operating_hours', 'Monday – Friday: 8:00 AM – 5:00 PM')
+                advisory_msg = settings.advisory_banner_text if getattr(settings, 'show_advisory_banner', False) and getattr(settings, 'advisory_banner_text', '') else 'No active emergency advisory.'
                 settings_context = f"""
                 Barangay Name: {settings.barangay_name}
                 Address: {settings.barangay_hall_address}
                 Contact Number: {settings.official_contact_number}
                 Contact Email: {settings.official_contact_email}
+                Operating Hours / Schedule: {operating_hrs}
+                Active Advisory: {advisory_msg}
                 Classification: {settings.barangay_classification}, {settings.barangay_city}, {settings.barangay_province}, {settings.barangay_region}
                 Puroks: {settings.number_of_puroks}
                 
@@ -1761,8 +1468,11 @@ class AiAssistantView(APIView):
                 Services & Facilities: {settings.services_facilities_text}
                 """
                 
-            contacts_context = "\\n".join([f"- {c.name} ({c.category}): {c.phone} - {c.description}" for c in contacts])
-            officials_context = "\\n".join([f"- {o.name} (Position: {o.position}, Committee: {o.committee})" for o in officials])
+            contacts_context = "\n".join([f"- {c.name} ({c.category}): {c.phone} - {c.description}" for c in contacts])
+            officials_context = "\n".join([f"- {o.name} (Position: {o.position}, Committee: {o.committee})" for o in officials])
+            faqs_context = "\n".join([f"- [{f.get_category_display()}] Q: {f.question}\n  A: {f.answer}" for f in faqs])
+            if not faqs_context:
+                faqs_context = "No custom FAQs recorded yet."
 
             # 3. Construct System Instruction
             system_instruction = f"""
@@ -1771,7 +1481,7 @@ class AiAssistantView(APIView):
             
             Here is the official, live data for your barangay. You MUST use this data to answer questions accurately. Do not invent information.
             
-            [BARANGAY DETAILS]
+            [BARANGAY DETAILS & OPERATING HOURS]
             {settings_context}
             
             [EMERGENCY CONTACTS]
@@ -1779,23 +1489,30 @@ class AiAssistantView(APIView):
             
             [BARANGAY OFFICIALS & COUNCIL]
             {officials_context}
+
+            [OFFICIAL KNOWLEDGE BASE & FAQS (FEES, CLEARANCES, REQUIREMENTS & PROCEDURES)]
+            {faqs_context}
             
             Guidelines:
-            - Answer questions accurately using the context provided above.
+            - Answer questions accurately using the official context provided above.
+            - If residents ask about clearances, certificate fees, or requirements, refer strictly to the Knowledge Base & FAQs section above. Give the specific fee (e.g. ₱50.00 for employment, free for first-time jobseekers, ₱0 for indigency) and requirements.
+            - If residents ask about operating hours or office schedule, provide the official hours from the details above.
+            - If there is an active emergency advisory, remind residents if relevant to their inquiry.
             - If asked about contact numbers, provide the specific hotlines from the Emergency Contacts list.
             - If asked about who is in charge of something, check the Barangay Officials list and their committees.
             - Keep your answers concise, friendly, and professional. Use formatting (bullet points, bold text) to make it easy to read.
+            - You may reply in English or Tagalog/Filipino depending on the language used by the resident.
             - If someone asks a question completely unrelated to the barangay or local government, politely decline to answer and redirect them to barangay services.
             """
-
+            
             model = genai.GenerativeModel(
-                model_name="gemini-3.1-flash-lite",
+                model_name="gemini-3.5-flash-lite",
                 system_instruction=system_instruction
             )
             chat_response = model.generate_content(user_prompt)
             ai_response_text = chat_response.text
 
-            # --- THE FIX: Only attach the user if they are actually logged in ---
+            # --- Only attach the user if they are actually logged in ---
             user_instance = request.user if request.user.is_authenticated else None
 
             AiQueryStatistic.objects.create(
@@ -1915,14 +1632,14 @@ class AdminAuditLogAPIView(APIView):
         querysets = []
         if not model_filter or model_filter == 'Resident':
             querysets.append(apply_filters(Resident.history.all()))
-        if not model_filter or model_filter == 'CertificateRequest':
-            querysets.append(apply_filters(CertificateRequest.history.all()))
-        if not model_filter or model_filter == 'IncidentReport':
-            querysets.append(apply_filters(IncidentReport.history.all()))
         if not model_filter or model_filter == 'UserProfile':
             querysets.append(apply_filters(UserProfile.history.all()))
         if not model_filter or model_filter == 'BarangayOfficial':
             querysets.append(apply_filters(BarangayOfficial.history.all()))
+        if not model_filter or model_filter == 'OfficialTab':
+            querysets.append(apply_filters(OfficialTab.history.all()))
+        if not model_filter or model_filter == 'BarangayFAQ':
+            querysets.append(apply_filters(BarangayFAQ.history.all()))
         if not model_filter or model_filter == 'BarangaySettings':
             querysets.append(apply_filters(BarangaySettings.history.all()))
         if not model_filter or model_filter == 'EmergencyContact':
@@ -1931,8 +1648,6 @@ class AdminAuditLogAPIView(APIView):
             querysets.append(apply_filters(Announcement.history.all()))
         if not model_filter or model_filter == 'Event':
             querysets.append(apply_filters(Event.history.all()))
-        if not model_filter or model_filter == 'Reservation':
-            querysets.append(apply_filters(Reservation.history.all()))
         if not model_filter or model_filter == 'OfficialDocument':
             querysets.append(apply_filters(OfficialDocument.history.all()))
         if not model_filter or model_filter == 'Household':
@@ -2009,10 +1724,10 @@ class AdminAuditLogAPIView(APIView):
                     target_info = f"Household at {getattr(record, 'address', '')[:30]}..." 
                 elif model_name in ["Announcement", "Event", "OfficialDocument"]:
                     target_info = getattr(record, 'title', target_info)
-                elif model_name == "BarangayOfficial" or model_name == "EmergencyContact":
+                elif model_name in ["BarangayOfficial", "EmergencyContact", "OfficialTab"]:
                     target_info = getattr(record, 'name', target_info)
-                elif model_name == "Reservation":
-                    target_info = getattr(record, 'purpose', target_info)
+                elif model_name == "BarangayFAQ":
+                    target_info = getattr(record, 'question', target_info)
                 elif model_name == "BarangaySettings":
                     target_info = "Global Configuration"
                 elif model_name == "Session":
@@ -2030,9 +1745,11 @@ class AdminAuditLogAPIView(APIView):
             except Exception:
                 action_user = "Deleted User"
 
+            display_model = "Council Tab" if model_name == "OfficialTab" else ("Barangay FAQ" if model_name == "BarangayFAQ" else model_name)
+
             log_data.append({
                 "id": record.history_id,
-                "model": model_name,
+                "model": display_model,
                 "target": target_info,
                 "action": action_map.get(record.history_type, 'Unknown'),
                 "user": action_user,
@@ -2074,6 +1791,7 @@ class StaffManagementAPIView(APIView):
                 "role": profile.role,
                 "is_active": profile.user.is_active,
                 "date_joined": profile.user.date_joined,
+                "must_change_password": profile.must_change_password,
             })
         return Response(staff_data, status=status.HTTP_200_OK)
 
@@ -2098,12 +1816,19 @@ class StaffManagementAPIView(APIView):
             )
         # --------------------------------------
 
+        # Enforce single active Punong Barangay (CAPTAIN)
+        if staff_role_upper == 'CAPTAIN' and UserProfile.objects.filter(role='CAPTAIN', user__is_active=True).exists():
+            return Response(
+                {"error": "An active Punong Barangay account already exists. You must deactivate or delete the existing Punong Barangay account before registering a new one."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             new_user = User.objects.create_user(username=username, email=email, password=password)
             if staff_role_upper in ['ADMIN', 'STAFF', 'CAPTAIN', 'SECRETARY']:
                 new_user.is_staff = True
                 new_user.save()
-            UserProfile.objects.create(user=new_user, role=staff_role_upper)
+            UserProfile.objects.create(user=new_user, role=staff_role_upper, must_change_password=True)
             from .models import SessionLog
             SessionLog.objects.create(user=request.user, action=f"Created {staff_role_upper} Account: {username}")
             return Response({"message": f"{staff_role_upper} account created successfully."}, status=status.HTTP_201_CREATED)
@@ -2146,6 +1871,14 @@ class StaffManagementAPIView(APIView):
                 if target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role != 'ADMIN':
                     return Response({"error": "Critical system accounts cannot be revoked via the dashboard."}, status=status.HTTP_403_FORBIDDEN)
                 
+                # If activating an account that has role CAPTAIN, ensure no other active CAPTAIN exists
+                if not target_user.is_active and target_profile.role == 'CAPTAIN':
+                    if UserProfile.objects.filter(role='CAPTAIN', user__is_active=True).exclude(user=target_user).exists():
+                        return Response(
+                            {"error": "Cannot activate this Punong Barangay account because another active Punong Barangay account already exists. Deactivate or delete the active one first."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
                 target_user.is_active = not target_user.is_active
                 target_user.save()
                 status_text = "Activated" if target_user.is_active else "Deactivated"
@@ -2158,6 +1891,9 @@ class StaffManagementAPIView(APIView):
                     return Response({"error": "New password is required."}, status=status.HTTP_400_BAD_REQUEST)
                 target_user.set_password(new_password)
                 target_user.save()
+                if target_profile:
+                    target_profile.must_change_password = True
+                    target_profile.save()
                 SessionLog.objects.create(user=request.user, action=f"Reset Password for {target_user.username}")
                 return Response({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
 
@@ -2182,6 +1918,13 @@ class StaffManagementAPIView(APIView):
                 
                 if target_profile.role in ['CAPTAIN', 'SECRETARY'] and requester_role != 'ADMIN':
                     return Response({"error": "Cannot downgrade critical system accounts."}, status=status.HTTP_403_FORBIDDEN)
+
+                if new_role == 'CAPTAIN' and target_user.is_active:
+                    if UserProfile.objects.filter(role='CAPTAIN', user__is_active=True).exclude(user=target_user).exists():
+                        return Response(
+                            {"error": "An active Punong Barangay account already exists. Deactivate or delete the existing Punong Barangay account first."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
 
                 target_profile.role = new_role
                 target_profile.save()
@@ -2225,6 +1968,21 @@ class SystemSettingsView(APIView):
             if val.lower() in ['null', 'none', 'undefined', '']:
                 save_data['barangay_seal_url'] = ''
 
+        # Handle removing barangay_seal or captain_image if sent as empty string or 'null'
+        if 'barangay_seal' in save_data and not request.FILES.get('barangay_seal'):
+            val = str(save_data.get('barangay_seal') or '').strip().lower()
+            if val in ['null', 'none', 'undefined', '']:
+                settings.barangay_seal = None
+                settings.save()
+                save_data.pop('barangay_seal', None)
+
+        if 'captain_image' in save_data and not request.FILES.get('captain_image'):
+            val = str(save_data.get('captain_image') or '').strip().lower()
+            if val in ['null', 'none', 'undefined', '']:
+                settings.captain_image = None
+                settings.save()
+                save_data.pop('captain_image', None)
+
         serializer = BarangaySettingsSerializer(settings, data=save_data, partial=True)
         
         if serializer.is_valid():
@@ -2250,14 +2008,31 @@ class EmergencyContactViewSet(viewsets.ModelViewSet):
         return [IsInternalUser()]
 
 
+class OfficialTabViewSet(viewsets.ModelViewSet):
+    queryset = OfficialTab.objects.all().order_by('order', 'id')
+    serializer_class = OfficialTabSerializer
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [permissions.AllowAny()]
+        return [IsAdminUser()]
+
+
 class BarangayOfficialViewSet(viewsets.ModelViewSet):
-    queryset = BarangayOfficial.objects.all().order_by('order', 'id')
+    queryset = BarangayOfficial.objects.select_related('tab').all().order_by('order', 'id')
     serializer_class = BarangayOfficialSerializer
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
-        return [IsInternalUser()]
+        return [IsAdminUser()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        tab_id = self.request.query_params.get('tab')
+        if tab_id:
+            qs = qs.filter(tab_id=tab_id)
+        return qs
 
 
 
@@ -2315,7 +2090,7 @@ class ProtectedMediaView(APIView):
                 role = str(request.user.otp_profile.role).upper()
             except Exception:
                 role = ''
-            if not (request.user.is_superuser or role in ['ADMIN', 'STAFF', 'CAPTAIN']):
+            if not (request.user.is_superuser or request.user.is_staff or role in ['ADMIN', 'STAFF', 'CAPTAIN', 'SECRETARY']):
                 return Response(
                     {"detail": "Access denied to protected document."}, 
                     status=status.HTTP_403_FORBIDDEN
@@ -2326,4 +2101,20 @@ class ProtectedMediaView(APIView):
             raise Http404("File not found.")
 
         content_type, _ = mimetypes.guess_type(full_path)
-        return FileResponse(open(full_path, 'rb'), content_type=content_type or 'application/octet-stream')
+        filename = os.path.basename(full_path)
+        as_attachment = request.GET.get('download') in ['1', 'true', 'yes']
+        return FileResponse(
+            open(full_path, 'rb'), 
+            content_type=content_type or 'application/octet-stream',
+            as_attachment=as_attachment,
+            filename=filename
+        )
+
+class BarangayFAQViewSet(viewsets.ModelViewSet):
+    queryset = BarangayFAQ.objects.all().order_by('order', 'id')
+    serializer_class = BarangayFAQSerializer
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [permissions.AllowAny()]
+        return [IsAdminUser()]

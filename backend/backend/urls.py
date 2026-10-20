@@ -6,6 +6,7 @@ from django.conf.urls.static import static   # 2. Import static
 from api.views import (
     ForgotPasswordView,
     ResetPasswordView,
+    ChangeTemporaryPasswordView,
     # Authentication & User Management
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
@@ -19,37 +20,23 @@ from api.views import (
     
     # User Profile & Approvals
     UserProfileView,
-    ClaimResidentProfileView,
-    SubmitResidentApplicationView, # NEW
-    UnlinkProfileView, # NEW
-    ResetRejectedClaimView,
-    ResidentApprovalViewSet,
     
     # Profile Corrections
-    CreateProfileUpdateRequestView,
-    StaffProfileUpdateListView,
-    StaffProfileUpdateActionView,
 
     # Core Features (User Facing)
-    CertificateRequestView,
-    PermitRequestView,
     AiAssistantView,
     DashboardStatsView,
     calendar_feed,
     
     # Core Features (Routers)
-    CertificateRequestManagerViewSet,
-    PermitRequestManagerViewSet,
     AnnouncementViewSet,
     HouseholdViewSet,
     ResidentViewSet,
-    ReservationViewSet,
-    FacilityViewSet,
-    EquipmentViewSet,
     EventViewSet,
     OfficialDocumentViewSet,
-    IncidentReportViewSet, # NEW
     EmergencyContactViewSet, BarangayOfficialViewSet,
+    OfficialTabViewSet,
+    BarangayFAQViewSet,
     StaffDemographicsAiView,
 
     # Admin Hub & Audit Logs
@@ -63,21 +50,15 @@ from api.reports import RBIFormCReportView, RBIFormCDownloadView
 
 # --- ViewSet Routers ---
 router = DefaultRouter()
-router.register(r'manager/certificates', CertificateRequestManagerViewSet, basename='manager-certificates')
-router.register(r'manager/permits', PermitRequestManagerViewSet, basename='manager-permits')
 router.register(r'announcements', AnnouncementViewSet, basename='announcements')
 router.register(r'households', HouseholdViewSet, basename='households')
 router.register(r'residents', ResidentViewSet, basename='residents')
-router.register(r'resident-approvals', ResidentApprovalViewSet, basename='resident-approvals')
-router.register(r'reservations', ReservationViewSet, basename='reservations')
-router.register(r'facilities', FacilityViewSet, basename='facilities')
-router.register(r'equipment', EquipmentViewSet, basename='equipment')
 router.register(r'events', EventViewSet, basename='events')
 router.register(r'official-documents', OfficialDocumentViewSet, basename='official-documents')
-router.register(r'incident-reports', IncidentReportViewSet, basename='incident-reports') # NEW
-router.register(r'ai-queries', AiQueryStatisticViewSet, basename='ai-queries')
 router.register(r'emergency-contacts', EmergencyContactViewSet, basename='emergency-contacts')
+router.register(r'official-tabs', OfficialTabViewSet, basename='official-tabs')
 router.register(r'barangay-officials', BarangayOfficialViewSet, basename='barangay-officials')
+router.register(r'faqs', BarangayFAQViewSet, basename='faqs')
 
 urlpatterns = [
     # --- Authentication & Registration ---
@@ -88,26 +69,18 @@ urlpatterns = [
     path('api/auth/logout/', LogoutView.as_view(), name='logout'),
     path('api/auth/forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
     path('api/auth/reset-password/', ResetPasswordView.as_view(), name='reset-password'),
+    path('api/auth/change-temporary-password/', ChangeTemporaryPasswordView.as_view(), name='change_temporary_password'),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/register/', CreateUserView.as_view(), name='register'),
     
     # --- Profile & Identity ---
     path('api/user/profile/', UserProfileView.as_view(), name='user-profile'),
-    path('api/claim-profile/', ClaimResidentProfileView.as_view(), name='claim-profile'),
-    path('api/submit-resident-application/', SubmitResidentApplicationView.as_view(), name='submit-resident-application'), # NEW
-    path('api/unlink-profile/', UnlinkProfileView.as_view(), name='unlink-profile'), # NEW
-    path('api/reset-rejected-claim/', ResetRejectedClaimView.as_view(), name='reset-rejected-claim'),
-    
+                    
     # --- Profile Corrections ---
-    path('api/profile-update-request/', CreateProfileUpdateRequestView.as_view(), name='create-profile-update'),
-    path('api/staff/profile-updates/', StaffProfileUpdateListView.as_view(), name='staff-profile-updates-list'),
-    path('api/staff/profile-updates/<int:pk>/', StaffProfileUpdateActionView.as_view(), name='staff-profile-updates-action'),
-
+            
     # --- Requests (User Facing) ---
-    path('api/certificates/', CertificateRequestView.as_view(), name='certificate-list-create'),
-    path('api/permits/', PermitRequestView.as_view(), name='permit-list-create'),
-
+        
     # --- Utility & Dashboards ---
     path('api/ai-assistant/', AiAssistantView.as_view(), name='ai-assistant'),
     path('api/dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),

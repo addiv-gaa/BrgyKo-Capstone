@@ -30,7 +30,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-0al7y^id2f3inx!vbho#z$%5=7b!iacy7g2bf9gccrcs#eia7w')
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ['true', '1']
@@ -177,10 +177,10 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://col-claims-closes-but.trycloudflare.com"
+    "https://intake-classifieds-potatoes-accidents.trycloudflare.com"
 ]
 CSRF_TRUSTED_ORIGINS = [
-    "https://col-claims-closes-but.trycloudflare.com"
+    "https://intake-classifieds-potatoes-accidents.trycloudflare.com"
 ]
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")

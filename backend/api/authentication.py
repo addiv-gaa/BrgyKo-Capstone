@@ -14,9 +14,20 @@ class CookieJWTAuthentication(JWTAuthentication):
 
         # 2. Fall back to the HttpOnly cookie
         raw_token = request.COOKIES.get('access_token')
-        if raw_token is None:
-            return None
+        if raw_token:
+            try:
+                validated_token = self.get_validated_token(raw_token)
+                return self.get_user(validated_token), validated_token
+            except Exception:
+                pass
 
-        # Validate the cookie token using SimpleJWT's built-in validation
-        validated_token = self.get_validated_token(raw_token)
-        return self.get_user(validated_token), validated_token
+        # 3. Fall back to query parameter (e.g. ?token=...) for direct media links/downloads
+        query_token = request.query_params.get('token') if hasattr(request, 'query_params') else request.GET.get('token')
+        if query_token:
+            try:
+                validated_token = self.get_validated_token(query_token)
+                return self.get_user(validated_token), validated_token
+            except Exception:
+                pass
+
+        return None

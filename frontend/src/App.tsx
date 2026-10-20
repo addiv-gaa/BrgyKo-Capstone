@@ -6,34 +6,21 @@ import Register from "./pages/Register"
 import NotFound from "./pages/NotFound"
 import ProtectedRoute from "./components/ProtectedRoutes"
 import Home from "./pages/Home"
-import Testpage from "./pages/testpage"
-import RequestCertificate from "./pages/RequestCertificate"
-import RequestPermit from "./pages/RequestPermit"
 import AIAssistant from "./pages/AIAssistant"
 import Residents from "./pages/Residents"
-import Inventory from "./pages/Inventory"
-import Welfare from "./pages/Welfare"
-import SKModule from "./pages/SKModule"
-import SMSBlast from "./pages/SMSBlast"
 import Reports from "./pages/Reports"
 import GeoMapping from "./pages/GeoMapping"
 import EmergencyContacts from "./pages/EmergencyContacts"
 import BarangayOfficials from "./pages/BarangayOfficials"
 import Documents from "./pages/Documents"
-import CertificateRequests from "./pages/CertificateRequests"
 import Announcements from "./pages/Announcements"
-import PermitRequests from "./pages/PermitRequests"
 import { AuthProvider, AuthContext } from "./components/AuthContext"
+import { SettingsProvider } from "./components/SettingsContext"
 import StaffSchedulePage from "./pages/BarangayCalendarStaff"
 import ResidentSchedulePage from "./pages/BarangayCalendarUser"
-import ReservationForm from "./pages/ReservationForm"
-import ClaimProfile from "./pages/ClaimProfile"
-import ResidentApprovals from "./pages/ResidentApproval"
 import Profile from "./pages/UserProfile"
-import ProfileUpdateApprovals from "./pages/ProfileUpdateApprovals"
-import ReportIncident from "./pages/ReportIncident"
-import TanodDashboard from "./pages/TanodDashboard"
 import AdminHub from "./pages/AdminHub"
+import MustChangePasswordModal from "./components/MustChangePasswordModal"
 
 
 function Logout() {
@@ -83,8 +70,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     ? [(user.roles as string).toUpperCase()]
     : [];
 
-
-
   const staffRoles = ['CAPTAIN', 'ADMIN', 'STAFF'];
   const isStaff = normalizedRoles.some(role => staffRoles.includes(role));
 
@@ -112,14 +97,20 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       return <>{children}</>;
   }
 
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <>
+      <MustChangePasswordModal />
+      <DashboardLayout>{children}</DashboardLayout>
+    </>
+  );
 }
 
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppLayout>
+      <SettingsProvider>
+        <BrowserRouter>
+          <AppLayout>
           <Routes>
             
             {/* =========================================
@@ -129,9 +120,8 @@ function App() {
             <Route path="/logout" element={<Logout />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<RegisterAndLogout />} />
-            <Route path="/testpage" element={<Testpage />} />
             
-            {/* NEWLY MOVED PUBLIC PAGES */}
+            {/* Public Information Pages */}
             <Route path="/aiassistant" element={<AIAssistant />} />
             <Route path="/emergencycontacts" element={<EmergencyContacts />} />
             <Route path="/announcements" element={<Announcements />} />
@@ -149,30 +139,6 @@ function App() {
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
             {/* =========================================
-                RESIDENT-ONLY ROUTES 
-                ========================================= */}
-            <Route 
-              path="/requestcertificate" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT']}><RequestCertificate /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/requestpermit" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT']}><RequestPermit /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/reservations/request" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT']}><ReservationForm /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/claimprofile" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT', 'STAFF', 'ADMIN', 'CAPTAIN']}><ClaimProfile /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/reportincident" 
-              element={<ProtectedRoute allowedRoles={['RESIDENT', 'STAFF', 'ADMIN', 'CAPTAIN']}><ReportIncident /></ProtectedRoute>} 
-            />
-
-            {/* =========================================
                 STAFF & ADMIN ROUTES (Secretary & Captain)
                 ========================================= */}
             <Route 
@@ -180,36 +146,8 @@ function App() {
               element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><Residents /></ProtectedRoute>} 
             />
             <Route 
-              path="/residentapproval" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><ResidentApprovals /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/profileupdate" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><ProfileUpdateApprovals /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/certrequests" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><CertificateRequests /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/permitrequests" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><PermitRequests /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/inventory" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><Inventory /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/welfare" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><Welfare /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/skmodule" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><SKModule /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/smsblast" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><SMSBlast /></ProtectedRoute>} 
+              path="/barangaycalendarstaff" 
+              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><StaffSchedulePage /></ProtectedRoute>} 
             />
             <Route 
               path="/reports" 
@@ -227,22 +165,11 @@ function App() {
               path="/adminhub" 
               element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminHub /></ProtectedRoute>} 
             />  
-            
-            {/* =========================================
-                MULTI-STAFF ROUTES (Includes Tanods)
-                ========================================= */}
-            <Route 
-              path="/barangaycalendarstaff" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><StaffSchedulePage /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/tanod/dashboard" 
-              element={<ProtectedRoute allowedRoles={['STAFF', 'ADMIN', 'CAPTAIN']}><TanodDashboard /></ProtectedRoute>} 
-            />
 
           </Routes>
         </AppLayout>
       </BrowserRouter>
+      </SettingsProvider>
     </AuthProvider>
   )
 }

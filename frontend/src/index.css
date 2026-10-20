@@ -12,3 +12,23 @@
         @apply pt-3 pr-2 pl-2 pb-1 text-xs font-bold uppercase 
     }
 }
+
+@keyframes marquee {
+    0% {
+        transform: translateX(100%);
+    }
+    100% {
+        transform: translateX(-100%);
+    }
+}
+
+.animate-marquee {
+    display: inline-block;
+    white-space: nowrap;
+    animation: marquee 25s linear infinite;
+    will-change: transform;
+}
+
+.pause-on-hover:hover {
+    animation-play-state: paused;
+}

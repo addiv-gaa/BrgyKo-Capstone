@@ -123,6 +123,14 @@ export default function Announcements() {
         }
     };
 
+    const getTodayDateString = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     // Archive Handlers
     const handleToggleArchive = (id: number, isCurrentlyArchived: boolean) => {
         setAnnToArchive({ id, currentStatus: isCurrentlyArchived });
@@ -181,6 +189,24 @@ export default function Announcements() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (hasEvent) {
+            if (!eventData.startDate || !eventData.startTime || !eventData.endDate || !eventData.endTime) {
+                alert("Please fill in all event date and time fields.");
+                return;
+            }
+            const startDateTime = new Date(`${eventData.startDate}T${eventData.startTime}`);
+            const endDateTime = new Date(`${eventData.endDate}T${eventData.endTime}`);
+            const now = new Date();
+
+            if (startDateTime < new Date(now.getTime() - 5 * 60 * 1000)) {
+                alert("Event start time cannot be in the past.");
+                return;
+            }
+            if (endDateTime < startDateTime) {
+                alert("Event end time cannot be before start time.");
+                return;
+            }
+        }
         setIsConfirmingCreate(true);
     };
 
@@ -211,7 +237,15 @@ export default function Announcements() {
                     body: JSON.stringify(eventPayload)
                 });
 
-                if (!eventRes.ok) throw new Error("Failed to create calendar event");
+                if (!eventRes.ok) {
+                    const errData = await eventRes.json().catch(() => ({}));
+                    const msg = (errData?.start_time && errData.start_time[0]) || 
+                                (errData?.end_time && errData.end_time[0]) || 
+                                errData?.error || 
+                                "Failed to create calendar event";
+                    alert(msg);
+                    throw new Error(msg);
+                }
                 const newEvent = await eventRes.json();
                 createdEventId = newEvent.id;
             }
@@ -430,7 +464,21 @@ export default function Announcements() {
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-700 mb-1">Start Date</label>
-                                                <input type="date" required={hasEvent} value={eventData.startDate} onChange={e => setEventData({...eventData, startDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700" />
+                                                <input 
+                                                    type="date" 
+                                                    required={hasEvent} 
+                                                    min={getTodayDateString()}
+                                                    value={eventData.startDate} 
+                                                    onChange={e => {
+                                                        const newStart = e.target.value;
+                                                        setEventData(prev => ({
+                                                            ...prev,
+                                                            startDate: newStart,
+                                                            endDate: prev.endDate && prev.endDate < newStart ? newStart : prev.endDate
+                                                        }));
+                                                    }} 
+                                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700" 
+                                                />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-700 mb-1">Start Time</label>
@@ -438,7 +486,14 @@ export default function Announcements() {
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-700 mb-1">End Date</label>
-                                                <input type="date" required={hasEvent} value={eventData.endDate} onChange={e => setEventData({...eventData, endDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700" />
+                                                <input 
+                                                    type="date" 
+                                                    required={hasEvent} 
+                                                    min={eventData.startDate || getTodayDateString()}
+                                                    value={eventData.endDate} 
+                                                    onChange={e => setEventData({...eventData, endDate: e.target.value})} 
+                                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700" 
+                                                />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-700 mb-1">End Time</label>

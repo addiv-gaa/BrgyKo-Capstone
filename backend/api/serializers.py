@@ -1,27 +1,23 @@
+import datetime
+from django.utils import timezone
 from django.contrib.auth.models import User
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
 
 from .models import (
-    CertificateRequest, 
-    PermitRequest,  
     Announcement, 
     ReadAnnouncement, 
     Household, 
     Resident,
-    Facility, 
-    Equipment, 
     Event, 
-    Reservation,
     OfficialDocument,
-    ProfileUpdateRequest,
-    IncidentReport,
     BarangaySettings,
-    ResidentApplication,
     AiQueryStatistic,
     EmergencyContact,
     BarangayOfficial,
+    OfficialTab,
+    BarangayFAQ,
 )
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -54,24 +50,6 @@ class UserSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(**validated_data)
         return user
     
-class CertificateRequestSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-
-    class Meta:
-        model = CertificateRequest
-        fields = '__all__'
-        # Protect tracking and admin fields from user manipulation
-        read_only_fields = ['status', 'rejection_reason', 'date_requested']
-
-class PermitRequestSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-
-    class Meta:
-        model = PermitRequest
-        fields = '__all__'
-        # Protect tracking and admin fields
-        read_only_fields = ['status', 'rejection_reason', 'date_requested']
-
 class EventNestedSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
@@ -106,14 +84,6 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         return ReadAnnouncement.objects.filter(user=user, announcement=obj).exists()
 
 
-class ResidentApplicationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ResidentApplication
-        fields = '__all__'
-        # Protect these fields so users cannot force their status to 'APPROVED' upon submission
-        read_only_fields = ['user', 'status', 'rejection_reason', 'created_at']
-
-# --- 1. Admin Resident Serializer (Full Access) ---
 class ResidentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resident
@@ -206,30 +176,26 @@ class HouseholdSerializer(GeoFeatureModelSerializer):
     def get_is_out_of_school(self, obj):
         return obj.residents.filter(is_out_of_school=True).exists()
     
-class FacilitySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Facility
-        fields = '__all__'
-
-class EquipmentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Equipment
-        fields = '__all__'
-
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = '__all__'
         read_only_fields = ['organizer', 'created_at']
 
-class ReservationSerializer(serializers.ModelSerializer):
-    facility_name = serializers.ReadOnlyField(source='facility.name')
-    equipment_name = serializers.ReadOnlyField(source='equipment.name')
-    
-    class Meta:
-        model = Reservation
-        fields = '__all__'
-        read_only_fields = ['user', 'status', 'rejection_reason', 'date_requested']
+    def validate(self, data):
+        start_time = data.get('start_time') or (self.instance.start_time if self.instance else None)
+        end_time = data.get('end_time') or (self.instance.end_time if self.instance else None)
+
+        # On create (not update of historical event), enforce start_time is present or future
+        if not self.instance:
+            if start_time and start_time < timezone.now() - datetime.timedelta(minutes=5):
+                raise serializers.ValidationError({"start_time": "Event start time cannot be in the past."})
+
+        if start_time and end_time:
+            if end_time < start_time:
+                raise serializers.ValidationError({"end_time": "Event end time cannot be before start time."})
+
+        return data
 
 class OfficialDocumentSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.SerializerMethodField()
@@ -254,31 +220,6 @@ class OfficialDocumentSerializer(serializers.ModelSerializer):
             return obj.file.name.split('/')[-1]
         return None
 
-class ProfileUpdateRequestSerializer(serializers.ModelSerializer):
-    resident_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ProfileUpdateRequest
-        fields = '__all__'
-        read_only_fields = ['user', 'resident', 'created_at', 'rejection_reason']
-
-    def get_resident_name(self, obj):
-        return f"{obj.resident.first_name} {obj.resident.last_name}"
-
-class IncidentReportSerializer(serializers.ModelSerializer):
-    reporter_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = IncidentReport
-        fields = '__all__'
-        # Protect admin-only fields from being set by the resident
-        read_only_fields = ['user', 'status', 'resolution_notes', 'created_at', 'updated_at']
-
-    def get_reporter_name(self, obj):
-        if obj.user.first_name:
-            return f"{obj.user.first_name} {obj.user.last_name}".strip()
-        return obj.user.username
-
 class BarangaySettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = BarangaySettings
@@ -294,8 +235,24 @@ class AiQueryStatisticSerializer(serializers.ModelSerializer):
         model = AiQueryStatistic
         # We include 'created_at' as it's required for the chart's monthly buckets
         fields = ['id', 'user', 'prompt', 'response', 'created_at']
+class OfficialTabSerializer(serializers.ModelSerializer):
+    officials_count = serializers.IntegerField(source='officials.count', read_only=True)
+
+    class Meta:
+        model = OfficialTab
+        fields = ['id', 'name', 'description', 'order', 'is_active', 'officials_count', 'created_at']
+
 class BarangayOfficialSerializer(serializers.ModelSerializer):
+    tab_name = serializers.ReadOnlyField(source='tab.name')
+
     class Meta:
         model = BarangayOfficial
         fields = '__all__'
 
+
+class BarangayFAQSerializer(serializers.ModelSerializer):
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+
+    class Meta:
+        model = BarangayFAQ
+        fields = ['id', 'question', 'answer', 'category', 'category_display', 'order', 'is_active', 'created_at', 'updated_at']

@@ -8,6 +8,7 @@ interface User {
     role?: string;
     first_name?: string;
     username?: string;
+    must_change_password?: boolean;
 }
 
 interface SystemSettings {
@@ -33,6 +34,7 @@ interface UserData {
     username: string;
     first_name: string;
     role: string;
+    must_change_password?: boolean;
 }
 
 interface AuthContextType {
@@ -42,6 +44,7 @@ interface AuthContextType {
     logout: () => void;
     refreshSettings: () => void;
     refreshUser: () => Promise<void>;
+    setMustChangePassword: (val: boolean) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -76,6 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     role: res.data.role,
                     first_name: res.data.first_name,
                     username: res.data.username,
+                    must_change_password: res.data.must_change_password,
                 });
             }
         } catch {
@@ -106,7 +110,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             role: userData.role,
             first_name: userData.first_name,
             username: userData.username,
+            must_change_password: userData.must_change_password,
         });
+    };
+
+    const setMustChangePassword = (val: boolean) => {
+        setUser(prev => prev ? { ...prev, must_change_password: val } : null);
     };
 
     const logout = async () => {
@@ -124,7 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, settings, login, logout, refreshSettings: fetchSettings, refreshUser }}>
+        <AuthContext.Provider value={{ user, settings, login, logout, refreshSettings: fetchSettings, refreshUser, setMustChangePassword }}>
             {!isAppLoading ? children : <div className="flex flex-col h-screen items-center justify-center bg-[#f4f7fa]">
                 <div className="animate-spin rounded-full h-14 w-14 border-4 border-gray-200 border-t-green-600 mb-4 shadow-sm"></div>
                 <div className="text-gray-600 font-bold tracking-wide">Loading Barangay Portal...</div>

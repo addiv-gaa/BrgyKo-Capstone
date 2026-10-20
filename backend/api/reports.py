@@ -292,9 +292,36 @@ class RBIFormCDownloadView(APIView):
         if signatories.get('date_accomplished'):
             ws['A57'] = f"Date Accomplished: {signatories['date_accomplished']}"
 
+        # Auto-save generated report to Documents & Records
+        from io import BytesIO
+        from django.core.files.base import ContentFile
+        from django.utils import timezone
+        from .models import OfficialDocument
+
+        buffer = BytesIO()
+        wb.save(buffer)
+        excel_bytes = buffer.getvalue()
+
+        try:
+            period = data.get('metadata', {}).get('semestral_period') or "Semestral"
+            timestamp_str = timezone.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"RBI_Form_C_{timestamp_str}.xlsx"
+            display_time = timezone.now().strftime("%b %d, %Y %I:%M %p")
+            doc_title = f"RBI Form C Semestral Report ({period}) - Generated {display_time}"
+            uploader = request.user if request.user.is_authenticated else None
+
+            OfficialDocument.objects.create(
+                title=doc_title,
+                file=ContentFile(excel_bytes, name=filename),
+                document_type='Report',
+                uploaded_by=uploader
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error auto-archiving Form C report: {e}")
+
         # HTTP Response
-        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response = HttpResponse(excel_bytes, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename="RBI_Form_C_Styled.xlsx"'
-        wb.save(response)
         return response
 

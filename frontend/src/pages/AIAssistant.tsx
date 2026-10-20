@@ -11,6 +11,16 @@ interface Message {
     sender: 'user' | 'bot';
 }
 
+interface BarangayFAQ {
+    id: number;
+    question: string;
+    answer: string;
+    category: 'FEES' | 'SERVICES' | 'EMERGENCY' | 'SANITATION' | 'GENERAL';
+    category_display?: string;
+    order: number;
+    is_active: boolean;
+}
+
 export default function AiAssistant() {
     const authContext = useContext(AuthContext);
     const settings = authContext?.settings;
@@ -24,8 +34,19 @@ export default function AiAssistant() {
     ]);
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    
-    const faqCategories = [
+    const [dbFaqs, setDbFaqs] = useState<BarangayFAQ[]>([]);
+
+    useEffect(() => {
+        fetch(`${API_URL}/api/faqs/`)
+            .then(res => res.json())
+            .then(data => {
+                const list = Array.isArray(data) ? data : (data.results || []);
+                setDbFaqs(list.filter((f: BarangayFAQ) => f.is_active));
+            })
+            .catch(err => console.error("Could not fetch FAQs for AI assistant:", err));
+    }, []);
+
+    const defaultFaqCategories = [
         {
             title: "Permits & Clearances",
             prompts: ["How do I get a barangay clearance?", "Requirements for business permit?", "How much are the permit fees?"]
@@ -39,7 +60,31 @@ export default function AiAssistant() {
             prompts: ["What are your office hours?", "List of emergency hotlines", "How to report an incident?"]
         }
     ];
-    const [expandedCategory, setExpandedCategory] = useState<string | null>("Permits & Clearances");
+
+    const categoryLabels: Record<string, string> = {
+        FEES: "Fees & Official Rates",
+        SERVICES: "Services & Permits",
+        EMERGENCY: "Emergency Procedures",
+        SANITATION: "Waste & Sanitation",
+        GENERAL: "General Info & Safety",
+    };
+
+    const displayCategories = dbFaqs.length > 0
+        ? Object.keys(categoryLabels).map(catKey => ({
+            title: categoryLabels[catKey],
+            prompts: dbFaqs.filter(f => f.category === catKey).map(f => f.question)
+        })).filter(c => c.prompts.length > 0)
+        : defaultFaqCategories;
+
+    const quickPrompts = [
+        "💰 Magkano ang Barangay Clearance?",
+        "📄 Requirements para sa Residency?",
+        "⏰ Ano ang operating hours?",
+        "🚨 Emergency Hotlines",
+        ...(dbFaqs.slice(0, 3).map(f => f.question))
+    ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 5);
+
+    const [expandedCategory, setExpandedCategory] = useState<string | null>("Fees & Official Rates");
     
     // Auto-scroll reference
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -194,6 +239,21 @@ export default function AiAssistant() {
 
                                 {/* Input Form & Suggestions Area */}
                                 <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg shrink-0">
+                                    {/* Suggested Quick Prompt Chips */}
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-2.5 mb-2 scrollbar-none">
+                                        <span className="text-[10px] font-bold text-gray-400 shrink-0 uppercase tracking-wider">Suggested:</span>
+                                        {quickPrompts.map((chip, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                disabled={isLoading}
+                                                onClick={() => handleSendMessage(chip)}
+                                                className="text-xs bg-white hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 font-medium px-3 py-1.5 rounded-full border border-gray-200 hover:border-emerald-300 shadow-2xs transition-all shrink-0 disabled:opacity-50"
+                                            >
+                                                {chip}
+                                            </button>
+                                        ))}
+                                    </div>
                                     
                                     <form onSubmit={onSubmit} className="flex gap-3">
                                         <input 
@@ -201,7 +261,7 @@ export default function AiAssistant() {
                                             value={inputValue}
                                             onChange={(e) => setInputValue(e.target.value)}
                                             disabled={isLoading}
-                                            placeholder="Ask about barangay services..." 
+                                            placeholder="Ask about barangay services, clearance fees, or requirements..." 
                                             className="flex-1 border border-gray-300 rounded-md p-3 text-sm outline-none focus:ring-2 focus:ring-green-600 transition-shadow disabled:bg-gray-100 disabled:text-gray-400"
                                         />
                                         <button 
@@ -227,7 +287,7 @@ export default function AiAssistant() {
                                     <p className="text-xs text-gray-500 mb-4">Click a category to see quick prompts.</p>
                                     
                                     <div className="space-y-3">
-                                        {faqCategories.map((cat, idx) => (
+                                        {displayCategories.map((cat, idx) => (
                                             <div key={idx} className="border border-gray-100 rounded-lg overflow-hidden bg-gray-50">
                                                 <button 
                                                     onClick={() => setExpandedCategory(expandedCategory === cat.title ? null : cat.title)}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import api from "../api";
 const API_URL = import.meta.env.VITE_API_URL;
 
 // --- Icons ---
@@ -10,7 +11,7 @@ const ArchiveIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" hei
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>;
 const EyeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
 
-const DOCUMENT_TYPES = ['Ordinance', 'Resolution', 'EO', 'Memo', 'Minutes', 'Financial', 'Template', 'Others'];
+const DOCUMENT_TYPES = ['Ordinance', 'Resolution', 'EO', 'Memo', 'Minutes', 'Financial', 'Report', 'Template', 'Others'];
 
 // Security Constraints
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -43,6 +44,45 @@ export default function Documents() {
     const [currentDocId, setCurrentDocId] = useState<number | null>(null);
     const [formState, setFormState] = useState<{title: string, type: string, file: File | null}>({ title: "", type: "Memo", file: null });
     const [isSaving, setIsSaving] = useState(false);
+    const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+    // --- Authenticated Document Download ---
+    const handleDownload = async (doc: any) => {
+        if (!doc.file) {
+            alert("No file attachment found for this document.");
+            return;
+        }
+
+        setDownloadingId(doc.id);
+        try {
+            // Authenticated download via Axios: sends HttpOnly cookie AND Authorization Bearer token
+            const response = await api.get(doc.file, { responseType: 'blob' });
+            
+            // Clean filename
+            const filename = doc.file_name || (doc.file.split('/').pop()?.split('?')[0]) || `${doc.title}.pdf`;
+            
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error: any) {
+            console.error("Document download error:", error);
+            // Fallback: If blob fetch failed, try opening with query token fallback if available
+            const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+            if (token && doc.file) {
+                const separator = doc.file.includes('?') ? '&' : '?';
+                window.open(`${doc.file}${separator}token=${encodeURIComponent(token)}&download=1`, '_blank');
+            } else {
+                alert("Failed to download document. Please ensure your session is active.");
+            }
+        } finally {
+            setDownloadingId(null);
+        }
+    };
 
     // --- Data Fetching ---
     useEffect(() => {
@@ -52,20 +92,18 @@ export default function Documents() {
 
     const fetchDocuments = async () => {
         const ordering = sortOrder === 'desc' ? `-${sortField}` : sortField;
-        let url = `${API_URL}/api/official-documents/?page=${page}&ordering=${ordering}&is_archived=${showArchived ? 'True' : 'False'}`;
+        let url = `/api/official-documents/?page=${page}&ordering=${ordering}&is_archived=${showArchived ? 'True' : 'False'}`;
         
         if (searchQuery) url += `&search=${searchQuery}`;
         if (filterType) url += `&document_type=${filterType}`;
 
         try {
-            const response = await fetch(url, { credentials: 'include' });
-            if (response.ok) {
-                const data = await response.json();
-                // DRF Paginator returns an object with 'results' and 'count'
-                setDocuments(data.results);
-                setTotalPages(Math.ceil(data.count / 10)); // 10 is the page_size we set in Django
-                setSelectedIds([]); // Clear selections on page change
-            }
+            const response = await api.get(url);
+            const data = response.data;
+            // DRF Paginator returns an object with 'results' and 'count'
+            setDocuments(data.results);
+            setTotalPages(Math.ceil(data.count / 10)); // 10 is the page_size we set in Django
+            setSelectedIds([]); // Clear selections on page change
         } catch (error) {
             console.error("Error fetching documents:", error);
         } finally {
@@ -132,24 +170,19 @@ export default function Documents() {
         formData.append('document_type', formState.type);
         if (formState.file) formData.append('file', formState.file);
 
-        const method = formMode === 'edit' ? 'PATCH' : 'POST';
-        const url = formMode === 'edit' 
-            ? `${API_URL}/api/official-documents/${currentDocId}/`
-            : `${API_URL}/api/official-documents/`;
-
         try {
-            const response = await fetch(url, { method, credentials: 'include', body: formData });
-            if (response.ok) {
-                setIsFormModalOpen(false);
-                setIsConfirmingSave(false);
-                setFormState({ title: "", type: "Memo", file: null });
-                fetchDocuments();
+            if (formMode === 'edit') {
+                await api.patch(`/api/official-documents/${currentDocId}/`, formData);
             } else {
-                alert("Action failed.");
-                setIsConfirmingSave(false);
+                await api.post(`/api/official-documents/`, formData);
             }
+            setIsFormModalOpen(false);
+            setIsConfirmingSave(false);
+            setFormState({ title: "", type: "Memo", file: null });
+            fetchDocuments();
         } catch (error) {
-            console.error(error);
+            console.error("Save document error:", error);
+            alert("Action failed. Please verify the document details.");
             setIsConfirmingSave(false);
         } finally {
             setIsSaving(false);
@@ -163,14 +196,17 @@ export default function Documents() {
 
     const executeToggleArchive = async () => {
         if (!docToArchive) return;
-        await fetch(`${API_URL}/api/official-documents/${docToArchive.id}/`, {
-            method: 'PATCH',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ is_archived: !docToArchive.currentStatus })
-        });
-        setDocToArchive(null);
-        fetchDocuments();
+        try {
+            await api.patch(`/api/official-documents/${docToArchive.id}/`, {
+                is_archived: !docToArchive.currentStatus
+            });
+            fetchDocuments();
+        } catch (error) {
+            console.error("Toggle archive error:", error);
+            alert("Failed to update document status.");
+        } finally {
+            setDocToArchive(null);
+        }
     };
 
     const handleBulkAction = (action: 'archive' | 'delete') => {
@@ -180,15 +216,18 @@ export default function Documents() {
 
     const executeBulkAction = async () => {
         if (!bulkActionConfirm) return;
-        await fetch(`${API_URL}/api/official-documents/bulk_${bulkActionConfirm}/`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids: selectedIds })
-        });
-        setBulkActionConfirm(null);
-        fetchDocuments();
-        setSelectedIds([]);
+        try {
+            await api.post(`/api/official-documents/bulk_${bulkActionConfirm}/`, {
+                ids: selectedIds
+            });
+            fetchDocuments();
+            setSelectedIds([]);
+        } catch (error) {
+            console.error("Bulk action error:", error);
+            alert("Failed to perform bulk action.");
+        } finally {
+            setBulkActionConfirm(null);
+        }
     };
 
     const getBadgeColor = (type: string) => {
@@ -196,6 +235,7 @@ export default function Documents() {
             case 'Ordinance': return 'bg-purple-100 text-purple-700 border-purple-200';
             case 'Resolution': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
             case 'Financial': return 'bg-green-100 text-green-700 border-green-200';
+            case 'Report': return 'bg-emerald-100 text-emerald-800 border-emerald-300';
             case 'Memo': return 'bg-green-100 text-green-700 border-green-200';
             case 'EO': return 'bg-red-100 text-red-700 border-red-200';
             default: return 'bg-gray-100 text-gray-700 border-gray-200';
@@ -324,9 +364,21 @@ export default function Documents() {
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(doc.uploaded_at).toLocaleDateString()}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                         <div className="flex justify-end gap-2">
-                                                            <a href={doc.file} download target="_blank" rel="noopener noreferrer" className="text-green-600 bg-green-50 p-2 rounded hover:bg-green-100" title="Download">
-                                                                <DownloadIcon />
-                                                            </a>
+                                                            <button 
+                                                                onClick={() => handleDownload(doc)} 
+                                                                disabled={downloadingId === doc.id}
+                                                                className="text-green-600 bg-green-50 p-2 rounded hover:bg-green-100 disabled:opacity-50 transition-colors" 
+                                                                title="Download"
+                                                            >
+                                                                {downloadingId === doc.id ? (
+                                                                    <svg className="animate-spin h-4 w-4 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                    </svg>
+                                                                ) : (
+                                                                    <DownloadIcon />
+                                                                )}
+                                                            </button>
                                                             <button onClick={() => openEditModal(doc)} className="text-amber-600 bg-amber-50 p-2 rounded hover:bg-amber-100" title="Edit">
                                                                 <EditIcon />
                                                             </button>

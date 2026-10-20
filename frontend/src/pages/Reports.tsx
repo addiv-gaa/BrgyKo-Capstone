@@ -97,6 +97,7 @@ export default function Reports() {
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
+            alert("RBI Form C report exported successfully and automatically archived to Documents & Records!");
         } catch (error) {
             console.error(error);
             alert("Error downloading styled Excel report.");

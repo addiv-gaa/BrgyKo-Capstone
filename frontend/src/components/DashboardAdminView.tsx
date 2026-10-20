@@ -84,7 +84,13 @@ export default function DashboardAdminView() {
     
     const [activeFilter, setActiveFilter] = useState<string | null>(null);
     const [welfareFilters, setWelfareFilters] = useState({
-        pwd: true, senior: true, solo: true, fourps: true
+        pwd: true, 
+        senior: true, 
+        solo: true, 
+        fourps: true,
+        indigenous: true,
+        ofw: true,
+        out_of_school: true
     });
     
     // Pagination & Residents
@@ -148,7 +154,14 @@ export default function DashboardAdminView() {
             if (civilStatusFilter) query += '&civil_status=' + encodeURIComponent(civilStatusFilter);
             
             if (activeFilter === 'vulnerable') {
-                const noWelfareChecked = !welfareFilters.pwd && !welfareFilters.senior && !welfareFilters.solo && !welfareFilters.fourps;
+                const noWelfareChecked = !welfareFilters.pwd && 
+                    !welfareFilters.senior && 
+                    !welfareFilters.solo && 
+                    !welfareFilters.fourps &&
+                    !welfareFilters.indigenous &&
+                    !welfareFilters.ofw &&
+                    !welfareFilters.out_of_school;
+
                 if (noWelfareChecked) {
                     setResidents([]);
                     setTotalPages(1);
@@ -160,6 +173,9 @@ export default function DashboardAdminView() {
                 if (welfareFilters.senior) query += '&is_senior_citizen=True';
                 if (welfareFilters.solo) query += '&is_solo_parent=True';
                 if (welfareFilters.fourps) query += '&is_4ps_beneficiary=True';
+                if (welfareFilters.indigenous) query += '&is_indigenous=True';
+                if (welfareFilters.ofw) query += '&is_ofw=True';
+                if (welfareFilters.out_of_school) query += '&is_out_of_school=True';
             }
 
             try {
@@ -290,11 +306,35 @@ export default function DashboardAdminView() {
             {/* Sub-menu for Vulnerable Sectors */}
             {activeFilter === 'vulnerable' && (
                 <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
-                    <span className="font-bold text-gray-800 mr-2">Filter by Sector:</span>
-                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={welfareFilters.pwd} onChange={() => toggleWelfare('pwd')} className="w-4 h-4 text-blue-600 rounded" /> PWD</label>
-                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={welfareFilters.senior} onChange={() => toggleWelfare('senior')} className="w-4 h-4 text-orange-600 rounded" /> Senior Citizen</label>
-                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={welfareFilters.solo} onChange={() => toggleWelfare('solo')} className="w-4 h-4 text-pink-600 rounded" /> Solo Parent</label>
-                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={welfareFilters.fourps} onChange={() => toggleWelfare('fourps')} className="w-4 h-4 text-purple-600 rounded" /> 4Ps</label>
+                    <span className="font-bold text-gray-800 mr-2 text-sm">Filter by Sector:</span>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input type="checkbox" checked={welfareFilters.pwd} onChange={() => toggleWelfare('pwd')} className="w-4 h-4 text-blue-600 rounded" />
+                        <span>PWD</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input type="checkbox" checked={welfareFilters.senior} onChange={() => toggleWelfare('senior')} className="w-4 h-4 text-orange-600 rounded" />
+                        <span>Senior Citizen</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input type="checkbox" checked={welfareFilters.solo} onChange={() => toggleWelfare('solo')} className="w-4 h-4 text-pink-600 rounded" />
+                        <span>Solo Parent</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input type="checkbox" checked={welfareFilters.fourps} onChange={() => toggleWelfare('fourps')} className="w-4 h-4 text-purple-600 rounded" />
+                        <span>4Ps</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input type="checkbox" checked={welfareFilters.indigenous} onChange={() => toggleWelfare('indigenous')} className="w-4 h-4 text-yellow-600 rounded" />
+                        <span>Indigenous (IP)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input type="checkbox" checked={welfareFilters.ofw} onChange={() => toggleWelfare('ofw')} className="w-4 h-4 text-cyan-600 rounded" />
+                        <span>OFW</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input type="checkbox" checked={welfareFilters.out_of_school} onChange={() => toggleWelfare('out_of_school')} className="w-4 h-4 text-red-600 rounded" />
+                        <span>Out of School (OSY)</span>
+                    </label>
                 </div>
             )}
 
@@ -360,11 +400,12 @@ export default function DashboardAdminView() {
                                     <th className="px-6 py-3">Purok</th>
                                     <th className="px-6 py-3">Sex</th>
                                     <th className="px-6 py-3">Age Group</th>
+                                    {activeFilter === 'vulnerable' && <th className="px-6 py-3">Sectors</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {residents.length === 0 ? (
-                                    <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">No residents found.</td></tr>
+                                    <tr><td colSpan={activeFilter === 'vulnerable' ? 5 : 4} className="px-6 py-4 text-center text-gray-500">No residents found.</td></tr>
                                 ) : (
                                     residents.map(r => (
                                         <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -374,6 +415,19 @@ export default function DashboardAdminView() {
                                             <td className="px-6 py-3 font-semibold text-gray-700">
                                                 {getResidentAgeGroup(r)}
                                             </td>
+                                            {activeFilter === 'vulnerable' && (
+                                                <td className="px-6 py-3">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {r.is_pwd && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">PWD</span>}
+                                                        {r.is_senior_citizen && <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200">Senior</span>}
+                                                        {r.is_solo_parent && <span className="bg-pink-100 text-pink-700 px-2 py-0.5 rounded text-[10px] font-bold border border-pink-200">Solo Parent</span>}
+                                                        {r.is_4ps_beneficiary && <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold border border-purple-200">4Ps</span>}
+                                                        {r.is_indigenous && <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-[10px] font-bold border border-yellow-200">IP</span>}
+                                                        {r.is_ofw && <span className="bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded text-[10px] font-bold border border-cyan-200">OFW</span>}
+                                                        {r.is_out_of_school && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">OSY</span>}
+                                                    </div>
+                                                </td>
+                                            )}
                                         </tr>
                                     ))
                                 )}
